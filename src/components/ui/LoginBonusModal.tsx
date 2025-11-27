@@ -9,7 +9,6 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Calendar, Flame, Gift } from 'lucide-react';
 import { PotatoAvatar } from './PotatoAvatar';
-import { REWARDS } from '@/lib/constants';
 
 // ===== Types =====
 

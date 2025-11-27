@@ -8,11 +8,6 @@ import type { Coordinate } from '@/types';
 import { MAP } from '@/lib/constants';
 
 /**
- * 黄金比
- */
-const PHI = (1 + Math.sqrt(5)) / 2; // ≈ 1.618
-
-/**
  * 黄金螺旋の角度増分
  * 黄金角 ≈ 137.5°
  */

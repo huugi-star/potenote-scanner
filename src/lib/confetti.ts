@@ -119,7 +119,7 @@ export const confettiIslandClear = () => {
 /**
  * シンプルな紙吹雪
  */
-export const confettiSimple = (options?: confetti.Options) => {
+export const confettiSimple = (options?: Parameters<typeof confetti>[0]) => {
   confetti({
     particleCount: 50,
     spread: 60,

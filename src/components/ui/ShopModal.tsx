@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
   Crown, 
-  Infinity, 
+  Infinity as InfinityIcon, 
   Coins, 
   Ban, 
   Sparkles,
@@ -32,7 +32,7 @@ interface ShopModalProps {
 
 const BENEFITS = [
   {
-    icon: Infinity,
+    icon: InfinityIcon,
     title: 'スキャン無制限',
     description: '1日のスキャン回数制限なし！学び放題！',
     color: '#8B5CF6',
@@ -287,7 +287,7 @@ export const ShopModal = ({
                       <div>
                         <p className="text-yellow-500 text-sm mb-1">VIPプラン</p>
                         <p className="text-white font-bold flex items-center justify-center gap-1">
-                          <Infinity className="w-4 h-4" /> 無制限
+                          <InfinityIcon className="w-4 h-4" /> 無制限
                         </p>
                       </div>
                     </div>

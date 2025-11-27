@@ -5,9 +5,9 @@
  * 始まりの島から100km毎に新しい島が出現
  */
 
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ZoomIn, ZoomOut, MapPin, Flag, Compass, Ship } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { ZoomIn, ZoomOut, Flag, Compass, Ship } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import type { Island, Flag as FlagType, Coordinate } from '@/types';
 
@@ -321,7 +321,7 @@ const PathBetweenIslands = ({
 
 // ===== Main Component =====
 
-export const MapVisualizer = ({ className = '', onClose }: MapVisualizerProps) => {
+export const MapVisualizer = ({ className = '' }: MapVisualizerProps) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
