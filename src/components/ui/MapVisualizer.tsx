@@ -9,11 +9,15 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ZoomIn, ZoomOut, MapPin, Flag, Compass, Ship } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
-import type { Island, Flag as FlagType } from '@/types';
+import type { Island, Flag as FlagType, Coordinate } from '@/types';
 
 // ===== Types =====
 
-interface MapVisualizerProps {
+export interface MapVisualizerProps {
+  flags?: FlagType[];
+  currentPosition?: Coordinate;
+  totalDistance?: number;
+  onFlagClick?: (flag: FlagType) => void;
   className?: string;
   onClose?: () => void;
 }
