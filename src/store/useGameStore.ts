@@ -1,0 +1,739 @@
+/**
+ * Potenote Scanner v2 - Game Store
+ * 
+ * Zustand + Persist による状態管理
+ */
+
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import type { UserState, InventoryItem, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR } from '@/types';
+import { ALL_ITEMS, getItemById, type Item } from '@/data/items';
+import { REWARDS, DISTANCE, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
+import { calculateSpiralPosition } from '@/lib/mapUtils';
+
+// ===== Helper Functions =====
+
+const getTodayString = (): string => {
+  return new Date().toISOString().split('T')[0];
+};
+
+const randomInRange = (min: number, max: number): number => {
+  return Math.random() * (max - min) + min;
+};
+
+const weightedRandom = <T extends { dropWeight: number }>(items: T[]): T => {
+  const totalWeight = items.reduce((sum, item) => sum + item.dropWeight, 0);
+  let random = Math.random() * totalWeight;
+  
+  for (const item of items) {
+    random -= item.dropWeight;
+    if (random <= 0) {
+      return item;
+    }
+  }
+  
+  return items[items.length - 1];
+};
+
+// ===== Store Types =====
+
+interface GameState extends UserState {
+  journey: {
+    totalDistance: number;
+    flags: Flag[];
+    currentPosition: Coordinate;
+    islands: Island[];
+  };
+  
+  gachaPity: {
+    srCounter: number;
+    ssrCounter: number;
+  };
+  
+  hasLaunched: boolean;
+  
+  // クイズ履歴（フリークエスト用）
+  quizHistory: QuizHistory[];
+}
+
+interface GameActions {
+  loginCheck: () => { isNewDay: boolean; bonusCoins: number };
+  
+  checkScanLimit: () => { canScan: boolean; remaining: number; error?: string };
+  incrementScanCount: () => void;
+  recoverScanCount: () => void;
+  
+  calculateResult: (correctCount: number, totalQuestions: number, isAdWatched: boolean) => QuizResult;
+  applyQuizResult: (result: QuizResult) => void;
+  
+  // クイズ履歴
+  saveQuizHistory: (quiz: QuizRaw, result: QuizResult, ocrText?: string, structuredOCR?: StructuredOCR) => void;
+  getQuizHistory: () => QuizHistory[];
+  updateQuizHistoryUsedIndices: (historyId: string, newIndices: number[]) => void;
+  addQuestionsToHistory: (historyId: string, newQuestions: QuizHistory['quiz']['questions']) => void;
+  
+  pullGacha: (useTicket?: boolean) => GachaResult | { error: string };
+  pullGachaTen: () => GachaResult[] | { error: string };
+  
+  addCoins: (amount: number) => void;
+  spendCoins: (amount: number) => boolean;
+  addTickets: (amount: number) => void;
+  useTicket: () => boolean;
+  useStamina: (amount?: number) => boolean;
+  recoverStamina: (amount?: number) => void;
+  
+  addItem: (itemId: string, quantity?: number) => void;
+  removeItem: (itemId: string, quantity?: number) => boolean;
+  equipItem: (itemId: string) => boolean;
+  unequipItem: (category: keyof EquippedItems) => void;
+  
+  activateVIP: (expiresAt: Date) => void;
+  deactivateVIP: () => void;
+  checkVIPStatus: () => boolean;
+  
+  addFlag: (quizId: string, keywords: string[], earnedDistance: number) => Flag;
+  checkAndUnlockIsland: () => Island | null;
+  
+  setHasLaunched: () => void;
+  
+  reset: () => void;
+}
+
+type GameStore = GameState & GameActions;
+
+// ===== Initial State =====
+
+const initialState: GameState = {
+  coins: 0,
+  tickets: 0,
+  stamina: STAMINA.MAX,
+  
+  isVIP: false,
+  vipExpiresAt: undefined,
+  
+  dailyScanCount: 0,
+  lastScanDate: '',
+  
+  lastLoginDate: '',
+  consecutiveLoginDays: 0,
+  
+  totalScans: 0,
+  totalQuizzes: 0,
+  totalCorrectAnswers: 0,
+  totalDistance: 0,
+  
+  inventory: [],
+  equipment: {},
+  
+  journey: {
+    totalDistance: 0,
+    flags: [],
+    currentPosition: { x: 0, y: 0 },
+    islands: [],
+  },
+  
+  gachaPity: {
+    srCounter: 0,
+    ssrCounter: 0,
+  },
+  
+  hasLaunched: false,
+  
+  quizHistory: [],
+};
+
+// ===== Store Implementation =====
+
+export const useGameStore = create<GameStore>()(
+  persist(
+    (set, get) => ({
+      ...initialState,
+      
+      // ===== Login & Daily Reset =====
+      
+      loginCheck: () => {
+        const state = get();
+        const today = getTodayString();
+        const isNewDay = state.lastLoginDate !== today;
+        
+        // 始まりの島がなければ追加
+        if (state.journey.islands.length === 0) {
+          set({
+            journey: {
+              ...state.journey,
+              islands: [{
+                id: 0,
+                distance: 0,
+                name: '始まりの島',
+                keywords: [],
+                unlockedAt: new Date().toISOString(),
+              }],
+            },
+          });
+        }
+        
+        if (!isNewDay) {
+          return { isNewDay: false, bonusCoins: 0 };
+        }
+        
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayString = yesterday.toISOString().split('T')[0];
+        const isConsecutive = state.lastLoginDate === yesterdayString;
+        
+        const bonusCoins = state.isVIP 
+          ? REWARDS.LOGIN_BONUS.VIP_COINS 
+          : REWARDS.LOGIN_BONUS.FREE_COINS;
+        
+        set({
+          lastLoginDate: today,
+          lastScanDate: today,
+          dailyScanCount: 0,
+          consecutiveLoginDays: isConsecutive ? state.consecutiveLoginDays + 1 : 1,
+          coins: state.coins + bonusCoins,
+        });
+        
+        return { isNewDay: true, bonusCoins };
+      },
+      
+      // ===== Scan Management =====
+      
+      checkScanLimit: () => {
+        const state = get();
+        const today = getTodayString();
+        
+        if (state.lastScanDate !== today) {
+          set({ dailyScanCount: 0, lastScanDate: today });
+          return { 
+            canScan: true, 
+            remaining: state.isVIP ? Infinity : LIMITS.FREE_USER.DAILY_SCAN_LIMIT 
+          };
+        }
+        
+        if (state.isVIP) {
+          return { canScan: true, remaining: Infinity };
+        }
+        
+        const remaining = LIMITS.FREE_USER.DAILY_SCAN_LIMIT - state.dailyScanCount;
+        
+        if (remaining <= 0) {
+          return { 
+            canScan: false, 
+            remaining: 0, 
+            error: ERROR_MESSAGES.SCAN_LIMIT_REACHED 
+          };
+        }
+        
+        return { canScan: true, remaining };
+      },
+      
+      incrementScanCount: () => {
+        const state = get();
+        set({
+          dailyScanCount: state.dailyScanCount + 1,
+          totalScans: state.totalScans + 1,
+        });
+      },
+      
+      recoverScanCount: () => {
+        const state = get();
+        const newCount = Math.max(0, state.dailyScanCount - REWARDS.AD_REWARDS.SCAN_RECOVERY_COUNT);
+        set({ dailyScanCount: newCount });
+      },
+      
+      // ===== Quiz & Rewards =====
+      
+      calculateResult: (correctCount, totalQuestions, isAdWatched) => {
+        const state = get();
+        const isPerfect = correctCount === totalQuestions;
+        
+        let baseCoins = REWARDS.QUEST_CLEAR.BASE_COINS;
+        if (isPerfect) {
+          baseCoins += REWARDS.QUEST_CLEAR.PERFECT_BONUS;
+        }
+        
+        const shouldDouble = state.isVIP || isAdWatched;
+        const earnedCoins = shouldDouble ? baseCoins * 2 : baseCoins;
+        
+        const scanBaseDistance = randomInRange(DISTANCE.SCAN_BASE.MIN, DISTANCE.SCAN_BASE.MAX);
+        const correctBonus = correctCount * DISTANCE.CORRECT_ANSWER;
+        const perfectBonus = isPerfect ? DISTANCE.PERFECT_BONUS : 0;
+        const earnedDistance = scanBaseDistance + correctBonus + perfectBonus;
+        
+        return {
+          quizId: `quiz_${Date.now()}`,
+          correctCount,
+          totalQuestions,
+          isPerfect,
+          earnedCoins,
+          earnedDistance: Math.round(earnedDistance * 100) / 100,
+          isDoubled: shouldDouble,
+          timestamp: new Date(),
+        };
+      },
+      
+      applyQuizResult: (result) => {
+        const state = get();
+        set({
+          coins: state.coins + result.earnedCoins,
+          totalQuizzes: state.totalQuizzes + 1,
+          totalCorrectAnswers: state.totalCorrectAnswers + result.correctCount,
+          totalDistance: state.totalDistance + result.earnedDistance,
+          journey: {
+            ...state.journey,
+            totalDistance: state.journey.totalDistance + result.earnedDistance,
+          },
+        });
+      },
+      
+      // ===== Quiz History =====
+      
+      saveQuizHistory: (quiz, result, ocrText, structuredOCR) => {
+        const state = get();
+        
+        const history: QuizHistory = {
+          id: result.quizId,
+          quiz,
+          result,
+          createdAt: new Date().toISOString(),
+          usedQuestionIndices: [],
+          ocrText,
+          structuredOCR, // 構造化OCRを保存（位置情報付き）
+        };
+        
+        // 最新50件を保持
+        const newHistory = [history, ...state.quizHistory].slice(0, 50);
+        set({ quizHistory: newHistory });
+      },
+      
+      getQuizHistory: () => {
+        return get().quizHistory;
+      },
+      
+      // フリークエスト用: 出題済みインデックスを更新
+      updateQuizHistoryUsedIndices: (historyId: string, newIndices: number[]) => {
+        const state = get();
+        const updated = state.quizHistory.map(h => 
+          h.id === historyId 
+            ? { ...h, usedQuestionIndices: [...(h.usedQuestionIndices || []), ...newIndices] }
+            : h
+        );
+        set({ quizHistory: updated });
+      },
+
+      // フリークエスト用: 新しい問題を履歴に追加（再挑戦用）
+      addQuestionsToHistory: (historyId: string, newQuestions: QuizHistory['quiz']['questions']) => {
+        const state = get();
+        const updated = state.quizHistory.map(h => {
+          if (h.id !== historyId) return h;
+          // 既存の問題と新しい問題を結合（重複除去）
+          const existingQs = h.quiz.questions.map(q => q.q);
+          const uniqueNewQs = newQuestions.filter(q => !existingQs.includes(q.q));
+          return {
+            ...h,
+            quiz: {
+              ...h.quiz,
+              questions: [...h.quiz.questions, ...uniqueNewQs],
+            },
+          };
+        });
+        set({ quizHistory: updated });
+      },
+      
+      // ===== Gacha =====
+      
+      pullGacha: (useTicket = false) => {
+        const state = get();
+        
+        if (useTicket) {
+          if (state.tickets < 1) {
+            return { error: ERROR_MESSAGES.INSUFFICIENT_TICKETS };
+          }
+        } else {
+          if (state.coins < GACHA.COST.SINGLE) {
+            return { error: ERROR_MESSAGES.INSUFFICIENT_COINS };
+          }
+        }
+        
+        let guaranteedRarity: 'SR' | 'SSR' | null = null;
+        const newSrCounter = state.gachaPity.srCounter + 1;
+        const newSsrCounter = state.gachaPity.ssrCounter + 1;
+        
+        if (newSsrCounter >= GACHA.PITY.SSR_GUARANTEE) {
+          guaranteedRarity = 'SSR';
+        } else if (newSrCounter >= GACHA.PITY.SR_GUARANTEE) {
+          guaranteedRarity = 'SR';
+        }
+        
+        let selectedRarity: 'N' | 'R' | 'SR' | 'SSR';
+        
+        if (guaranteedRarity === 'SSR') {
+          selectedRarity = 'SSR';
+        } else if (guaranteedRarity === 'SR') {
+          const roll = Math.random() * (GACHA.RATES.SR + GACHA.RATES.SSR);
+          selectedRarity = roll < GACHA.RATES.SSR ? 'SSR' : 'SR';
+        } else {
+          const roll = Math.random() * 100;
+          if (roll < GACHA.RATES.SSR) {
+            selectedRarity = 'SSR';
+          } else if (roll < GACHA.RATES.SSR + GACHA.RATES.SR) {
+            selectedRarity = 'SR';
+          } else if (roll < GACHA.RATES.SSR + GACHA.RATES.SR + GACHA.RATES.R) {
+            selectedRarity = 'R';
+          } else {
+            selectedRarity = 'N';
+          }
+        }
+        
+        const itemsOfRarity = ALL_ITEMS.filter(item => item.rarity === selectedRarity);
+        const selectedItem = weightedRandom(itemsOfRarity);
+        
+        const existingItem = state.inventory.find(inv => inv.itemId === selectedItem.id);
+        const isNew = !existingItem;
+        
+        const updatedPity = {
+          srCounter: selectedRarity === 'SR' || selectedRarity === 'SSR' ? 0 : newSrCounter,
+          ssrCounter: selectedRarity === 'SSR' ? 0 : newSsrCounter,
+        };
+        
+        const newInventory = [...state.inventory];
+        if (existingItem) {
+          const index = newInventory.findIndex(inv => inv.itemId === selectedItem.id);
+          newInventory[index] = {
+            ...existingItem,
+            quantity: Math.min(existingItem.quantity + 1, LIMITS.INVENTORY.MAX_STACK),
+          };
+        } else {
+          newInventory.push({
+            itemId: selectedItem.id,
+            quantity: 1,
+            obtainedAt: new Date(),
+          });
+        }
+        
+        set({
+          coins: useTicket ? state.coins : state.coins - GACHA.COST.SINGLE,
+          tickets: useTicket ? state.tickets - 1 : state.tickets,
+          inventory: newInventory,
+          gachaPity: updatedPity,
+        });
+        
+        return {
+          item: selectedItem,
+          isNew,
+          timestamp: new Date(),
+        };
+      },
+      
+      pullGachaTen: () => {
+        const state = get();
+        
+        if (state.coins < GACHA.COST.TEN_PULL) {
+          return { error: ERROR_MESSAGES.INSUFFICIENT_COINS };
+        }
+        
+        const results: GachaResult[] = [];
+        set({ coins: state.coins - GACHA.COST.TEN_PULL });
+        
+        for (let i = 0; i < 10; i++) {
+          const tempCoins = get().coins;
+          set({ coins: tempCoins + GACHA.COST.SINGLE });
+          
+          const result = get().pullGacha(false);
+          
+          if (!('error' in result)) {
+            results.push(result);
+          }
+        }
+        
+        return results;
+      },
+      
+      // ===== Resource Management =====
+      
+      addCoins: (amount) => {
+        set(state => ({ coins: state.coins + amount }));
+      },
+      
+      spendCoins: (amount) => {
+        const state = get();
+        if (state.coins < amount) {
+          return false;
+        }
+        set({ coins: state.coins - amount });
+        return true;
+      },
+      
+      addTickets: (amount) => {
+        set(state => ({ tickets: state.tickets + amount }));
+      },
+      
+      useTicket: () => {
+        const state = get();
+        if (state.tickets < 1) {
+          return false;
+        }
+        set({ tickets: state.tickets - 1 });
+        return true;
+      },
+      
+      useStamina: (amount = STAMINA.QUIZ_COST) => {
+        const state = get();
+        if (state.stamina < amount) {
+          return false;
+        }
+        set({ stamina: state.stamina - amount });
+        return true;
+      },
+      
+      recoverStamina: (amount = 1) => {
+        set(state => ({
+          stamina: Math.min(state.stamina + amount, STAMINA.MAX),
+        }));
+      },
+      
+      // ===== Inventory & Equipment =====
+      
+      addItem: (itemId, quantity = 1) => {
+        const state = get();
+        const existingItem = state.inventory.find(inv => inv.itemId === itemId);
+        
+        if (existingItem) {
+          const newQuantity = Math.min(
+            existingItem.quantity + quantity,
+            LIMITS.INVENTORY.MAX_STACK
+          );
+          set({
+            inventory: state.inventory.map(inv =>
+              inv.itemId === itemId
+                ? { ...inv, quantity: newQuantity }
+                : inv
+            ),
+          });
+        } else {
+          set({
+            inventory: [
+              ...state.inventory,
+              { itemId, quantity, obtainedAt: new Date() },
+            ],
+          });
+        }
+      },
+      
+      removeItem: (itemId, quantity = 1) => {
+        const state = get();
+        const existingItem = state.inventory.find(inv => inv.itemId === itemId);
+        
+        if (!existingItem || existingItem.quantity < quantity) {
+          return false;
+        }
+        
+        const newQuantity = existingItem.quantity - quantity;
+        
+        if (newQuantity <= 0) {
+          set({
+            inventory: state.inventory.filter(inv => inv.itemId !== itemId),
+          });
+        } else {
+          set({
+            inventory: state.inventory.map(inv =>
+              inv.itemId === itemId
+                ? { ...inv, quantity: newQuantity }
+                : inv
+            ),
+          });
+        }
+        
+        return true;
+      },
+      
+      equipItem: (itemId) => {
+        const state = get();
+        const item = getItemById(itemId);
+        
+        if (!item || item.type !== 'equipment' || !item.category) {
+          return false;
+        }
+        
+        const hasItem = state.inventory.some(inv => inv.itemId === itemId);
+        if (!hasItem) {
+          return false;
+        }
+        
+        set({
+          equipment: {
+            ...state.equipment,
+            [item.category]: itemId,
+          },
+        });
+        
+        return true;
+      },
+      
+      unequipItem: (category) => {
+        set(state => ({
+          equipment: {
+            ...state.equipment,
+            [category]: undefined,
+          },
+        }));
+      },
+      
+      // ===== VIP =====
+      
+      activateVIP: (expiresAt) => {
+        set({
+          isVIP: true,
+          vipExpiresAt: expiresAt,
+        });
+      },
+      
+      deactivateVIP: () => {
+        set({
+          isVIP: false,
+          vipExpiresAt: undefined,
+        });
+      },
+      
+      checkVIPStatus: () => {
+        const state = get();
+        
+        if (!state.isVIP) {
+          return false;
+        }
+        
+        if (state.vipExpiresAt && new Date(state.vipExpiresAt) < new Date()) {
+          get().deactivateVIP();
+          return false;
+        }
+        
+        return true;
+      },
+      
+      // ===== Map & Journey =====
+      
+      addFlag: (quizId, keywords, earnedDistance) => {
+        const state = get();
+        const newTotalDistance = state.journey.totalDistance + earnedDistance;
+        const newPosition = calculateSpiralPosition(newTotalDistance);
+        
+        const flag: Flag = {
+          id: `flag_${Date.now()}`,
+          quizId,
+          keywords,
+          position: newPosition,
+          distance: newTotalDistance,
+          createdAt: new Date(),
+        };
+        
+        set({
+          journey: {
+            ...state.journey,
+            totalDistance: newTotalDistance,
+            flags: [...state.journey.flags, flag],
+            currentPosition: newPosition,
+          },
+        });
+        
+        return flag;
+      },
+      
+      checkAndUnlockIsland: () => {
+        const state = get();
+        const currentDistance = state.journey.totalDistance;
+        const islandCount = state.journey.islands.length;
+        const nextIslandDistance = islandCount * 100; // 100km毎に新しい島
+        
+        if (currentDistance >= nextIslandDistance) {
+          // 最新のフラッグからキーワードを取得
+          const recentFlags = state.journey.flags.slice(-5);
+          const keywords = recentFlags.flatMap(f => f.keywords).slice(0, 3);
+          
+          const newIsland: Island = {
+            id: islandCount,
+            distance: nextIslandDistance,
+            name: `島 ${islandCount + 1}`,
+            keywords,
+            unlockedAt: new Date().toISOString(),
+          };
+          
+          set({
+            journey: {
+              ...state.journey,
+              islands: [...state.journey.islands, newIsland],
+            },
+          });
+          
+          return newIsland;
+        }
+        
+        return null;
+      },
+      
+      // ===== Onboarding =====
+      
+      setHasLaunched: () => {
+        set({ hasLaunched: true });
+      },
+      
+      // ===== Utility =====
+      
+      reset: () => {
+        set(initialState);
+      },
+    }),
+    {
+      name: 'potenote-scanner-v2',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        coins: state.coins,
+        tickets: state.tickets,
+        stamina: state.stamina,
+        isVIP: state.isVIP,
+        vipExpiresAt: state.vipExpiresAt,
+        dailyScanCount: state.dailyScanCount,
+        lastScanDate: state.lastScanDate,
+        lastLoginDate: state.lastLoginDate,
+        consecutiveLoginDays: state.consecutiveLoginDays,
+        totalScans: state.totalScans,
+        totalQuizzes: state.totalQuizzes,
+        totalCorrectAnswers: state.totalCorrectAnswers,
+        totalDistance: state.totalDistance,
+        inventory: state.inventory,
+        equipment: state.equipment,
+        journey: state.journey,
+        gachaPity: state.gachaPity,
+        hasLaunched: state.hasLaunched,
+        quizHistory: state.quizHistory,
+      }),
+    }
+  )
+);
+
+// ===== Selectors =====
+
+export const selectIsVIP = (state: GameState) => state.isVIP;
+
+export const selectCanScan = (state: GameState) => {
+  if (state.isVIP) return true;
+  const today = getTodayString();
+  if (state.lastScanDate !== today) return true;
+  return state.dailyScanCount < LIMITS.FREE_USER.DAILY_SCAN_LIMIT;
+};
+
+export const selectRemainingScanCount = (state: GameState) => {
+  if (state.isVIP) return Infinity;
+  const today = getTodayString();
+  if (state.lastScanDate !== today) return LIMITS.FREE_USER.DAILY_SCAN_LIMIT;
+  return Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - state.dailyScanCount);
+};
+
+export const selectEquippedItemDetails = (state: GameState) => {
+  const { equipment } = state;
+  return {
+    head: equipment.head ? getItemById(equipment.head) : undefined,
+    body: equipment.body ? getItemById(equipment.body) : undefined,
+    face: equipment.face ? getItemById(equipment.face) : undefined,
+    accessory: equipment.accessory ? getItemById(equipment.accessory) : undefined,
+  };
+};
