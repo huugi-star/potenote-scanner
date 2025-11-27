@@ -78,10 +78,6 @@ export const MapScreen = ({ onBack }: MapScreenProps) => {
 
         {/* マップ */}
         <MapVisualizer
-          flags={journey.flags}
-          currentPosition={journey.currentPosition}
-          totalDistance={journey.totalDistance}
-          onFlagClick={handleFlagClick}
           className="h-[400px]"
         />
 
