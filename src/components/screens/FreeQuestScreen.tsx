@@ -331,7 +331,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
 
                 <button
                   onClick={() => {
-                    handleStartQuiz(selectedQuiz);
+                    onStartQuiz(selectedQuiz.quiz);
                     setSelectedQuiz(null);
                   }}
                   className="w-full py-3 rounded-xl bg-emerald-500 text-white font-bold"
