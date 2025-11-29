@@ -192,19 +192,23 @@ export const LoginBonusModal = ({
           />
 
           {/* コイン落下エフェクト */}
-          {showCoins && <FallingCoins count={bonusCoins} />}
+          {showCoins && (
+            <div className="absolute inset-0 pointer-events-none z-0">
+              <FallingCoins count={bonusCoins} />
+            </div>
+          )}
 
           {/* モーダルコンテンツ */}
           <motion.div
-            className="relative w-full max-w-sm bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 rounded-2xl overflow-hidden border border-yellow-500/30 shadow-2xl"
+            className="relative w-full max-w-sm bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 rounded-2xl overflow-hidden border border-yellow-500/30 shadow-2xl z-10"
             initial={{ scale: 0.8, y: 50 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.8, y: 50 }}
             transition={{ type: 'spring', damping: 20 }}
           >
             {/* 装飾的なグロー */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-yellow-500/20 blur-3xl" />
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-orange-500/10 blur-3xl" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-yellow-500/20 blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-orange-500/10 blur-3xl pointer-events-none" />
 
             {/* ヘッダー */}
             <div className="relative text-center pt-6 pb-2">
@@ -274,10 +278,10 @@ export const LoginBonusModal = ({
             </motion.div>
 
             {/* フッター */}
-            <div className="px-6 pb-6">
+            <div className="px-6 pb-6 relative z-10">
               <motion.button
                 onClick={onClose}
-                className="w-full py-4 rounded-xl font-bold text-black bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 transition-all shadow-lg shadow-yellow-500/25"
+                className="w-full py-4 rounded-xl font-bold text-black bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 transition-all shadow-lg shadow-yellow-500/25 relative z-10"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.2 }}
