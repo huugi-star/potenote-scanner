@@ -11,11 +11,18 @@ import { NextResponse } from 'next/server';
 const RAKUTEN_APP_ID = process.env.RAKUTEN_APP_ID;
 const RAKUTEN_AFF_ID = process.env.RAKUTEN_AFF_ID;
 
-// カテゴリのジャンルID
-const GENRE_IDS = {
-  books: '001001',      // 楽天ブックス
-  gadgets: '100227',    // 文房具・事務用品
-  health: '100804',     // 健康・美容
+// カテゴリごとの検索パラメータ
+// ※ IchibaItem Search API は genreId が厳密なので、キーワード検索に寄せる
+const SEARCH_PARAMS = {
+  books: {
+    keyword: '勉強 本 学習 参考書',
+  },
+  gadgets: {
+    keyword: '勉強 文房具 ガジェット ペン ノート',
+  },
+  health: {
+    keyword: '学習 椅子 デスク 姿勢 クッション 健康',
+  },
 } as const;
 
 export async function GET(request: Request) {
@@ -30,43 +37,57 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const category = searchParams.get('category') as keyof typeof GENRE_IDS | null;
+    const category = searchParams.get('category') as keyof typeof SEARCH_PARAMS | null;
     
-    if (!category || !GENRE_IDS[category]) {
+    if (!category || !SEARCH_PARAMS[category]) {
       return NextResponse.json(
         { error: 'Invalid category' },
         { status: 400 }
       );
     }
 
-    const genreId = GENRE_IDS[category];
+    const { keyword } = SEARCH_PARAMS[category];
 
     // 楽天APIを呼び出し
-    const response = await fetch(
+    const searchUrl =
       `https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601?` +
-      `applicationId=${RAKUTEN_APP_ID}&` +
-      `affiliateId=${RAKUTEN_AFF_ID}&` +
-      `genreId=${genreId}&` +
+      `applicationId=${encodeURIComponent(RAKUTEN_APP_ID)}&` +
+      `affiliateId=${encodeURIComponent(RAKUTEN_AFF_ID)}&` +
+      `keyword=${encodeURIComponent(keyword)}&` +
       `hits=10&` +
       `sort=-itemPrice&` +
-      `availability=1`
-    );
+      `availability=1`;
+
+    const response = await fetch(searchUrl);
 
     if (!response.ok) {
+      // レスポンス本文もログに出して原因を特定しやすくする
+      const errorText = await response.text();
+      console.error('Rakuten API response error:', response.status, errorText);
       throw new Error(`楽天APIエラー: ${response.status}`);
     }
 
     const data = await response.json();
     
-    // 商品データを整形
-    const items = data.Items?.map((item: any) => ({
-      itemName: item.Item.itemName,
-      itemPrice: item.Item.itemPrice,
-      itemUrl: item.Item.itemUrl,
-      mediumImageUrls: item.Item.mediumImageUrls,
-      shopName: item.Item.shopName,
-      affiliateUrl: item.Item.affiliateUrl,
-    })) || [];
+    // 商品データを整形（楽天APIのレスポンス形式に合わせて安全に変換）
+    const items = data.Items?.map((raw: any) => {
+      const item = raw.Item ?? raw.item ?? raw;
+      const mediumImageUrls: string[] =
+        Array.isArray(item.mediumImageUrls)
+          ? item.mediumImageUrls
+              .map((img: any) => img?.imageUrl)
+              .filter((url: unknown): url is string => typeof url === 'string')
+          : [];
+
+      return {
+        itemName: item.itemName,
+        itemPrice: String(item.itemPrice),
+        itemUrl: item.itemUrl,
+        mediumImageUrls,
+        shopName: item.shopName,
+        affiliateUrl: item.affiliateUrl,
+      };
+    }) || [];
 
     return NextResponse.json({ items });
   } catch (error) {
