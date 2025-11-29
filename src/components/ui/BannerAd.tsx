@@ -102,45 +102,6 @@ const AdContentDisplay = ({
   );
 };
 
-/**
- * シミュレート広告（外部広告風）
- */
-const SimulatedExternalAd = ({ onClick }: { onClick: () => void }) => {
-  const [variant] = useState(() => Math.floor(Math.random() * 3));
-
-  const variants = [
-    {
-      bg: 'bg-gradient-to-r from-blue-600 to-blue-800',
-      text: '📚 今すぐダウンロード',
-      subtext: '人気の学習アプリ',
-    },
-    {
-      bg: 'bg-gradient-to-r from-red-600 to-orange-600',
-      text: '🎮 新作ゲーム登場',
-      subtext: '無料でプレイ',
-    },
-    {
-      bg: 'bg-gradient-to-r from-green-600 to-teal-600',
-      text: '🛒 セール開催中',
-      subtext: '最大50%OFF',
-    },
-  ];
-
-  const current = variants[variant];
-
-  return (
-    <div 
-      className={`flex items-center justify-between w-full ${current.bg} px-4 py-2 rounded cursor-pointer`}
-      onClick={onClick}
-    >
-      <div>
-        <p className="text-white text-sm font-bold">{current.text}</p>
-        <p className="text-white/70 text-xs">{current.subtext}</p>
-      </div>
-      <div className="text-white/50 text-xs">広告</div>
-    </div>
-  );
-};
 
 // ===== Main Component =====
 
@@ -177,6 +138,17 @@ export const BannerAd = ({
     setTimeout(() => setIsDismissed(false), 30000);
   };
 
+  // Google AdSense広告を初期化
+  useEffect(() => {
+    if (isVisible && !isDismissed && typeof window !== 'undefined') {
+      try {
+        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+      } catch (err) {
+        console.error('AdSense initialization error:', err);
+      }
+    }
+  }, [isVisible, isDismissed]);
+
   if (!isVisible || isDismissed) return null;
 
   return (
@@ -196,7 +168,7 @@ export const BannerAd = ({
           {/* 閉じるボタン */}
           <button
             onClick={handleDismiss}
-            className="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-300 transition-colors"
+            className="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-300 transition-colors z-10"
           >
             <X className="w-4 h-4" />
           </button>
@@ -216,12 +188,21 @@ export const BannerAd = ({
               </motion.div>
             ) : (
               <motion.div
-                key="external"
+                key="adsense"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
+                className="w-full"
               >
-                <SimulatedExternalAd onClick={() => {}} />
+                {/* Google AdSense 広告ユニット */}
+                <ins
+                  className="adsbygoogle"
+                  style={{ display: 'block' }}
+                  data-ad-client="ca-pub-5524219244906928"
+                  data-ad-slot="5707417970"
+                  data-ad-format="auto"
+                  data-full-width-responsive="true"
+                />
               </motion.div>
             )}
           </AnimatePresence>
