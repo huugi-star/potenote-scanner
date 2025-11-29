@@ -97,6 +97,7 @@ export interface UserState {
   totalQuizzes: number;          // 累計クイズプレイ回数
   totalCorrectAnswers: number;   // 累計正解数
   totalDistance: number;         // 累計移動距離 (km)
+  totalQuizClears: number;       // 累計クイズクリア回数（アフィリエイト表示用）
   
   // 所持アイテム
   inventory: InventoryItem[];    // インベントリ

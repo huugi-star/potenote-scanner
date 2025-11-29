@@ -121,6 +121,7 @@ const initialState: GameState = {
   totalQuizzes: 0,
   totalCorrectAnswers: 0,
   totalDistance: 0,
+  totalQuizClears: 0,
   
   inventory: [],
   equipment: {},
@@ -279,6 +280,7 @@ export const useGameStore = create<GameStore>()(
           totalQuizzes: state.totalQuizzes + 1,
           totalCorrectAnswers: state.totalCorrectAnswers + result.correctCount,
           totalDistance: state.totalDistance + result.earnedDistance,
+          totalQuizClears: state.totalQuizClears + 1,
           journey: {
             ...state.journey,
             totalDistance: state.journey.totalDistance + result.earnedDistance,
@@ -699,6 +701,7 @@ export const useGameStore = create<GameStore>()(
         totalQuizzes: state.totalQuizzes,
         totalCorrectAnswers: state.totalCorrectAnswers,
         totalDistance: state.totalDistance,
+        totalQuizClears: state.totalQuizClears,
         inventory: state.inventory,
         equipment: state.equipment,
         journey: state.journey,

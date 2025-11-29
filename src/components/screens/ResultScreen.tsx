@@ -21,6 +21,7 @@ import {
 import { useGameStore } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
 import { AdsModal } from '@/components/ui/AdsModal';
+import { AffiliateSection } from '@/components/ui/AffiliateSection';
 import { useToast } from '@/components/ui/Toast';
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
 import { confettiIslandClear } from '@/lib/confetti';
@@ -65,6 +66,7 @@ export const ResultScreen = ({
   // Store
   const isVIP = useGameStore(state => state.isVIP);
   const totalDistance = useGameStore(state => state.journey.totalDistance);
+  const totalQuizClears = useGameStore(state => state.totalQuizClears);
   const calculateResult = useGameStore(state => state.calculateResult);
   const applyQuizResult = useGameStore(state => state.applyQuizResult);
   const addFlag = useGameStore(state => state.addFlag);
@@ -75,6 +77,11 @@ export const ResultScreen = ({
 
   const isPerfect = correctCount === totalQuestions;
   const scorePercentage = (correctCount / totalQuestions) * 100;
+
+  // アフィリエイト表示判定（3回に1回）
+  const shouldShowAffiliate = useMemo(() => {
+    return totalQuizClears > 0 && totalQuizClears % 3 === 0;
+  }, [totalQuizClears]);
 
   // 結果計算（初回のみ）
   useEffect(() => {
@@ -112,6 +119,7 @@ export const ResultScreen = ({
           totalDistance: state.journey.totalDistance + quizResult.earnedDistance,
         },
         totalDistance: state.totalDistance + quizResult.earnedDistance,
+        totalQuizClears: state.totalQuizClears + 1, // クリア回数もカウント
       });
     } else {
       // 通常クエスト: 結果を適用（1回のみ）
@@ -354,6 +362,11 @@ export const ResultScreen = ({
             <Crown className="w-5 h-5 text-yellow-500" />
             <span className="text-yellow-400 font-medium">VIP特典: コイン常時2倍</span>
           </motion.div>
+        )}
+
+        {/* アフィリエイトセクション（3回に1回表示） */}
+        {shouldShowAffiliate && (
+          <AffiliateSection milestoneCount={totalQuizClears} />
         )}
 
         {/* キーワードフラッグ */}

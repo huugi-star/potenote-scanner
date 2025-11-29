@@ -10,6 +10,7 @@ export type { PotatoEmotion } from './PotatoAvatar';
 export { AdsModal } from './AdsModal';
 export { ShopModal } from './ShopModal';
 export { LoginBonusModal } from './LoginBonusModal';
+export { AffiliateSection } from './AffiliateSection';
 export { MapVisualizer } from './MapVisualizer';
 export { BannerAd } from './BannerAd';
 export { ToastProvider, useToast } from './Toast';

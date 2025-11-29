@@ -111,3 +111,13 @@ body {
   transform: rotate(45deg);
   animation: shimmer 3s infinite;
 }
+
+/* スクロールバー非表示 */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
