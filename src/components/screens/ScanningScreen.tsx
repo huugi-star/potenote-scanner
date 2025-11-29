@@ -330,10 +330,10 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
                       <AlertCircle className="w-8 h-8 text-red-400" />
                     </div>
                     <p className="text-red-400 font-medium mb-2">
-                      本日のスキャン回数上限
+                      本日のスキャン回数上限（5回）
                     </p>
                     <p className="text-gray-500 text-sm">
-                      下のボタンから回復できます
+                      広告を視聴して3回回復するか、VIPプラン（1日100回まで）にアップグレードしてください
                     </p>
                   </>
                 )}
@@ -365,7 +365,7 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
                     whileTap={{ scale: 0.98 }}
                   >
                     <Crown className="w-5 h-5" />
-                    ¥550で無制限
+                    ¥550で1日100回まで
                   </motion.button>
                 </div>
               )}

@@ -87,8 +87,8 @@ export interface UserState {
   // 日次制限
   dailyScanCount: number;        // 本日のスキャン済み回数
   lastScanDate: string;          // 最終スキャン日 (YYYY-MM-DD)
-  dailyFreeQuestGenerationCount: number; // 本日のフリークエスト新問題生成回数
-  lastFreeQuestGenerationDate: string;   // 最終フリークエスト新問題生成日 (YYYY-MM-DD)
+  dailyFreeQuestGenerationCount: number;  // 本日のフリークエスト新問題生成回数
+  lastFreeQuestGenerationDate: string;     // 最終フリークエスト生成日 (YYYY-MM-DD)
   
   // ログイン
   lastLoginDate: string;         // 最終ログイン日 (YYYY-MM-DD)

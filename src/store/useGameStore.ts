@@ -256,17 +256,19 @@ export const useGameStore = create<GameStore>()(
         
         if (state.lastFreeQuestGenerationDate !== today) {
           set({ dailyFreeQuestGenerationCount: 0, lastFreeQuestGenerationDate: today });
+          const limit = state.isVIP 
+            ? LIMITS.VIP_USER.DAILY_FREE_QUEST_GENERATION_LIMIT 
+            : LIMITS.FREE_USER.DAILY_FREE_QUEST_GENERATION_LIMIT;
           return { 
             canGenerate: true, 
-            remaining: state.isVIP ? Infinity : LIMITS.FREE_USER.DAILY_FREE_QUEST_GENERATION_LIMIT 
+            remaining: limit 
           };
         }
         
-        if (state.isVIP) {
-          return { canGenerate: true, remaining: Infinity };
-        }
-        
-        const remaining = LIMITS.FREE_USER.DAILY_FREE_QUEST_GENERATION_LIMIT - state.dailyFreeQuestGenerationCount;
+        const limit = state.isVIP 
+          ? LIMITS.VIP_USER.DAILY_FREE_QUEST_GENERATION_LIMIT 
+          : LIMITS.FREE_USER.DAILY_FREE_QUEST_GENERATION_LIMIT;
+        const remaining = limit - state.dailyFreeQuestGenerationCount;
         
         if (remaining <= 0) {
           return { 
@@ -288,7 +290,7 @@ export const useGameStore = create<GameStore>()(
       
       recoverFreeQuestGenerationCount: () => {
         const state = get();
-        const newCount = Math.max(0, state.dailyFreeQuestGenerationCount - REWARDS.AD_REWARDS.SCAN_RECOVERY_COUNT);
+        const newCount = Math.max(0, state.dailyFreeQuestGenerationCount - REWARDS.AD_REWARDS.FREE_QUEST_GENERATION_RECOVERY_COUNT);
         set({ dailyFreeQuestGenerationCount: newCount });
       },
       
