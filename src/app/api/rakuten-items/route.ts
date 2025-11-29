@@ -15,15 +15,26 @@ const RAKUTEN_AFF_ID = process.env.RAKUTEN_AFF_ID;
 // ※ IchibaItem Search API は genreId が厳密なので、キーワード検索に寄せる
 const SEARCH_PARAMS = {
   books: {
-    keyword: '勉強 本 学習 参考書',
+    // 学習・参考書系を優先（AND条件を避けるためシンプルに）
+    keyword: '勉強 本',
+    fallbackKeyword: '学習 本',
   },
   gadgets: {
-    keyword: '勉強 文房具 ガジェット ペン ノート',
+    // 勉強向けガジェット・文房具
+    keyword: '勉強 文房具',
+    fallbackKeyword: '学習 文房具',
   },
   health: {
-    keyword: '学習 椅子 デスク 姿勢 クッション 健康',
+    // 学習環境・姿勢・集中力サポート
+    keyword: '学習 椅子',
+    fallbackKeyword: '学習 デスク',
   },
 } as const;
+
+// ノイズ除去用 NG キーワード（中古品・返礼品・レンタル等を避ける）
+// Rakuten Ichiba API の NGKeyword パラメータに渡す
+const NG_KEYWORDS =
+  '中古 中古本 ふるさと納税 レンタル オークション 中古品 リサイクル 貸出 auction rental used';
 
 export async function GET(request: Request) {
   try {
@@ -46,17 +57,23 @@ export async function GET(request: Request) {
       );
     }
 
-    const { keyword } = SEARCH_PARAMS[category];
+    const { keyword, fallbackKeyword } = SEARCH_PARAMS[category];
 
     // 楽天APIを呼び出し
     const searchUrl =
       `https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601?` +
       `applicationId=${encodeURIComponent(RAKUTEN_APP_ID)}&` +
       `affiliateId=${encodeURIComponent(RAKUTEN_AFF_ID)}&` +
+      // 関連度順（標準）
+      `sort=standard&` +
+      // 学習関連キーワードで検索
       `keyword=${encodeURIComponent(keyword)}&` +
-      `hits=10&` +
-      `sort=-itemPrice&` +
-      `availability=1`;
+      // NGキーワードでノイズ除去（中古・ふるさと納税・レンタル等）
+      `NGKeyword=${encodeURIComponent(NG_KEYWORDS)}&` +
+      // 在庫ありのみ
+      `availability=1&` +
+      // 取得件数
+      `hits=10`;
 
     const response = await fetch(searchUrl);
 
@@ -70,7 +87,7 @@ export async function GET(request: Request) {
     const data = await response.json();
     
     // 商品データを整形（楽天APIのレスポンス形式に合わせて安全に変換）
-    const items = data.Items?.map((raw: any) => {
+    let items = data.Items?.map((raw: any) => {
       const item = raw.Item ?? raw.item ?? raw;
       const mediumImageUrls: string[] =
         Array.isArray(item.mediumImageUrls)
@@ -88,6 +105,41 @@ export async function GET(request: Request) {
         affiliateUrl: item.affiliateUrl,
       };
     }) || [];
+
+    // 0件だった場合は、NGKeyword を外しつつフォールバックキーワードで再検索
+    if (!items.length && fallbackKeyword) {
+      const fallbackUrl =
+        `https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601?` +
+        `applicationId=${encodeURIComponent(RAKUTEN_APP_ID)}&` +
+        `affiliateId=${encodeURIComponent(RAKUTEN_AFF_ID)}&` +
+        `sort=standard&` +
+        `keyword=${encodeURIComponent(fallbackKeyword)}&` +
+        `availability=1&` +
+        `hits=10`;
+
+      const fallbackResponse = await fetch(fallbackUrl);
+      if (fallbackResponse.ok) {
+        const fallbackData = await fallbackResponse.json();
+        items = fallbackData.Items?.map((raw: any) => {
+          const item = raw.Item ?? raw.item ?? raw;
+          const mediumImageUrls: string[] =
+            Array.isArray(item.mediumImageUrls)
+              ? item.mediumImageUrls
+                  .map((img: any) => img?.imageUrl)
+                  .filter((url: unknown): url is string => typeof url === 'string')
+              : [];
+
+          return {
+            itemName: item.itemName,
+            itemPrice: String(item.itemPrice),
+            itemUrl: item.itemUrl,
+            mediumImageUrls,
+            shopName: item.shopName,
+            affiliateUrl: item.affiliateUrl,
+          };
+        }) || [];
+      }
+    }
 
     return NextResponse.json({ items });
   } catch (error) {
