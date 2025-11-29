@@ -21,12 +21,6 @@ interface RakutenItem {
   affiliateUrl: string;
 }
 
-interface RakutenResponse {
-  Items: Array<{
-    Item: RakutenItem;
-  }>;
-}
-
 interface AffiliateSectionProps {
   milestoneCount: number; // 累計クリア回数（例：3, 6, 9...）
 }
