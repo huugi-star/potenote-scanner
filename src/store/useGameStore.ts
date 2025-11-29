@@ -63,6 +63,10 @@ interface GameActions {
   incrementScanCount: () => void;
   recoverScanCount: () => void;
   
+  checkFreeQuestGenerationLimit: () => { canGenerate: boolean; remaining: number; error?: string };
+  incrementFreeQuestGenerationCount: () => void;
+  recoverFreeQuestGenerationCount: () => void;
+  
   calculateResult: (correctCount: number, totalQuestions: number, isAdWatched: boolean) => QuizResult;
   applyQuizResult: (result: QuizResult) => void;
   
@@ -113,6 +117,8 @@ const initialState: GameState = {
   
   dailyScanCount: 0,
   lastScanDate: '',
+  dailyFreeQuestGenerationCount: 0,
+  lastFreeQuestGenerationDate: '',
   
   lastLoginDate: '',
   consecutiveLoginDays: 0,
@@ -240,6 +246,50 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const newCount = Math.max(0, state.dailyScanCount - REWARDS.AD_REWARDS.SCAN_RECOVERY_COUNT);
         set({ dailyScanCount: newCount });
+      },
+      
+      // ===== Free Quest Generation Management =====
+      
+      checkFreeQuestGenerationLimit: () => {
+        const state = get();
+        const today = getTodayString();
+        
+        if (state.lastFreeQuestGenerationDate !== today) {
+          set({ dailyFreeQuestGenerationCount: 0, lastFreeQuestGenerationDate: today });
+          return { 
+            canGenerate: true, 
+            remaining: state.isVIP ? Infinity : LIMITS.FREE_USER.DAILY_FREE_QUEST_GENERATION_LIMIT 
+          };
+        }
+        
+        if (state.isVIP) {
+          return { canGenerate: true, remaining: Infinity };
+        }
+        
+        const remaining = LIMITS.FREE_USER.DAILY_FREE_QUEST_GENERATION_LIMIT - state.dailyFreeQuestGenerationCount;
+        
+        if (remaining <= 0) {
+          return { 
+            canGenerate: false, 
+            remaining: 0, 
+            error: ERROR_MESSAGES.FREE_QUEST_GENERATION_LIMIT_REACHED 
+          };
+        }
+        
+        return { canGenerate: true, remaining };
+      },
+      
+      incrementFreeQuestGenerationCount: () => {
+        const state = get();
+        set({
+          dailyFreeQuestGenerationCount: state.dailyFreeQuestGenerationCount + 1,
+        });
+      },
+      
+      recoverFreeQuestGenerationCount: () => {
+        const state = get();
+        const newCount = Math.max(0, state.dailyFreeQuestGenerationCount - REWARDS.AD_REWARDS.SCAN_RECOVERY_COUNT);
+        set({ dailyFreeQuestGenerationCount: newCount });
       },
       
       // ===== Quiz & Rewards =====
@@ -695,6 +745,8 @@ export const useGameStore = create<GameStore>()(
         vipExpiresAt: state.vipExpiresAt,
         dailyScanCount: state.dailyScanCount,
         lastScanDate: state.lastScanDate,
+        dailyFreeQuestGenerationCount: state.dailyFreeQuestGenerationCount,
+        lastFreeQuestGenerationDate: state.lastFreeQuestGenerationDate,
         lastLoginDate: state.lastLoginDate,
         consecutiveLoginDays: state.consecutiveLoginDays,
         totalScans: state.totalScans,

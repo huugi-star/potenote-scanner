@@ -15,12 +15,15 @@ import {
   CheckCircle,
   Star,
   Search,
-  History
+  History,
+  Crown
 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
-import { vibrateLight } from '@/lib/haptics';
+import { AdsModal } from '@/components/ui/AdsModal';
+import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
 import { useToast } from '@/components/ui/Toast';
+import { LIMITS } from '@/lib/constants';
 import type { QuizHistory, QuizRaw } from '@/types';
 
 // ===== Types =====
@@ -37,11 +40,20 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
   const [selectedQuiz, setSelectedQuiz] = useState<QuizHistory | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [showAdsModal, setShowAdsModal] = useState(false);
   
   // Store
+  const isVIP = useGameStore(state => state.isVIP);
   const quizHistory = useGameStore(state => state.quizHistory);
   const addQuestionsToHistory = useGameStore(state => state.addQuestionsToHistory);
+  const checkFreeQuestGenerationLimit = useGameStore(state => state.checkFreeQuestGenerationLimit);
+  const incrementFreeQuestGenerationCount = useGameStore(state => state.incrementFreeQuestGenerationCount);
+  const recoverFreeQuestGenerationCount = useGameStore(state => state.recoverFreeQuestGenerationCount);
   const { addToast } = useToast();
+  
+  // 新問題生成の残り回数を取得
+  const generationLimit = checkFreeQuestGenerationLimit();
+  const canGenerate = isVIP || generationLimit.canGenerate;
 
   // フィルタリング
   const filteredHistory = useMemo(() => {
@@ -57,6 +69,13 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
   // 新しい問題に挑戦
   const handleNewQuiz = async (history: QuizHistory) => {
     vibrateLight();
+    
+    // 制限チェック
+    if (!canGenerate) {
+      addToast('error', generationLimit.error || '本日の新問題生成回数の上限に達しました');
+      setShowAdsModal(true);
+      return;
+    }
     
     if (history.ocrText) {
       setIsGenerating(true);
@@ -84,6 +103,8 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
         const newQuiz = result.quiz;
         
         if (newQuiz && newQuiz.questions && newQuiz.questions.length > 0) {
+          // ★成功時のみ新問題生成回数を消費
+          incrementFreeQuestGenerationCount();
           // 新しい問題を履歴に追加（再挑戦用）
           addQuestionsToHistory(history.id, newQuiz.questions);
           addToast('success', '新しい問題を生成しました！');
@@ -93,6 +114,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
         }
       } catch (error) {
         console.error('Quiz generation error:', error);
+        // ★エラー時は新問題生成回数を消費しない
         addToast('error', '新問題の生成に失敗。既存問題で挑戦します');
         onStartQuiz(history.quiz);
       } finally {
@@ -103,6 +125,14 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
       addToast('info', 'OCRテキストがないため既存問題で挑戦します');
       onStartQuiz(history.quiz);
     }
+  };
+  
+  // 広告視聴完了
+  const handleAdRewardClaimed = () => {
+    recoverFreeQuestGenerationCount();
+    setShowAdsModal(false);
+    vibrateSuccess();
+    addToast('success', '新問題生成回数が3回回復しました！');
   };
 
   // 過去の問題に再挑戦（ランダム順）
@@ -163,6 +193,19 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
                 過去にスキャンした内容を何度でも復習できます。
                 スキャン回数は消費しません！
               </p>
+              {/* 新問題生成の残り回数 */}
+              {!isVIP && (
+                <div className={`mt-2 px-3 py-1.5 rounded-lg text-xs font-medium ${
+                  canGenerate
+                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                }`}>
+                  {canGenerate 
+                    ? `新問題生成: 残り ${generationLimit.remaining}/${LIMITS.FREE_USER.DAILY_FREE_QUEST_GENERATION_LIMIT} 回`
+                    : '新問題生成: 本日の上限に達しました'
+                  }
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -259,16 +302,18 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
                   {/* 新しい問題ボタン */}
                   <motion.button
                     onClick={() => handleNewQuiz(history)}
-                    disabled={isGenerating || !history.ocrText}
+                    disabled={isGenerating || !history.ocrText || (!isVIP && !canGenerate)}
                     className={`flex-1 py-2.5 rounded-lg text-white font-medium flex items-center justify-center gap-2 ${
                       isGenerating && generatingId === history.id
                         ? 'bg-gray-600'
-                        : history.ocrText
-                          ? 'bg-gradient-to-r from-emerald-600 to-emerald-500'
-                          : 'bg-gray-600 opacity-50'
+                        : !history.ocrText
+                          ? 'bg-gray-600 opacity-50'
+                          : !isVIP && !canGenerate
+                            ? 'bg-red-600/50 opacity-50'
+                            : 'bg-gradient-to-r from-emerald-600 to-emerald-500'
                     }`}
-                    whileHover={!isGenerating && history.ocrText ? { scale: 1.02 } : {}}
-                    whileTap={!isGenerating && history.ocrText ? { scale: 0.98 } : {}}
+                    whileHover={!isGenerating && history.ocrText && (isVIP || canGenerate) ? { scale: 1.02 } : {}}
+                    whileTap={!isGenerating && history.ocrText && (isVIP || canGenerate) ? { scale: 0.98 } : {}}
                   >
                     {isGenerating && generatingId === history.id ? (
                       <>
@@ -287,6 +332,38 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
             ))
           )}
         </div>
+        
+        {/* 広告モーダル（新問題生成回数回復用） */}
+        {!isVIP && !canGenerate && (
+          <div className="mt-6 space-y-3">
+            <motion.button
+              onClick={() => {
+                vibrateLight();
+                setShowAdsModal(true);
+              }}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-bold flex items-center justify-center gap-2"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Play className="w-5 h-5" />
+              動画を見て3回回復
+            </motion.button>
+
+            <motion.button
+              onClick={() => {
+                vibrateLight();
+                // VIP購入画面へ遷移（実装が必要な場合は追加）
+                addToast('info', 'VIPプランで無制限に新問題を生成できます');
+              }}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold flex items-center justify-center gap-2"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Crown className="w-5 h-5" />
+              ¥550で無制限
+            </motion.button>
+          </div>
+        )}
       </div>
 
       {/* クイズ詳細モーダル */}
@@ -343,6 +420,14 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* 広告モーダル */}
+      <AdsModal
+        isOpen={showAdsModal}
+        onClose={() => setShowAdsModal(false)}
+        adType="scan_recovery"
+        onRewardClaimed={handleAdRewardClaimed}
+      />
     </div>
   );
 };

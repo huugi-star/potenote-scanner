@@ -65,7 +65,8 @@ export const VIP_PLAN = {
 export const LIMITS = {
   // Free ユーザーの制限
   FREE_USER: {
-    DAILY_SCAN_LIMIT: 3,     // 1日3回まで（トークン消費のため）
+    DAILY_SCAN_LIMIT: 5,     // 1日5回まで（スキャン）
+    DAILY_FREE_QUEST_GENERATION_LIMIT: 3, // 1日3回まで（フリークエストの新問題生成）
     MAX_STAMINA: 5,          // 最大スタミナ
   },
   
@@ -166,7 +167,8 @@ export const ANIMATION = {
 // ===== Error Messages (エラーメッセージ) =====
 
 export const ERROR_MESSAGES = {
-  SCAN_LIMIT_REACHED: '本日のスキャン回数（3回）の上限に達しました。広告を視聴して3回回復するか、VIPプランにアップグレードしてください。',
+  SCAN_LIMIT_REACHED: '本日のスキャン回数の上限に達しました。広告を視聴するか、VIPプランにアップグレードしてください。',
+  FREE_QUEST_GENERATION_LIMIT_REACHED: '本日の新問題生成回数（3回）の上限に達しました。広告を視聴して3回回復するか、VIPプランにアップグレードしてください。',
   INSUFFICIENT_COINS: 'コインが足りません。',
   INSUFFICIENT_STAMINA: 'スタミナが足りません。',
   INSUFFICIENT_TICKETS: 'チケットが足りません。',
