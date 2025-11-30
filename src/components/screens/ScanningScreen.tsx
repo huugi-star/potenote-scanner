@@ -24,7 +24,7 @@ import {
 import { useGameStore, selectRemainingScanCount } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
 import { AdsModal } from '@/components/ui/AdsModal';
-import { ShopModal } from '@/components/ui/ShopModal';
+// import { ShopModal } from '@/components/ui/ShopModal'; // 一時的に非表示
 import { useToast } from '@/components/ui/Toast';
 import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/imageUtils';
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
@@ -48,7 +48,7 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showAdsModal, setShowAdsModal] = useState(false);
-  const [showShopModal, setShowShopModal] = useState(false);
+  // const [showShopModal, setShowShopModal] = useState(false); // 一時的に非表示
   const [generatedQuiz, setGeneratedQuiz] = useState<QuizRaw | null>(null);
   const [ocrText, setOcrText] = useState<string | undefined>(undefined);
   const [structuredOCR, setStructuredOCR] = useState<StructuredOCR | undefined>(undefined);
@@ -59,7 +59,7 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
   const checkScanLimit = useGameStore(state => state.checkScanLimit);
   const incrementScanCount = useGameStore(state => state.incrementScanCount);
   const recoverScanCount = useGameStore(state => state.recoverScanCount);
-  const activateVIP = useGameStore(state => state.activateVIP);
+  // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
   // Toast
   const { addToast } = useToast();
@@ -196,15 +196,15 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
     addToast('success', 'スキャン回数が回復しました！');
   };
 
-  // VIP購入
-  const handleVIPPurchase = () => {
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + 1);
-    activateVIP(expiresAt);
-    setShowShopModal(false);
-    vibrateSuccess();
-    addToast('success', 'VIPプランが有効になりました！');
-  };
+  // VIP購入（一時的に非表示）
+  // const handleVIPPurchase = () => {
+  //   const expiresAt = new Date();
+  //   expiresAt.setMonth(expiresAt.getMonth() + 1);
+  //   activateVIP(expiresAt);
+  //   setShowShopModal(false);
+  //   vibrateSuccess();
+  //   addToast('success', 'VIPプランが有効になりました！');
+  // };
 
   // リセット
   const handleReset = () => {
@@ -355,7 +355,8 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
                     動画を見て3回回復
                   </motion.button>
 
-                  <motion.button
+                  {/* VIP購入ボタン（一時的に非表示） */}
+                  {/* <motion.button
                     onClick={() => {
                       vibrateLight();
                       setShowShopModal(true);
@@ -366,7 +367,7 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
                   >
                     <Crown className="w-5 h-5" />
                     ¥550で1日100回まで
-                  </motion.button>
+                  </motion.button> */}
                 </div>
               )}
             </motion.div>
@@ -496,12 +497,13 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
         onRewardClaimed={handleAdRewardClaimed}
       />
 
-      <ShopModal
+      {/* ショップモーダル（一時的に非表示） */}
+      {/* <ShopModal
         isOpen={showShopModal}
         onClose={() => setShowShopModal(false)}
         onPurchase={handleVIPPurchase}
         isVIP={isVIP}
-      />
+      /> */}
     </div>
   );
 };

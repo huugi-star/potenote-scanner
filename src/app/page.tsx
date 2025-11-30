@@ -23,7 +23,7 @@ import { FreeQuestScreen } from '@/components/screens/FreeQuestScreen';
 
 // UI Components
 import { LoginBonusModal } from '@/components/ui/LoginBonusModal';
-import { ShopModal } from '@/components/ui/ShopModal';
+// import { ShopModal } from '@/components/ui/ShopModal'; // 一時的に非表示
 import { BannerAd } from '@/components/ui/BannerAd';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -71,8 +71,8 @@ const HomeScreen = ({
   const totalQuizzes = useGameStore(state => state.totalQuizzes);
   const quizHistoryCount = useGameStore(state => state.quizHistory.length);
   const equipment = useGameStore(state => state.equipment);
-  const [showShop, setShowShop] = useState(false);
-  const activateVIP = useGameStore(state => state.activateVIP);
+  // const [showShop, setShowShop] = useState(false); // 一時的に非表示
+  // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
   // 装備アイテムの詳細を取得（useMemoで安定化）
   const equippedDetails = useMemo(() => ({
@@ -82,12 +82,13 @@ const HomeScreen = ({
     accessory: equipment.accessory ? getItemById(equipment.accessory) : undefined,
   }), [equipment.head, equipment.body, equipment.face, equipment.accessory]);
 
-  const handleVIPPurchase = () => {
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + 1);
-    activateVIP(expiresAt);
-    setShowShop(false);
-  };
+  // VIP購入（一時的に非表示）
+  // const handleVIPPurchase = () => {
+  //   const expiresAt = new Date();
+  //   expiresAt.setMonth(expiresAt.getMonth() + 1);
+  //   activateVIP(expiresAt);
+  //   setShowShop(false);
+  // };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4 pb-24">
@@ -97,7 +98,14 @@ const HomeScreen = ({
           <h1 className="text-2xl font-bold gradient-text">
             Potenote Scanner
           </h1>
-          <button
+          {/* VIP購入ボタン（一時的に非表示） */}
+          {isVIP && (
+            <div className="px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+              <Crown className="w-4 h-4 text-yellow-400" />
+              VIP
+            </div>
+          )}
+          {/* <button
             onClick={() => {
               vibrateLight();
               setShowShop(true);
@@ -110,7 +118,7 @@ const HomeScreen = ({
           >
             <Crown className={`w-4 h-4 ${isVIP ? 'text-yellow-400' : ''}`} />
             {isVIP ? 'VIP' : 'VIPになる'}
-          </button>
+          </button> */}
         </div>
 
         {/* ステータスバー */}
@@ -228,13 +236,13 @@ const HomeScreen = ({
         </div>
       </div>
 
-      {/* ショップモーダル */}
-      <ShopModal
+      {/* ショップモーダル（一時的に非表示） */}
+      {/* <ShopModal
         isOpen={showShop}
         onClose={() => setShowShop(false)}
         onPurchase={handleVIPPurchase}
         isVIP={isVIP}
-      />
+      /> */}
     </div>
   );
 };

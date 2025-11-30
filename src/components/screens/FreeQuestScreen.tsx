@@ -22,7 +22,7 @@ import {
 import { useGameStore } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
 import { AdsModal } from '@/components/ui/AdsModal';
-import { ShopModal } from '@/components/ui/ShopModal';
+// import { ShopModal } from '@/components/ui/ShopModal'; // 一時的に非表示
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
 import { useToast } from '@/components/ui/Toast';
 import { LIMITS } from '@/lib/constants';
@@ -43,7 +43,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [showAdsModal, setShowAdsModal] = useState(false);
-  const [showShopModal, setShowShopModal] = useState(false);
+  // const [showShopModal, setShowShopModal] = useState(false); // 一時的に非表示
   
   // Store
   const isVIP = useGameStore(state => state.isVIP);
@@ -52,7 +52,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
   const checkFreeQuestGenerationLimit = useGameStore(state => state.checkFreeQuestGenerationLimit);
   const incrementFreeQuestGenerationCount = useGameStore(state => state.incrementFreeQuestGenerationCount);
   const recoverFreeQuestGenerationCount = useGameStore(state => state.recoverFreeQuestGenerationCount);
-  const activateVIP = useGameStore(state => state.activateVIP);
+  // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
   const { addToast } = useToast();
   
   // 制限チェック
@@ -143,15 +143,15 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
     }
   };
   
-  // VIP購入
-  const handleVIPPurchase = () => {
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + 1);
-    activateVIP(expiresAt);
-    setShowShopModal(false);
-    vibrateSuccess();
-    addToast('success', 'VIPプランが有効になりました！1日100回まで生成可能です。');
-  };
+  // VIP購入（一時的に非表示）
+  // const handleVIPPurchase = () => {
+  //   const expiresAt = new Date();
+  //   expiresAt.setMonth(expiresAt.getMonth() + 1);
+  //   activateVIP(expiresAt);
+  //   setShowShopModal(false);
+  //   vibrateSuccess();
+  //   addToast('success', 'VIPプランが有効になりました！1日100回まで生成可能です。');
+  // };
 
   // 過去の問題に再挑戦（ランダム順）
   const handleRetryQuiz = (history: QuizHistory) => {
@@ -388,7 +388,8 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
               動画を見て3回回復
             </motion.button>
 
-            <motion.button
+            {/* VIP購入ボタン（一時的に非表示） */}
+            {/* <motion.button
               onClick={() => {
                 vibrateLight();
                 setShowShopModal(true);
@@ -399,7 +400,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
             >
               <Crown className="w-5 h-5" />
               ¥550で1日100回まで
-            </motion.button>
+            </motion.button> */}
           </div>
         )}
       </div>
@@ -412,13 +413,13 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
         onRewardClaimed={handleAdRewardClaimed}
       />
 
-      {/* ショップモーダル */}
-      <ShopModal
+      {/* ショップモーダル（一時的に非表示） */}
+      {/* <ShopModal
         isOpen={showShopModal}
         onClose={() => setShowShopModal(false)}
         onPurchase={handleVIPPurchase}
         isVIP={isVIP}
-      />
+      /> */}
 
       {/* クイズ詳細モーダル */}
       <AnimatePresence>
