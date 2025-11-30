@@ -7,6 +7,9 @@
 
 import { NextResponse } from 'next/server';
 
+// Vercelでの動的レンダリングを強制（request.urlを使用するため）
+export const dynamic = 'force-dynamic';
+
 // 楽天API設定（※IDは必ず.env.localに保存し、コード上には直書きしない）
 const RAKUTEN_APP_ID = process.env.RAKUTEN_APP_ID;
 const RAKUTEN_AFF_ID = process.env.RAKUTEN_AFF_ID;
