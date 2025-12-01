@@ -60,7 +60,7 @@ export const AuthButton = () => {
         onClick={isLoggedIn ? () => setShowConfirm(true) : handleLogin}
         disabled={loading}
         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-800/80 hover:bg-gray-700 text-white text-xs sm:text-sm font-medium transition-colors disabled:opacity-60 border border-white/10"
-        title={isLoggedIn ? 'ログアウト' : 'Googleでログイン'}
+        title={isLoggedIn ? 'サインアウト' : 'Googleでログイン'}
       >
         <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center">
           <img
@@ -69,15 +69,15 @@ export const AuthButton = () => {
             className="w-4 h-4"
           />
         </div>
-        <span className="hidden sm:inline">
+        <span>
           {loading
             ? '処理中...'
             : isLoggedIn
-              ? 'アカウント'
-              : 'Googleでログイン'}
+              ? 'サインアウト'
+              : 'ログイン'}
         </span>
-        {isLoggedIn && !loading && (
-          <span className="hidden sm:inline text-xs text-gray-300 flex items-center gap-1">
+        {isLoggedIn && !loading && shortId && (
+          <span className="hidden sm:inline text-[10px] text-gray-300 flex items-center gap-1">
             <User className="w-3 h-3" />
             {shortId}
           </span>
