@@ -156,13 +156,6 @@ const HomeScreen = ({
           </button> */}
         </div>
 
-        {/* データバックアップに関する注釈 */}
-        <p className="mt-1 text-[10px] text-gray-400 leading-snug">
-          ⚠ データのバックアップについて：クラウドに同期されるクイズ／翻訳履歴は
-          <span className="font-semibold">最新30件まで</span>です。
-          現在お使いの端末内には、すべての履歴が無制限に保存されます。
-        </p>
-
         {/* ステータスバー */}
         <div className="flex items-center gap-3 mb-8">
           <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-800/50 rounded-xl border border-gray-700">

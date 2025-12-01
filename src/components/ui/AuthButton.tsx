@@ -10,7 +10,10 @@ export const AuthButton = () => {
   const uid = useGameStore(state => state.uid);
   const setUserId = useGameStore(state => state.setUserId);
   const [loading, setLoading] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showLoginConfirm, setShowLoginConfirm] = useState(false);
+
+  const isLoggedIn = !!uid;
 
   const handleLogin = async () => {
     if (!auth || !googleProvider) {
@@ -26,6 +29,7 @@ export const AuthButton = () => {
       console.error('Google Login Error:', error);
     } finally {
       setLoading(false);
+      setShowLoginConfirm(false);
     }
   };
 
@@ -44,13 +48,10 @@ export const AuthButton = () => {
       useGameStore.getState().reset();
     } finally {
       setLoading(false);
-      setShowConfirm(false);
+      setShowLogoutConfirm(false);
     }
   };
 
-  const isLoggedIn = !!uid;
-
-  // 表示用の短いID（セキュリティのため一部だけ）
   const shortId = isLoggedIn && uid ? `${uid.slice(0, 4)}...` : null;
   const displayName = isLoggedIn && auth?.currentUser?.displayName
     ? auth.currentUser.displayName
@@ -60,7 +61,7 @@ export const AuthButton = () => {
     <>
       {/* メインボタン */}
       <button
-        onClick={isLoggedIn ? () => setShowConfirm(true) : handleLogin}
+        onClick={isLoggedIn ? () => setShowLogoutConfirm(true) : () => setShowLoginConfirm(true)}
         disabled={loading}
         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-800/80 hover:bg-gray-700 text-white text-xs sm:text-sm font-medium transition-colors disabled:opacity-60 border border-white/10"
         title={isLoggedIn ? (displayName || 'ログイン中') : 'Googleでログイン'}
@@ -87,8 +88,47 @@ export const AuthButton = () => {
         )}
       </button>
 
+      {/* ログイン確認モーダル */}
+      {showLoginConfirm && !isLoggedIn && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-xs sm:max-w-sm bg-gray-900 rounded-2xl border border-gray-700 p-5 shadow-xl">
+            <div className="mb-3">
+              <p className="text-xs font-bold text-gray-300 mb-1">
+                【データのバックアップについて】
+              </p>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                クラウドに同期（引き継ぎ）されるクイズや翻訳の履歴は、通信節約のため
+                <span className="font-semibold">最新の30件まで</span>となります。
+                （※現在お使いの端末内には、引き続きすべての履歴が無制限に保存されます）
+              </p>
+              <p className="text-xs text-gray-200 mt-2">
+                Googleアカウントでログインして、データを保存しますか？
+              </p>
+            </div>
+
+            <div className="space-y-2 mt-4">
+              <button
+                onClick={() => setShowLoginConfirm(false)}
+                disabled={loading}
+                className="w-full py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium border border-gray-700 disabled:opacity-60"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleLogin}
+                disabled={loading}
+                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                <LogIn className="w-4 h-4" />
+                {loading ? 'ログイン中...' : 'Googleでログインして保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ログアウト確認モーダル */}
-      {showConfirm && (
+      {showLogoutConfirm && isLoggedIn && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-xs sm:max-w-sm bg-gray-900 rounded-2xl border border-gray-700 p-5 shadow-xl">
             <div className="flex items-center gap-3 mb-3">
@@ -106,7 +146,7 @@ export const AuthButton = () => {
 
             <div className="space-y-2 mt-4">
               <button
-                onClick={() => setShowConfirm(false)}
+                onClick={() => setShowLogoutConfirm(false)}
                 disabled={loading}
                 className="w-full py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium border border-gray-700 disabled:opacity-60"
               >
