@@ -29,6 +29,7 @@ import { LoginBonusModal } from '@/components/ui/LoginBonusModal';
 import { BannerAd } from '@/components/ui/BannerAd';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
 import { ToastProvider } from '@/components/ui/Toast';
+import { AuthButton } from '@/components/ui/AuthButton';
 import { OnboardingOverlay } from '@/components/ui/OnboardingOverlay';
 
 import { vibrateLight } from '@/lib/haptics';
@@ -125,16 +126,20 @@ const HomeScreen = ({
       {/* ヘッダー */}
       <div className="max-w-md mx-auto pt-6">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold gradient-text">
-            Potenote Scanner
-          </h1>
-          {/* VIP購入ボタン（一時的に非表示） */}
-          {isVIP && (
-            <div className="px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-              <Crown className="w-4 h-4 text-yellow-400" />
-              VIP
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold gradient-text">
+              Potenote Scanner
+            </h1>
+            {/* VIPバッジ（購入ボタンは一時的に非表示） */}
+            {isVIP && (
+              <div className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                <Crown className="w-3 h-3 text-yellow-400" />
+                VIP
+              </div>
+            )}
+          </div>
+          {/* 右上: Googleログインボタン */}
+          <AuthButton />
           {/* <button
             onClick={() => {
               vibrateLight();
