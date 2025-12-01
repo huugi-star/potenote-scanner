@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LogIn, LogOut } from 'lucide-react';
+import { LogIn, LogOut, User, AlertCircle } from 'lucide-react';
 import { signInWithPopup, signOut } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
 import { useGameStore } from '@/store/useGameStore';
@@ -10,6 +10,7 @@ export const AuthButton = () => {
   const uid = useGameStore(state => state.uid);
   const setUserId = useGameStore(state => state.setUserId);
   const [loading, setLoading] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleLogin = async () => {
     if (!auth || !googleProvider) {
@@ -28,35 +29,105 @@ export const AuthButton = () => {
     }
   };
 
-  const handleLogout = async () => {
-    if (auth) {
-      try {
-        await signOut(auth);
-      } catch (error) {
-        console.error('Logout Error:', error);
+  const handleConfirmLogout = async () => {
+    setLoading(true);
+    try {
+      if (auth) {
+        try {
+          await signOut(auth);
+        } catch (error) {
+          console.error('Logout Error:', error);
+        }
       }
+      // UIDをクリアしつつ、ローカル状態を完全リセット
+      await setUserId(null);
+      useGameStore.getState().reset();
+    } finally {
+      setLoading(false);
+      setShowConfirm(false);
     }
-    await setUserId(null);
   };
 
   const isLoggedIn = !!uid;
 
+  // 表示用の短いID（セキュリティのため一部だけ）
+  const shortId = isLoggedIn && uid ? `${uid.slice(0, 4)}...` : null;
+
   return (
-    <button
-      onClick={isLoggedIn ? handleLogout : handleLogin}
-      disabled={loading}
-      className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
-    >
-      {loading ? (
-        <span className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin" />
-      ) : isLoggedIn ? (
-        <LogOut className="w-4 h-4" />
-      ) : (
-        <LogIn className="w-4 h-4" />
+    <>
+      {/* メインボタン */}
+      <button
+        onClick={isLoggedIn ? () => setShowConfirm(true) : handleLogin}
+        disabled={loading}
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-800/80 hover:bg-gray-700 text-white text-xs sm:text-sm font-medium transition-colors disabled:opacity-60 border border-white/10"
+        title={isLoggedIn ? 'ログアウト' : 'Googleでログイン'}
+      >
+        <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center">
+          <img
+            src="https://www.gstatic.com/images/branding/product/1x/googleg_32dp.png"
+            alt="Google"
+            className="w-4 h-4"
+          />
+        </div>
+        <span className="hidden sm:inline">
+          {loading
+            ? '処理中...'
+            : isLoggedIn
+              ? 'アカウント'
+              : 'Googleでログイン'}
+        </span>
+        {isLoggedIn && !loading && (
+          <span className="hidden sm:inline text-xs text-gray-300 flex items-center gap-1">
+            <User className="w-3 h-3" />
+            {shortId}
+          </span>
+        )}
+        {!isLoggedIn && !loading && (
+          <LogIn className="w-4 h-4 hidden sm:inline" />
+        )}
+        {loading && (
+          <span className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin" />
+        )}
+      </button>
+
+      {/* ログアウト確認モーダル */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-xs sm:max-w-sm bg-gray-900 rounded-2xl border border-gray-700 p-5 shadow-xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                <AlertCircle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">ログアウトしますか？</p>
+                <p className="text-xs text-gray-300 mt-0.5 leading-relaxed">
+                  あなたの学習データは、クラウドに安全にバックアップされています。
+                  この端末からは一時的にデータが消去されますが、次回ログインすればいつでも続きから再開できます。
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 mt-4">
+              <button
+                onClick={() => setShowConfirm(false)}
+                disabled={loading}
+                className="w-full py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium border border-gray-700 disabled:opacity-60"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleConfirmLogout}
+                disabled={loading}
+                className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                <LogOut className="w-4 h-4" />
+                {loading ? 'ログアウト中...' : 'ログアウト'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-      <span>{loading ? '処理中...' : isLoggedIn ? 'ログアウト' : 'Googleでログイン'}</span>
-    </button>
+    </>
   );
 };
-
 
