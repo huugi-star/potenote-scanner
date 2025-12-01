@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ExternalLink, Sparkles } from 'lucide-react';
-import { ASP_ADS, type ASPAd } from '@/data/aspAds';
+import { ASP_ADS, type AspAdItem } from '@/data/aspAds';
 
 // ===== Types =====
 
@@ -34,7 +34,7 @@ export const ASPSalesModal = ({
 }: ASPSalesModalProps) => {
   const [readTime, setReadTime] = useState(0);
   const [canClick, setCanClick] = useState(false);
-  const [selectedAd, setSelectedAd] = useState<ASPAd | null>(null);
+  const [selectedAd, setSelectedAd] = useState<AspAdItem | null>(null);
 
   // 広告情報を取得
   useEffect(() => {
@@ -67,10 +67,10 @@ export const ASPSalesModal = ({
 
   // 外部リンクを開く
   const handleOpenLink = () => {
-    if (selectedAd?.affiliateUrl) {
-      window.open(selectedAd.affiliateUrl, '_blank', 'noopener,noreferrer');
+    if (selectedAd?.url) {
+      window.open(selectedAd.url, '_blank', 'noopener,noreferrer');
     } else {
-      // アフィリエイトURLが設定されていない場合は、商品名で検索
+      // URLが設定されていない場合は、商品名で検索
       const searchQuery = encodeURIComponent(selectedAd?.name || '');
       window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank', 'noopener,noreferrer');
     }

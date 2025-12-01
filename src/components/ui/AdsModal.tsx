@@ -20,9 +20,7 @@ export function AdsModal({ isOpen, onClose, adType, onRewardClaimed, adRecommend
   const [countdown, setCountdown] = useState(5);
 
   const targetAd = ASP_ADS.find(ad => ad.id === adRecommendation?.ad_id) || ASP_ADS[0];
-  const salesCopy = adRecommendation?.reason 
-    || targetAd.stockMessages?.[Math.floor(Math.random() * (targetAd.stockMessages?.length || 0))] 
-    || targetAd.descriptionForAI;
+  const salesCopy = adRecommendation?.reason || targetAd.descriptionForAI;
 
   useEffect(() => {
     if (isOpen) {
@@ -83,7 +81,7 @@ export function AdsModal({ isOpen, onClose, adType, onRewardClaimed, adRecommend
       </div>
 
           <a
-            href={targetAd.url || targetAd.affiliateUrl || '#'}
+            href={targetAd.url || '#'}
             target="_blank"
             rel="noopener noreferrer"
             onClick={handleClickAd}

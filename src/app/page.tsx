@@ -439,11 +439,13 @@ const AppContent = () => {
 
   // 翻訳準備完了
   const handleTranslationReady = useCallback((result: { originalText: string; translatedText: string }, imageUrl?: string) => {
-    useGameStore.getState().setTranslationResult({
+    const store = useGameStore.getState();
+    store.setTranslationResult({
       originalText: result.originalText,
       translatedText: result.translatedText,
     });
-    // imageUrlはTranslationResultScreenで保存時に使用
+    // 翻訳履歴に保存（imageUrlも含む）
+    store.saveTranslationHistory(result, imageUrl);
     setPhase('translation_result');
   }, []);
 

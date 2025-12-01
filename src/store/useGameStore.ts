@@ -80,6 +80,11 @@ interface GameActions {
   setScanType: (type: 'quiz' | 'translation') => void;
   setTranslationResult: (result: TranslationResult | null) => void;
   
+  // 翻訳履歴管理
+  saveTranslationHistory: (result: TranslationResult, imageUrl?: string) => void;
+  getTranslationHistory: () => TranslationHistory[];
+  deleteTranslationHistory: (id: string) => void;
+  
   calculateResult: (correctCount: number, totalQuestions: number, isAdWatched: boolean) => QuizResult;
   applyQuizResult: (result: QuizResult) => void;
   
@@ -164,6 +169,9 @@ const initialState: GameState = {
   quizHistory: [],
   
   translationHistory: [],
+  
+  scanType: 'quiz',
+  translationResult: null,
 };
 
 // ===== Store Implementation =====
