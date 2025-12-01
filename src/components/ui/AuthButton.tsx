@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LogIn, LogOut, Loader2 } from 'lucide-react';
+import { LogIn, LogOut } from 'lucide-react';
 import { signInWithPopup, signOut } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
 import { useGameStore } from '@/store/useGameStore';
@@ -45,14 +45,14 @@ export const AuthButton = () => {
     <button
       onClick={isLoggedIn ? handleLogout : handleLogin}
       disabled={loading}
-      className=\"inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium transition-colors disabled:opacity-60\"
+      className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
     >
       {loading ? (
-        <Loader2 className=\"w-4 h-4 animate-spin\" />
+        <span className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin" />
       ) : isLoggedIn ? (
-        <LogOut className=\"w-4 h-4\" />
+        <LogOut className="w-4 h-4" />
       ) : (
-        <LogIn className=\"w-4 h-4\" />
+        <LogIn className="w-4 h-4" />
       )}
       <span>{loading ? '処理中...' : isLoggedIn ? 'ログアウト' : 'Googleでログイン'}</span>
     </button>
