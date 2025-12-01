@@ -11,6 +11,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Languages } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 // Screens
 import { ScanningScreen } from '@/components/screens/ScanningScreen';
@@ -424,12 +426,14 @@ const AppContent = () => {
 
   // Store
   const isVIP = useGameStore(state => state.isVIP);
+  const setUserId = useGameStore(state => state.setUserId);
 
-  // 初回起動時のログインチェック（1回のみ）
+  // 初回起動時のログインチェック & Firebase認証状態の反映（1回のみ）
   useEffect(() => {
     const loginCheck = useGameStore.getState().loginCheck;
     const launched = useGameStore.getState().hasLaunched;
-    
+
+    // 1. ローカルのログインボーナスなど
     const result = loginCheck();
     if (result.isNewDay && result.bonusCoins > 0) {
       setLoginBonusData({
@@ -439,11 +443,21 @@ const AppContent = () => {
       setShowLoginBonus(true);
     }
 
-    // 初回起動時のオンボーディング
     if (!launched) {
       setShowOnboarding(true);
     }
-  }, []); // 空の依存配列で1回のみ実行
+
+    // 2. Firebase Auth のログイン状態をストアに反映（リロード後もログイン継続）
+    if (auth) {
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        // user がいれば uid を、いなければ null をセット
+        setUserId(user ? user.uid : null);
+      });
+      return () => unsubscribe();
+    }
+
+    return;
+  }, [setUserId]);
 
   // オンボーディング終了
   const handleDismissOnboarding = useCallback(() => {
