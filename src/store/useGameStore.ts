@@ -10,6 +10,8 @@ import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinat
 import { ALL_ITEMS, getItemById } from '@/data/items';
 import { REWARDS, DISTANCE, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 // ===== Helper Functions =====
 
@@ -119,6 +121,10 @@ interface GameActions {
   setHasLaunched: () => void;
   
   reset: () => void;
+
+  // ===== Auth & Cloud Sync =====
+  setUserId: (uid: string | null) => Promise<void>;
+  syncWithCloud: () => Promise<void>;
 }
 
 type GameStore = GameState & GameActions;
@@ -126,6 +132,7 @@ type GameStore = GameState & GameActions;
 // ===== Initial State =====
 
 const initialState: GameState = {
+  uid: null,
   coins: 0,
   tickets: 0,
   stamina: STAMINA.MAX,
@@ -181,6 +188,120 @@ export const useGameStore = create<GameStore>()(
     (set, get) => ({
       ...initialState,
       
+      // ===== Auth & Cloud Sync =====
+      
+      setUserId: async (uid) => {
+        // ローカルのUIDを更新
+        set({ uid });
+
+        if (!uid || !db) return;
+
+        try {
+          const userRef = doc(db, 'users', uid);
+          const snap = await getDoc(userRef);
+          const state = get();
+
+          if (snap.exists()) {
+            const cloudData = snap.data() as any;
+
+            set({
+              // ユーザー状態系（努力の結晶のみ）
+              uid,
+              coins: cloudData.userState?.coins ?? state.coins,
+              tickets: cloudData.userState?.tickets ?? state.tickets,
+              stamina: cloudData.userState?.stamina ?? state.stamina,
+              isVIP: cloudData.userState?.isVIP ?? state.isVIP,
+              vipExpiresAt: cloudData.userState?.vipExpiresAt
+                ? new Date(cloudData.userState.vipExpiresAt)
+                : state.vipExpiresAt,
+              dailyScanCount: cloudData.userState?.dailyScanCount ?? state.dailyScanCount,
+              lastScanDate: cloudData.userState?.lastScanDate ?? state.lastScanDate,
+              dailyFreeQuestGenerationCount:
+                cloudData.userState?.dailyFreeQuestGenerationCount ?? state.dailyFreeQuestGenerationCount,
+              lastFreeQuestGenerationDate:
+                cloudData.userState?.lastFreeQuestGenerationDate ?? state.lastFreeQuestGenerationDate,
+              dailyTranslationCount:
+                cloudData.userState?.dailyTranslationCount ?? state.dailyTranslationCount,
+              lastTranslationDate:
+                cloudData.userState?.lastTranslationDate ?? state.lastTranslationDate,
+              lastLoginDate: cloudData.userState?.lastLoginDate ?? state.lastLoginDate,
+              consecutiveLoginDays:
+                cloudData.userState?.consecutiveLoginDays ?? state.consecutiveLoginDays,
+              totalScans: cloudData.userState?.totalScans ?? state.totalScans,
+              totalQuizzes: cloudData.userState?.totalQuizzes ?? state.totalQuizzes,
+              totalCorrectAnswers:
+                cloudData.userState?.totalCorrectAnswers ?? state.totalCorrectAnswers,
+              totalDistance: cloudData.userState?.totalDistance ?? state.totalDistance,
+              totalQuizClears:
+                cloudData.userState?.totalQuizClears ?? state.totalQuizClears,
+
+              // インベントリ系
+              inventory: cloudData.inventory ?? state.inventory,
+              equipment: cloudData.equipment ?? state.equipment,
+
+              // マップ／旅路
+              journey: cloudData.journey ?? state.journey,
+
+              // 履歴は端末ローカルのみ（クラウドには載せない）
+            });
+          } else {
+            // 初回ログイン: 現在のローカル状態をクラウドへ
+            await get().syncWithCloud();
+          }
+        } catch (error) {
+          console.error('Cloud Load Error:', error);
+        }
+      },
+
+      syncWithCloud: async () => {
+        const state = get();
+        if (!db || !state.uid) return;
+
+        try {
+          const userRef = doc(db, 'users', state.uid);
+          const now = new Date().toISOString();
+
+          await setDoc(
+            userRef,
+            {
+              userState: {
+                uid: state.uid,
+                coins: state.coins,
+                tickets: state.tickets,
+                stamina: state.stamina,
+                isVIP: state.isVIP,
+                vipExpiresAt: state.vipExpiresAt
+                  ? state.vipExpiresAt.toISOString?.() ?? state.vipExpiresAt
+                  : null,
+                dailyScanCount: state.dailyScanCount,
+                lastScanDate: state.lastScanDate,
+                dailyFreeQuestGenerationCount:
+                  state.dailyFreeQuestGenerationCount,
+                lastFreeQuestGenerationDate:
+                  state.lastFreeQuestGenerationDate,
+                dailyTranslationCount: state.dailyTranslationCount,
+                lastTranslationDate: state.lastTranslationDate,
+                lastLoginDate: state.lastLoginDate,
+                consecutiveLoginDays: state.consecutiveLoginDays,
+                totalScans: state.totalScans,
+                totalQuizzes: state.totalQuizzes,
+                totalCorrectAnswers: state.totalCorrectAnswers,
+                totalDistance: state.totalDistance,
+                totalQuizClears: state.totalQuizClears,
+              },
+              inventory: state.inventory,
+              equipment: state.equipment,
+              journey: state.journey,
+              updatedAt: now,
+            },
+            { merge: true }
+          );
+          console.log('Data synced to cloud');
+        } catch (error) {
+          console.error('Cloud Sync Error:', error);
+        }
+      },
+      
       // ===== Login & Daily Reset =====
       
       loginCheck: () => {
@@ -225,6 +346,9 @@ export const useGameStore = create<GameStore>()(
           coins: state.coins + bonusCoins,
         });
         
+        // ログイン時の状態をクラウドに保存
+        get().syncWithCloud();
+
         return { isNewDay: true, bonusCoins };
       },
       
@@ -265,12 +389,14 @@ export const useGameStore = create<GameStore>()(
           dailyScanCount: state.dailyScanCount + 1,
           totalScans: state.totalScans + 1,
         });
+        get().syncWithCloud();
       },
       
       recoverScanCount: () => {
         const state = get();
         const newCount = Math.max(0, state.dailyScanCount - REWARDS.AD_REWARDS.SCAN_RECOVERY_COUNT);
         set({ dailyScanCount: newCount });
+        get().syncWithCloud();
       },
       
       // ===== Free Quest Generation Management =====

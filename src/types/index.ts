@@ -94,6 +94,9 @@ export interface Island {
  * ユーザーの状態
  */
 export interface UserState {
+  // ユーザーID（Firebase Auth）
+  uid?: string | null;
+
   // リソース
   coins: number;                 // 所持コイン
   tickets: number;               // ガチャチケット

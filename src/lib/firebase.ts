@@ -1,7 +1,7 @@
 // Firebase SDKの初期化
 
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // ★重要: Step 1で取得したキーを .env.local に入れて、ここで読み込みます
@@ -19,6 +19,7 @@ const firebaseConfig = {
 let app: ReturnType<typeof initializeApp> | null = null;
 let authInstance: ReturnType<typeof getAuth> | null = null;
 let dbInstance: ReturnType<typeof getFirestore> | null = null;
+let googleProviderInstance: GoogleAuthProvider | null = null;
 
 try {
   // 最低限必要な環境変数が設定されているかチェック
@@ -26,6 +27,7 @@ try {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     authInstance = getAuth(app);
     dbInstance = getFirestore(app);
+    googleProviderInstance = new GoogleAuthProvider();
   } else {
     console.warn("Firebase環境変数が不足しています。Firebase機能は無効化されます。");
   }
@@ -39,4 +41,7 @@ export const auth = authInstance;
 
 // データベース機能（クイズ・広告コピー共有用）
 export const db = dbInstance;
+
+// Googleログイン用プロバイダ
+export const googleProvider = googleProviderInstance;
 
