@@ -508,11 +508,18 @@ const AppContent = () => {
 
   // ナビゲーション
   const handleNavigate = useCallback((newPhase: GamePhase) => {
+    // 画面遷移時にスクロール位置をリセット
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+    }
     setPhase(newPhase);
   }, []);
 
   // ホームに戻る
   const handleBackToHome = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+    }
     setPhase('home');
     setQuizSession(null);
   }, []);
