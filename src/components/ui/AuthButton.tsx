@@ -94,26 +94,21 @@ export const AuthButton = () => {
           <div className="w-full max-w-xs sm:max-w-sm bg-gray-900 rounded-2xl border border-gray-700 p-5 shadow-xl">
             <div className="mb-3">
               <p className="text-xs font-bold text-gray-300 mb-1">
-                【データのバックアップについて】
+                【データをバックアップしますか？】
               </p>
               <p className="text-xs text-gray-300 leading-relaxed">
-                クラウドに同期（引き継ぎ）されるクイズや翻訳の履歴は、通信節約のため
-                <span className="font-semibold">最新の30件まで</span>となります。
-                （※現在お使いの端末内には、引き続きすべての履歴が無制限に保存されます）
+                Googleでログインすると、コインやアイテムが安全に保存され、スマホを機種変更しても消えなくなります。
               </p>
-              <p className="text-xs text-gray-200 mt-2">
-                Googleアカウントでログインして、データを保存しますか？
+              <p className="text-xs text-gray-300 leading-relaxed mt-1">
+                （※もちろんバックアップの料金は一切かかりません）
+              </p>
+              <p className="text-xs text-gray-300 leading-relaxed mt-1">
+                クイズ、翻訳の履歴の引き継ぎは<span className="font-semibold">最新の30件</span>になりますが、
+                今のスマホには全部残るので安心してください。
               </p>
             </div>
 
             <div className="space-y-2 mt-4">
-              <button
-                onClick={() => setShowLoginConfirm(false)}
-                disabled={loading}
-                className="w-full py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium border border-gray-700 disabled:opacity-60"
-              >
-                キャンセル
-              </button>
               <button
                 onClick={handleLogin}
                 disabled={loading}
@@ -121,6 +116,13 @@ export const AuthButton = () => {
               >
                 <LogIn className="w-4 h-4" />
                 {loading ? 'ログイン中...' : 'Googleでログインして保存'}
+              </button>
+              <button
+                onClick={() => setShowLoginConfirm(false)}
+                disabled={loading}
+                className="w-full py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium border border-gray-700 disabled:opacity-60"
+              >
+                キャンセル
               </button>
             </div>
           </div>
@@ -138,20 +140,13 @@ export const AuthButton = () => {
               <div>
                 <p className="text-sm font-bold text-white">ログアウトしますか？</p>
                 <p className="text-xs text-gray-300 mt-0.5 leading-relaxed">
-                  あなたの学習データは、クラウドに安全にバックアップされています。
-                  この端末からは一時的にデータが消去されますが、次回ログインすればいつでも続きから再開できます。
+                  あなたのデータはクラウドに安全に保存されています。
+                  この端末からは一時的に消えますが、またログインすれば続きから遊べます。
                 </p>
               </div>
             </div>
 
             <div className="space-y-2 mt-4">
-              <button
-                onClick={() => setShowLogoutConfirm(false)}
-                disabled={loading}
-                className="w-full py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium border border-gray-700 disabled:opacity-60"
-              >
-                キャンセル
-              </button>
               <button
                 onClick={handleConfirmLogout}
                 disabled={loading}
@@ -159,6 +154,13 @@ export const AuthButton = () => {
               >
                 <LogOut className="w-4 h-4" />
                 {loading ? 'ログアウト中...' : 'ログアウト'}
+              </button>
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                disabled={loading}
+                className="w-full py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium border border-gray-700 disabled:opacity-60"
+              >
+                キャンセル
               </button>
             </div>
           </div>
