@@ -15,12 +15,28 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// サーバーサイドレンダリング(SSR)での多重初期化を防ぐおまじない
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// Firebase初期化（環境変数が設定されている場合のみ）
+let app: ReturnType<typeof initializeApp> | null = null;
+let authInstance: ReturnType<typeof getAuth> | null = null;
+let dbInstance: ReturnType<typeof getFirestore> | null = null;
+
+try {
+  // 最低限必要な環境変数が設定されているかチェック
+  if (firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId) {
+    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    authInstance = getAuth(app);
+    dbInstance = getFirestore(app);
+  } else {
+    console.warn("Firebase環境変数が不足しています。Firebase機能は無効化されます。");
+  }
+} catch (error) {
+  console.error("Firebase初期化エラー:", error);
+  // エラーが発生してもアプリは動作し続ける
+}
 
 // 認証機能（ログイン・課金管理用）
-export const auth = getAuth(app);
+export const auth = authInstance;
 
 // データベース機能（クイズ・広告コピー共有用）
-export const db = getFirestore(app);
+export const db = dbInstance;
 

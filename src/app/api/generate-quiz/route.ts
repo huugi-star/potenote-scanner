@@ -46,6 +46,12 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { image, text, verifiedFacts } = body;
+    
+    // デバッグ用ログ
+    console.log("=== Generate Quiz API Called ===");
+    console.log("Has image:", !!image);
+    console.log("Has text:", !!text);
+    console.log("Has verifiedFacts:", !!verifiedFacts);
 
     let extractedText = text || "";
 
@@ -123,39 +129,43 @@ export async function POST(req: Request) {
           console.log(`Keyword Match Found: ${ad.name}`);
 
           // ★Firebaseチェック: この広告の「名作コピー」が保存されているか？
+          // Firebaseが利用可能な場合のみ実行（エラー時はスキップしてAI生成に回す）
           try {
-            const copyQuery = query(
-              collection(db, "ad_copies"),
-              where("ad_id", "==", ad.id),
-              limit(30) // 30個まで取得（在庫チェック用）
-            );
-            const querySnapshot = await getDocs(copyQuery);
-            const stockCount = querySnapshot.size;
-            
-            // 新陳代謝ロジック
-            // 在庫が少ない時（30個未満）: 50%の確率で新規作成（どんどん貯める）
-            // 在庫が多い時（30個以上）: 10%の確率であえて新規作成（マンネリ防止＆新しい当たりを探す）
-            const shouldCreateNew = stockCount < 30 
-              ? Math.random() < 0.5  // 50%の確率
-              : Math.random() < 0.1; // 10%の確率
-            
-            if (!querySnapshot.empty && !shouldCreateNew) {
-              // 在庫あり＆新規作成しない場合: ランダムに1つ選ぶ
-              const docs = querySnapshot.docs;
-              const randomDoc = docs[Math.floor(Math.random() * docs.length)];
-              const data = randomDoc.data();
+            if (db) {
+              const copyQuery = query(
+                collection(db, "ad_copies"),
+                where("ad_id", "==", ad.id),
+                limit(30) // 30個まで取得（在庫チェック用）
+              );
+              const querySnapshot = await getDocs(copyQuery);
+              const stockCount = querySnapshot.size;
               
-              if (data.reason) {
-                preSelectedAdId = ad.id;
-                preSelectedReason = data.reason;
-                console.log(`🔥 Firebase Hit! Using saved copy (Cost: 0). Stock: ${stockCount}`);
+              // 新陳代謝ロジック
+              // 在庫が少ない時（30個未満）: 50%の確率で新規作成（どんどん貯める）
+              // 在庫が多い時（30個以上）: 10%の確率であえて新規作成（マンネリ防止＆新しい当たりを探す）
+              const shouldCreateNew = stockCount < 30 
+                ? Math.random() < 0.5  // 50%の確率
+                : Math.random() < 0.1; // 10%の確率
+              
+              if (!querySnapshot.empty && !shouldCreateNew) {
+                // 在庫あり＆新規作成しない場合: ランダムに1つ選ぶ
+                const docs = querySnapshot.docs;
+                const randomDoc = docs[Math.floor(Math.random() * docs.length)];
+                const data = randomDoc.data();
+                
+                if (data.reason) {
+                  preSelectedAdId = ad.id;
+                  preSelectedReason = data.reason;
+                  console.log(`🔥 Firebase Hit! Using saved copy (Cost: 0). Stock: ${stockCount}`);
+                }
+              } else if (shouldCreateNew) {
+                // 新規作成する場合: preSelectedAdId/preSelectedReason を null のままにして、AI生成に回す
+                console.log(`📝 Creating new copy (Stock: ${stockCount}, Mode: ${stockCount < 30 ? '積極的' : '新陳代謝'})`);
               }
-            } else if (shouldCreateNew) {
-              // 新規作成する場合: preSelectedAdId/preSelectedReason を null のままにして、AI生成に回す
-              console.log(`📝 Creating new copy (Stock: ${stockCount}, Mode: ${stockCount < 30 ? '積極的' : '新陳代謝'})`);
             }
           } catch (e) {
-            console.error("Firebase Read Error (Ignored):", e);
+            // Firebase接続エラーは無視して、AI生成に回す
+            console.error("Firebase Read Error (Ignored, falling back to AI generation):", e);
           }
           break; // 1つ見つかったらループ終了
         }
@@ -164,6 +174,15 @@ export async function POST(req: Request) {
 
     // ===== Step 3: クイズ生成（OpenAI）=====
     console.log("Step 3: Quiz generation with OpenAI...");
+    
+    // OpenAI APIキーの確認
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("OPENAI_API_KEY is not set");
+      return NextResponse.json(
+        { error: "OpenAI API key is not configured" },
+        { status: 500 }
+      );
+    }
 
     // AIへの指示（プロンプト）を構築
     let systemPrompt = "";
@@ -362,17 +381,19 @@ ${verifiedFacts}
     // パターンBで新しく生成されたコピーなら、Firebaseに保存してストックする
     if (!preSelectedReason && validatedData.ad_recommendation && validatedData.ad_recommendation.ad_id) {
       try {
-        await addDoc(collection(db, "ad_copies"), {
-          ad_id: validatedData.ad_recommendation.ad_id,
-          reason: validatedData.ad_recommendation.reason,
-          keywords: validatedData.keywords || [],
-          created_at: Timestamp.now(),
-          click_count: 0, // 将来の分析用
-          view_count: 0   // 将来の分析用
-        });
-        console.log("✨ New Sales Copy Saved to Firebase!");
+        if (db) {
+          await addDoc(collection(db, "ad_copies"), {
+            ad_id: validatedData.ad_recommendation.ad_id,
+            reason: validatedData.ad_recommendation.reason,
+            keywords: validatedData.keywords || [],
+            created_at: Timestamp.now(),
+            click_count: 0, // 将来の分析用
+            view_count: 0   // 将来の分析用
+          });
+          console.log("✨ New Sales Copy Saved to Firebase!");
+        }
       } catch (e) {
-        console.error("Firebase Save Error:", e);
+        console.error("Firebase Save Error (Ignored):", e);
         // 保存に失敗しても、クイズ生成自体は止めない
       }
     }
