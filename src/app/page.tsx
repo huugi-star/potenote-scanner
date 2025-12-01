@@ -683,7 +683,6 @@ const AppContent = () => {
       {/* バナー広告（Freeユーザー・ホーム画面のみ） */}
       <BannerAd
         isVisible={!isVIP && phase === 'home'}
-        onUpgradeClick={() => {}}
       />
 
       {/* ログインボーナスモーダル */}
