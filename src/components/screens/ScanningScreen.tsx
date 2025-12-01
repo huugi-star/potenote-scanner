@@ -19,11 +19,13 @@ import {
   AlertCircle,
   CheckCircle,
   X,
-  ChevronLeft
+  ChevronLeft,
+  Sparkles
 } from 'lucide-react';
 import { useGameStore, selectRemainingScanCount } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
 import { AdsModal } from '@/components/ui/AdsModal';
+import { ASPSalesModal } from '@/components/ui/ASPSalesModal';
 // import { ShopModal } from '@/components/ui/ShopModal'; // 一時的に非表示
 import { useToast } from '@/components/ui/Toast';
 import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/imageUtils';
@@ -35,6 +37,7 @@ import type { QuizRaw, StructuredOCR } from '@/types';
 
 interface ScanningScreenProps {
   onQuizReady: (quiz: QuizRaw, imageUrl: string, ocrText?: string, structuredOCR?: StructuredOCR) => void;
+  onTranslationReady?: (result: { originalText: string; translatedText: string }, imageUrl: string) => void;
   onBack?: () => void;
 }
 
@@ -42,12 +45,14 @@ type ScanState = 'idle' | 'uploading' | 'processing' | 'ready' | 'error';
 
 // ===== Main Component =====
 
-export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => {
+export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: ScanningScreenProps) => {
   // State
   const [scanState, setScanState] = useState<ScanState>('idle');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showAdsModal, setShowAdsModal] = useState(false);
+  const [showASPSalesModal, setShowASPSalesModal] = useState(false);
+  const [aspAdRecommendation, setAspAdRecommendation] = useState<{ ad_id: string; reason: string } | null>(null);
   // const [showShopModal, setShowShopModal] = useState(false); // 一時的に非表示
   const [generatedQuiz, setGeneratedQuiz] = useState<QuizRaw | null>(null);
   const [ocrText, setOcrText] = useState<string | undefined>(undefined);
@@ -55,9 +60,12 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
 
   // Store
   const isVIP = useGameStore(state => state.isVIP);
+  const scanType = useGameStore(state => state.scanType);
   const remainingScans = useGameStore(selectRemainingScanCount);
   const checkScanLimit = useGameStore(state => state.checkScanLimit);
+  const checkTranslationLimit = useGameStore(state => state.checkTranslationLimit);
   const incrementScanCount = useGameStore(state => state.incrementScanCount);
+  const incrementTranslationCount = useGameStore(state => state.incrementTranslationCount);
   const recoverScanCount = useGameStore(state => state.recoverScanCount);
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
@@ -74,12 +82,22 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
     vibrateLight();
 
     // 制限チェック（消費はまだしない）
-    const limitCheck = checkScanLimit();
-    if (!limitCheck.canScan) {
-      setErrorMessage(limitCheck.error || 'スキャン回数の上限に達しました');
-      setScanState('error');
-      vibrateError();
-      return;
+    if (scanType === 'translation') {
+      const limitCheck = checkTranslationLimit();
+      if (!limitCheck.canTranslate) {
+        setErrorMessage(limitCheck.error || '翻訳回数の上限に達しました');
+        setScanState('error');
+        vibrateError();
+        return;
+      }
+    } else {
+      const limitCheck = checkScanLimit();
+      if (!limitCheck.canScan) {
+        setErrorMessage(limitCheck.error || 'スキャン回数の上限に達しました');
+        setScanState('error');
+        vibrateError();
+        return;
+      }
     }
 
     // バリデーション
@@ -103,41 +121,89 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
       // 2. OCR用に画像補正（コントラスト・シャープネス強化）
       const enhancedImage = await preprocessImageForOCR(file);
 
-      // Google Vision OCR + OpenAI クイズ生成
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      const quizResponse = await fetch('/api/generate-quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: enhancedImage, // 補正済み画像を送信
-        }),
-        signal: controller.signal,
-      });
+      if (scanType === 'translation') {
+        // 翻訳モード
+        const translateResponse = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image: enhancedImage,
+          }),
+          signal: controller.signal,
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-      if (!quizResponse.ok) {
-        throw new Error(`Quiz error: ${quizResponse.status}`);
-      }
+        if (!translateResponse.ok) {
+          throw new Error(`Translation error: ${translateResponse.status}`);
+        }
 
-      const quizResult = await quizResponse.json();
+        const translateResult = await translateResponse.json();
 
-      // APIは { quiz: ..., ocrText: ..., structuredOCR: ... } を返す
-      if (quizResult.quiz && quizResult.quiz.questions && quizResult.quiz.questions.length > 0) {
-        // ★成功時のみスキャン回数を消費
-        incrementScanCount();
-        setGeneratedQuiz(quizResult.quiz);
-        setOcrText(quizResult.ocrText);
-        setStructuredOCR(quizResult.structuredOCR); // 構造化OCRを保存
-        setScanState('ready');
-        vibrateSuccess();
-        addToast('success', 'クイズを生成しました！');
-      } else if (quizResult.error) {
-        throw new Error(quizResult.error);
+        if (translateResult.originalText && translateResult.translatedText) {
+          // ★成功時のみ翻訳回数を消費
+          incrementTranslationCount();
+          
+          if (onTranslationReady) {
+            onTranslationReady(
+              {
+                originalText: translateResult.originalText,
+                translatedText: translateResult.translatedText,
+              },
+              compressed.dataUrl
+            );
+          }
+          
+          vibrateSuccess();
+          addToast('success', '翻訳が完了しました！');
+        } else if (translateResult.error) {
+          throw new Error(translateResult.error);
+        } else {
+          throw new Error('翻訳に失敗しました');
+        }
       } else {
-        throw new Error('クイズ生成に失敗しました');
+        // クイズモード
+        const quizResponse = await fetch('/api/generate-quiz', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image: enhancedImage, // 補正済み画像を送信
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!quizResponse.ok) {
+          throw new Error(`Quiz error: ${quizResponse.status}`);
+        }
+
+        const quizResult = await quizResponse.json();
+
+        // APIは { quiz: ..., ocrText: ..., structuredOCR: ... } を返す
+        if (quizResult.quiz && quizResult.quiz.questions && quizResult.quiz.questions.length > 0) {
+          // ★成功時のみスキャン回数を消費
+          incrementScanCount();
+          setGeneratedQuiz(quizResult.quiz);
+          setOcrText(quizResult.ocrText);
+          setStructuredOCR(quizResult.structuredOCR); // 構造化OCRを保存
+          
+          // ASP広告推奨を保存（クイズ生成成功時のみ）
+          if (quizResult.quiz.ad_recommendation) {
+            setAspAdRecommendation(quizResult.quiz.ad_recommendation);
+          }
+          
+          setScanState('ready');
+          vibrateSuccess();
+          addToast('success', 'クイズを生成しました！');
+        } else if (quizResult.error) {
+          throw new Error(quizResult.error);
+        } else {
+          throw new Error('クイズ生成に失敗しました');
+        }
       }
     } catch (error) {
       console.error('Scan error:', error);
@@ -342,6 +408,22 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
               {/* Freeユーザー向け回復オプション */}
               {!isVIP && !canScan && (
                 <div className="mt-6 space-y-3">
+                  {/* ASP広告モーダル表示ボタン（ad_recommendationがある場合のみ） */}
+                  {aspAdRecommendation && (
+                    <motion.button
+                      onClick={() => {
+                        vibrateLight();
+                        setShowASPSalesModal(true);
+                      }}
+                      className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold flex items-center justify-center gap-2"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Sparkles className="w-5 h-5" />
+                      AI先生からのアドバイスを見る
+                    </motion.button>
+                  )}
+                  
                   <motion.button
                     onClick={() => {
                       vibrateLight();
@@ -495,6 +577,13 @@ export const ScanningScreen = ({ onQuizReady, onBack }: ScanningScreenProps) => 
         onClose={() => setShowAdsModal(false)}
         adType="scan_recovery"
         onRewardClaimed={handleAdRewardClaimed}
+      />
+      
+      {/* ASP広告モーダル */}
+      <ASPSalesModal
+        isOpen={showASPSalesModal}
+        onClose={() => setShowASPSalesModal(false)}
+        adRecommendation={aspAdRecommendation}
       />
 
       {/* ショップモーダル（一時的に非表示） */}

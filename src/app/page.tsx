@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History } from 'lucide-react';
+import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Languages } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 
@@ -20,6 +20,7 @@ import { GachaScreen } from '@/components/screens/GachaScreen';
 import { MapScreen } from '@/components/screens/MapScreen';
 import { DressUpScreen } from '@/components/screens/DressUpScreen';
 import { FreeQuestScreen } from '@/components/screens/FreeQuestScreen';
+import { TranslationResultScreen } from '@/components/screens/TranslationResultScreen';
 
 // UI Components
 import { LoginBonusModal } from '@/components/ui/LoginBonusModal';
@@ -43,7 +44,8 @@ type GamePhase =
   | 'gacha'
   | 'map'
   | 'dressup'
-  | 'freequest';
+  | 'freequest'
+  | 'translation_result';
 
 interface QuizSession {
   quiz: QuizRaw;
@@ -56,6 +58,31 @@ interface QuizSession {
 }
 
 // ===== Sub Components =====
+
+/**
+ * 翻訳結果画面ラッパー（ストアから結果を取得）
+ */
+const TranslationResultScreenWrapper = ({ onBack }: { onBack: () => void }) => {
+  const translationResult = useGameStore(state => state.translationResult);
+  
+  if (!translationResult) {
+    return null;
+  }
+  
+  return (
+    <motion.div
+      key="translation_result"
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+    >
+      <TranslationResultScreen
+        result={translationResult}
+        onBack={onBack}
+      />
+    </motion.div>
+  );
+};
 
 /**
  * ホーム画面
@@ -175,6 +202,7 @@ const HomeScreen = ({
         <motion.button
           onClick={() => {
             vibrateLight();
+            useGameStore.getState().setScanType('quiz');
             onNavigate('scanning');
           }}
           className="w-full py-5 rounded-2xl bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-cyan-500/25"
@@ -182,7 +210,28 @@ const HomeScreen = ({
           whileTap={{ scale: 0.98 }}
         >
           <Scan className="w-7 h-7" />
-          スキャンして学ぶ
+          スキャンして学ぶ（クイズ）
+        </motion.button>
+
+        {/* スキャン翻訳ボタン */}
+        <motion.button
+          onClick={() => {
+            vibrateLight();
+            const checkLimit = useGameStore.getState().checkTranslationLimit();
+            if (!checkLimit.canTranslate) {
+              // 制限オーバーの場合はエラーメッセージを表示（将来的に広告モーダルを表示）
+              alert(checkLimit.error || '翻訳回数の上限に達しました');
+              return;
+            }
+            useGameStore.getState().setScanType('translation');
+            onNavigate('scanning');
+          }}
+          className="w-full mt-3 py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <Languages className="w-5 h-5" />
+          スキャン翻訳
         </motion.button>
 
         {/* フリークエスト */}
@@ -388,6 +437,16 @@ const AppContent = () => {
     setPhase('mode_select');
   }, []);
 
+  // 翻訳準備完了
+  const handleTranslationReady = useCallback((result: { originalText: string; translatedText: string }, imageUrl?: string) => {
+    useGameStore.getState().setTranslationResult({
+      originalText: result.originalText,
+      translatedText: result.translatedText,
+    });
+    // imageUrlはTranslationResultScreenで保存時に使用
+    setPhase('translation_result');
+  }, []);
+
   // フリークエスト開始
   const handleFreeQuestStart = useCallback((quiz: QuizRaw) => {
     setQuizSession({
@@ -450,9 +509,14 @@ const AppContent = () => {
           >
             <ScanningScreen 
               onQuizReady={handleQuizReady}
+              onTranslationReady={handleTranslationReady}
               onBack={handleBackToHome}
             />
           </motion.div>
+        )}
+
+        {phase === 'translation_result' && (
+          <TranslationResultScreenWrapper onBack={handleBackToHome} />
         )}
 
         {phase === 'mode_select' && (

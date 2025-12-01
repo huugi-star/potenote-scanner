@@ -46,6 +46,25 @@ export interface StructuredOCR {
 }
 
 /**
+ * 翻訳結果
+ */
+export interface TranslationResult {
+  originalText: string;   // 原文
+  translatedText: string;  // 翻訳文
+}
+
+/**
+ * 翻訳履歴
+ */
+export interface TranslationHistory {
+  id: string;
+  originalText: string;
+  translatedText: string;
+  createdAt: string;   // ISO日付文字列
+  imageUrl?: string;   // スキャン元画像のURL（オプション）
+}
+
+/**
  * クイズ履歴（フリークエスト用）
  */
 export interface QuizHistory {
@@ -89,6 +108,8 @@ export interface UserState {
   lastScanDate: string;          // 最終スキャン日 (YYYY-MM-DD)
   dailyFreeQuestGenerationCount: number;  // 本日のフリークエスト新問題生成回数
   lastFreeQuestGenerationDate: string;     // 最終フリークエスト生成日 (YYYY-MM-DD)
+  dailyTranslationCount: number;  // 本日の翻訳回数
+  lastTranslationDate: string;    // 最終翻訳日 (YYYY-MM-DD)
   
   // ログイン
   lastLoginDate: string;         // 最終ログイン日 (YYYY-MM-DD)

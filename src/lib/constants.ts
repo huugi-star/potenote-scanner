@@ -68,6 +68,7 @@ export const LIMITS = {
   FREE_USER: {
     DAILY_SCAN_LIMIT: 5,     // 1日5回まで（スキャン）
     DAILY_FREE_QUEST_GENERATION_LIMIT: 3, // 1日3回まで（フリークエストの新問題生成）
+    DAILY_TRANSLATION_LIMIT: 3, // 1日3回まで（翻訳）
     MAX_STAMINA: 5,          // 最大スタミナ
   },
   
@@ -75,6 +76,7 @@ export const LIMITS = {
   VIP_USER: {
     DAILY_SCAN_LIMIT: 100,   // 1日100回まで（課金で上限開放）
     DAILY_FREE_QUEST_GENERATION_LIMIT: 100, // 1日100回まで（課金で上限開放）
+    DAILY_TRANSLATION_LIMIT: Infinity, // 無制限（翻訳）
     MAX_STAMINA: 5,          // 最大スタミナ (同じ)
   },
   
@@ -171,6 +173,7 @@ export const ANIMATION = {
 export const ERROR_MESSAGES = {
   SCAN_LIMIT_REACHED: '本日のスキャン回数（5回）の上限に達しました。広告を視聴して3回回復するか、VIPプラン（1日100回まで）にアップグレードしてください。',
   FREE_QUEST_GENERATION_LIMIT_REACHED: '本日の新問題生成回数（3回）の上限に達しました。広告を視聴して3回回復するか、VIPプラン（1日100回まで）にアップグレードしてください。',
+  TRANSLATION_LIMIT_REACHED: '本日の翻訳回数（3回）の上限に達しました。VIPプラン（無制限）にアップグレードしてください。',
   INSUFFICIENT_COINS: 'コインが足りません。',
   INSUFFICIENT_STAMINA: 'スタミナが足りません。',
   INSUFFICIENT_TICKETS: 'チケットが足りません。',

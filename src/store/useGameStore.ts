@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR } from '@/types';
+import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory } from '@/types';
 import { ALL_ITEMS, getItemById } from '@/data/items';
 import { REWARDS, DISTANCE, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
@@ -54,6 +54,13 @@ interface GameState extends UserState {
   
   // クイズ履歴（フリークエスト用）
   quizHistory: QuizHistory[];
+  
+  // 翻訳履歴
+  translationHistory: TranslationHistory[];
+  
+  // スキャンタイプと翻訳結果
+  scanType: 'quiz' | 'translation';
+  translationResult: TranslationResult | null;
 }
 
 interface GameActions {
@@ -66,6 +73,12 @@ interface GameActions {
   checkFreeQuestGenerationLimit: () => { canGenerate: boolean; remaining: number; error?: string };
   incrementFreeQuestGenerationCount: () => void;
   recoverFreeQuestGenerationCount: () => void;
+  
+  checkTranslationLimit: () => { canTranslate: boolean; remaining: number; error?: string };
+  incrementTranslationCount: () => void;
+  
+  setScanType: (type: 'quiz' | 'translation') => void;
+  setTranslationResult: (result: TranslationResult | null) => void;
   
   calculateResult: (correctCount: number, totalQuestions: number, isAdWatched: boolean) => QuizResult;
   applyQuizResult: (result: QuizResult) => void;
@@ -119,6 +132,8 @@ const initialState: GameState = {
   lastScanDate: '',
   dailyFreeQuestGenerationCount: 0,
   lastFreeQuestGenerationDate: '',
+  dailyTranslationCount: 0,
+  lastTranslationDate: '',
   
   lastLoginDate: '',
   consecutiveLoginDays: 0,
@@ -147,6 +162,8 @@ const initialState: GameState = {
   hasLaunched: false,
   
   quizHistory: [],
+  
+  translationHistory: [],
 };
 
 // ===== Store Implementation =====
@@ -292,6 +309,82 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const newCount = Math.max(0, state.dailyFreeQuestGenerationCount - REWARDS.AD_REWARDS.FREE_QUEST_GENERATION_RECOVERY_COUNT);
         set({ dailyFreeQuestGenerationCount: newCount });
+      },
+      
+      // ===== Translation Management =====
+      
+      checkTranslationLimit: () => {
+        const state = get();
+        const today = getTodayString();
+        
+        if (state.lastTranslationDate !== today) {
+          set({ dailyTranslationCount: 0, lastTranslationDate: today });
+          const limit = state.isVIP 
+            ? LIMITS.VIP_USER.DAILY_TRANSLATION_LIMIT 
+            : LIMITS.FREE_USER.DAILY_TRANSLATION_LIMIT;
+          return { 
+            canTranslate: true, 
+            remaining: limit === Infinity ? Infinity : limit 
+          };
+        }
+        
+        if (state.isVIP) {
+          return { canTranslate: true, remaining: Infinity };
+        }
+        
+        const remaining = LIMITS.FREE_USER.DAILY_TRANSLATION_LIMIT - state.dailyTranslationCount;
+        
+        if (remaining <= 0) {
+          return { 
+            canTranslate: false, 
+            remaining: 0, 
+            error: ERROR_MESSAGES.TRANSLATION_LIMIT_REACHED 
+          };
+        }
+        
+        return { canTranslate: true, remaining };
+      },
+      
+      incrementTranslationCount: () => {
+        const state = get();
+        set({
+          dailyTranslationCount: state.dailyTranslationCount + 1,
+        });
+      },
+      
+      setScanType: (type) => {
+        set({ scanType: type });
+      },
+      
+      setTranslationResult: (result) => {
+        set({ translationResult: result });
+      },
+      
+      // ===== Translation History Management =====
+      
+      saveTranslationHistory: (result, imageUrl) => {
+        const state = get();
+        const newHistory: TranslationHistory = {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          originalText: result.originalText,
+          translatedText: result.translatedText,
+          createdAt: new Date().toISOString(),
+          imageUrl,
+        };
+        set({
+          translationHistory: [newHistory, ...state.translationHistory],
+        });
+      },
+      
+      getTranslationHistory: () => {
+        return get().translationHistory;
+      },
+      
+      deleteTranslationHistory: (id) => {
+        const state = get();
+        set({
+          translationHistory: state.translationHistory.filter(h => h.id !== id),
+        });
       },
       
       // ===== Quiz & Rewards =====
@@ -749,6 +842,8 @@ export const useGameStore = create<GameStore>()(
         lastScanDate: state.lastScanDate,
         dailyFreeQuestGenerationCount: state.dailyFreeQuestGenerationCount,
         lastFreeQuestGenerationDate: state.lastFreeQuestGenerationDate,
+        dailyTranslationCount: state.dailyTranslationCount,
+        lastTranslationDate: state.lastTranslationDate,
         lastLoginDate: state.lastLoginDate,
         consecutiveLoginDays: state.consecutiveLoginDays,
         totalScans: state.totalScans,
@@ -762,6 +857,9 @@ export const useGameStore = create<GameStore>()(
         gachaPity: state.gachaPity,
         hasLaunched: state.hasLaunched,
         quizHistory: state.quizHistory,
+        translationHistory: state.translationHistory,
+        scanType: state.scanType,
+        translationResult: state.translationResult,
       }),
     }
   )
