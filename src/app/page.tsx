@@ -665,19 +665,6 @@ const AppContent = () => {
             />
           </motion.div>
         )}
-
-        {phase === 'translation_history' && (
-          <motion.div
-            key="translation_history"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-          >
-            <TranslationHistoryScreen 
-              onBack={handleBackToHome}
-            />
-          </motion.div>
-        )}
       </AnimatePresence>
 
       {/* バナー広告（Freeユーザー・ホーム画面のみ） */}
