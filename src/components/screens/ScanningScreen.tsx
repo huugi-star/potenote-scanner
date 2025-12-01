@@ -476,10 +476,16 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
               
               <Loader2 className="w-12 h-12 text-cyan-400 mx-auto mb-4 animate-spin" />
               <p className="text-white font-medium">
-                {scanState === 'uploading' ? '画像を処理中...' : 'OCR & クイズ生成中...'}
+                {scanState === 'uploading' 
+                  ? '画像を処理中...' 
+                  : scanType === 'translation'
+                    ? '日本語訳に変換中...'
+                    : 'OCR & クイズ生成中...'}
               </p>
               <p className="text-gray-400 text-sm mt-2">
-                Google Vision + GPT-4o-mini
+                {scanType === 'translation' 
+                  ? 'Google Vision + GPT-4o-mini' 
+                  : 'Google Vision + GPT-4o-mini'}
               </p>
             </motion.div>
           )}

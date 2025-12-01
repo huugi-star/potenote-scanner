@@ -5,7 +5,7 @@
  * 原文と翻訳文を見やすく表示する
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Home, Copy, Check, History, Trash2 } from 'lucide-react';
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
@@ -35,10 +35,25 @@ export const TranslationResultScreen = ({
   const translationHistory = useGameStore(state => state.translationHistory);
   const deleteTranslationHistory = useGameStore(state => state.deleteTranslationHistory);
   
-  // 翻訳結果を自動保存
+  // 重複保存を防ぐためのref
+  const hasSavedRef = useRef(false);
+  
+  // 翻訳結果を自動保存（1回のみ）
   useEffect(() => {
-    saveTranslationHistory(result, imageUrl);
-  }, []); // 初回のみ実行
+    if (hasSavedRef.current) return; // 既に保存済みの場合はスキップ
+    
+    // 同じ内容の翻訳が既に存在するかチェック
+    const isDuplicate = translationHistory.some(
+      (history) =>
+        history.originalText === result.originalText &&
+        history.translatedText === result.translatedText
+    );
+    
+    if (!isDuplicate) {
+      saveTranslationHistory(result, imageUrl);
+      hasSavedRef.current = true;
+    }
+  }, [result, imageUrl, saveTranslationHistory, translationHistory]);
 
   const handleCopyOriginal = async () => {
     try {

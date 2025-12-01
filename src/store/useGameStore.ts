@@ -372,6 +372,19 @@ export const useGameStore = create<GameStore>()(
       
       saveTranslationHistory: (result, imageUrl) => {
         const state = get();
+        
+        // 重複チェック: 同じ内容の翻訳が既に存在する場合は追加しない
+        const isDuplicate = state.translationHistory.some(
+          (history) =>
+            history.originalText === result.originalText &&
+            history.translatedText === result.translatedText
+        );
+        
+        if (isDuplicate) {
+          console.log('Translation history duplicate detected, skipping save');
+          return;
+        }
+        
         const newHistory: TranslationHistory = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           originalText: result.originalText,

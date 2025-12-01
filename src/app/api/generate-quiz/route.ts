@@ -240,10 +240,26 @@ OCRで読み取られた学習教材のテキストから、生徒の真の理�
 
 ## 出力 (JSON)
 
+**重要**: 必ず以下の形式で出力してください。キー名は正確に一致させること。
+
 {
-  "summary": "要約",
-  "keywords": ["語句1", "語句2"],
-  "questions": [ ... ],
+  "summary": "教材の要約（100文字程度）",
+  "keywords": ["重要語句1", "重要語句2", "重要語句3"],
+  "questions": [
+    {
+      "q": "問題文（具体的な問いかけ）",
+      "options": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
+      "a": 0,
+      "explanation": "解説文（60文字以内）"
+    },
+    {
+      "q": "問題文2",
+      "options": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
+      "a": 1,
+      "explanation": "解説文2"
+    }
+    // ... 合計5問
+  ],
   "ad_recommendation": {
     "ad_id": "${preSelectedAdId}",
     "reason": "${preSelectedReason}"
@@ -295,14 +311,31 @@ ${adListText}
 
 ## 出力 (JSON)
 
+**重要**: 必ず以下の形式で出力してください。キー名は正確に一致させること。
+
 {
-  "summary": "要約",
-  "keywords": ["語句1", "語句2"],
-  "questions": [ ... ],
+  "summary": "教材の要約（100文字程度）",
+  "keywords": ["重要語句1", "重要語句2", "重要語句3"],
+  "questions": [
+    {
+      "q": "問題文（具体的な問いかけ）",
+      "options": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
+      "a": 0,
+      "explanation": "解説文（60文字以内）"
+    },
+    {
+      "q": "問題文2",
+      "options": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
+      "a": 1,
+      "explanation": "解説文2"
+    }
+    // ... 合計5問
+  ],
   "ad_recommendation": {
     "ad_id": "ID",
     "reason": "メッセージ"
   }
+  // または適切な商品がない場合: "ad_recommendation": null
 }`;
     }
 
@@ -361,7 +394,51 @@ ${verifiedFacts}
     const content = openaiData.choices[0]?.message?.content;
     if (!content) throw new Error("No content");
 
-    const json = JSON.parse(content);
+    let json;
+    try {
+      json = JSON.parse(content);
+    } catch (parseError) {
+      console.error("Failed to parse OpenAI response:", content);
+      throw new Error(`Failed to parse OpenAI response: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+    }
+    
+    // デバッグ用: OpenAIレスポンスの構造をログ出力
+    console.log("OpenAI Response JSON structure:", JSON.stringify(json, null, 2));
+    
+    // レスポンスの正規化（キー名の違いに対応）
+    if (json.questions && Array.isArray(json.questions)) {
+      json.questions = json.questions.map((q: any, index: number) => {
+        // キー名のバリエーションに対応
+        const normalized = {
+          q: q.q || q.question || q.questionText || q.text || '',
+          options: q.options || q.choices || q.answers || [],
+          a: typeof q.a === 'number' ? q.a : (typeof q.answer === 'number' ? q.answer : (typeof q.correctAnswer === 'number' ? q.correctAnswer : (typeof q.correctIndex === 'number' ? q.correctIndex : 0))),
+          explanation: q.explanation || q.explain || q.reason || q.comment || '',
+        };
+        
+        // デバッグ: 正規化前のデータをログ出力
+        if (!normalized.q || !normalized.options || normalized.options.length === 0) {
+          console.error(`Question ${index} normalization failed:`, q);
+        }
+        
+        return normalized;
+      }).filter((q: any) => {
+        // 無効な問題を除外（q, optionsが必須）
+        const isValid = q.q && q.q.trim() !== '' && q.options && Array.isArray(q.options) && q.options.length >= 2;
+        if (!isValid) {
+          console.warn(`Filtered out invalid question:`, q);
+        }
+        return isValid;
+      });
+      
+      // 問題数が不足している場合の警告
+      if (json.questions.length < 5) {
+        console.warn(`Warning: Only ${json.questions.length} valid questions found (expected 5)`);
+      }
+    } else {
+      console.error("No questions array found in OpenAI response:", json);
+      throw new Error("OpenAI response does not contain a questions array");
+    }
 
     // 正解インデックスをシャッフル
     if (json.questions) {
