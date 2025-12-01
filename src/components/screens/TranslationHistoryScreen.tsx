@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Home, Copy, Check, Trash2, ChevronLeft } from 'lucide-react';
+import { Copy, Check, Trash2, ChevronLeft } from 'lucide-react';
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
 import { useGameStore } from '@/store/useGameStore';
 import type { TranslationHistory } from '@/types';
