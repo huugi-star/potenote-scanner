@@ -94,17 +94,16 @@ export const AuthButton = () => {
           <div className="w-full max-w-xs sm:max-w-sm bg-gray-900 rounded-2xl border border-gray-700 p-5 shadow-xl">
             <div className="mb-3">
               <p className="text-xs font-bold text-gray-300 mb-1">
-                【データをバックアップしますか？】
+                【データの保存・引き継ぎ】
               </p>
               <p className="text-xs text-gray-300 leading-relaxed">
-                Googleでログインすると、コインやアイテムが安全に保存され、スマホを機種変更しても消えなくなります。
+                Googleでログインすると、現在のデータを安全にバックアップしたり、別の端末のデータを復元して続きから遊べるようになります。
+                （※バックアップ機能は無料でご利用いただけます）
               </p>
               <p className="text-xs text-gray-300 leading-relaxed mt-1">
-                （※もちろんバックアップの料金は一切かかりません）
-              </p>
-              <p className="text-xs text-gray-300 leading-relaxed mt-1">
-                クイズ、翻訳の履歴の引き継ぎは<span className="font-semibold">最新の30件</span>になりますが、
-                今のスマホには全部残るので安心してください。
+                履歴の同期（引き継ぎ）は通信節約のため、クイズ、翻訳については
+                <span className="font-semibold">最新の30件</span>までとなりますが、
+                現在の端末内にはすべての履歴がそのまま残ります。
               </p>
             </div>
 
@@ -115,7 +114,7 @@ export const AuthButton = () => {
                 className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 <LogIn className="w-4 h-4" />
-                {loading ? 'ログイン中...' : 'Googleでログインして保存'}
+                {loading ? 'ログイン中...' : 'Googleでログインして連携'}
               </button>
               <button
                 onClick={() => setShowLoginConfirm(false)}
