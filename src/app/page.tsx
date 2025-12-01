@@ -105,13 +105,6 @@ const HomeScreen = ({
   // const [showShop, setShowShop] = useState(false); // 一時的に非表示
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
-  // ホーム表示時にスクロール位置を先頭にリセット
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'auto' });
-    }
-  }, []);
-
   // 装備アイテムの詳細を取得（useMemoで安定化）
   const equippedDetails = useMemo(() => ({
     head: equipment.head ? getItemById(equipment.head) : undefined,
@@ -515,21 +508,21 @@ const AppContent = () => {
 
   // ナビゲーション
   const handleNavigate = useCallback((newPhase: GamePhase) => {
-    // 画面遷移時にスクロール位置をリセット
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-    }
     setPhase(newPhase);
   }, []);
 
   // ホームに戻る
   const handleBackToHome = useCallback(() => {
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-    }
     setPhase('home');
     setQuizSession(null);
   }, []);
+
+  // フェーズ変更時に必ずスクロール位置を先頭に戻す
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  }, [phase]);
 
   return (
     <main className="relative">
