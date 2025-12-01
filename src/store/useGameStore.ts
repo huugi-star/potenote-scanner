@@ -11,7 +11,7 @@ import { ALL_ITEMS, getItemById } from '@/data/items';
 import { REWARDS, DISTANCE, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit as fsLimit } from 'firebase/firestore';
 
 // ===== Helper Functions =====
 
@@ -242,8 +242,34 @@ export const useGameStore = create<GameStore>()(
               // マップ／旅路
               journey: cloudData.journey ?? state.journey,
 
-              // 履歴は端末ローカルのみ（クラウドには載せない）
+              // 履歴はこの後サブコレクションから読み込む
             });
+
+            // ===== 履歴サブコレクションの読み込み =====
+            try {
+              // クイズ履歴（クラウドは最新30件まで）
+              const quizCol = collection(db, 'users', uid, 'quiz_history');
+              const quizSnap = await getDocs(
+                query(quizCol, orderBy('createdAt', 'desc'), fsLimit(30))
+              );
+              const quizHistory: QuizHistory[] = quizSnap.docs.map((d) => d.data() as QuizHistory);
+
+              // 翻訳履歴（クラウドは最新30件まで）
+              const transCol = collection(db, 'users', uid, 'translation_history');
+              const transSnap = await getDocs(
+                query(transCol, orderBy('createdAt', 'desc'), fsLimit(30))
+              );
+              const translationHistory: TranslationHistory[] = transSnap.docs.map(
+                (d) => d.data() as TranslationHistory
+              );
+
+              set({
+                quizHistory: quizHistory,
+                translationHistory: translationHistory,
+              });
+            } catch (historyError) {
+              console.error('Cloud history load error:', historyError);
+            }
           } else {
             // 初回ログイン: 現在のローカル状態をクラウドへ
             await get().syncWithCloud();
@@ -521,6 +547,18 @@ export const useGameStore = create<GameStore>()(
         set({
           translationHistory: [newHistory, ...state.translationHistory],
         });
+
+        // クラウドにも保存（テキストのみなので軽量）
+        if (db && state.uid) {
+          (async () => {
+            try {
+              const colRef = collection(db, 'users', state.uid!, 'translation_history');
+              await setDoc(doc(colRef, newHistory.id), newHistory, { merge: true });
+            } catch (e) {
+              console.error('Cloud translation history save error:', e);
+            }
+          })();
+        }
       },
       
       getTranslationHistory: () => {
@@ -595,9 +633,21 @@ export const useGameStore = create<GameStore>()(
           structuredOCR, // 構造化OCRを保存（位置情報付き）
         };
         
-        // 最新50件を保持
-        const newHistory = [history, ...state.quizHistory].slice(0, 50);
+        // 端末ローカルでは履歴を無制限に保持（クラウド側で最新件数を制御）
+        const newHistory = [history, ...state.quizHistory];
         set({ quizHistory: newHistory });
+
+         // クラウドにも保存（テキスト＋スコア程度なので軽量）
+         if (db && state.uid) {
+           (async () => {
+             try {
+               const colRef = collection(db, 'users', state.uid!, 'quiz_history');
+               await setDoc(doc(colRef, history.id), history, { merge: true });
+             } catch (e) {
+               console.error('Cloud quiz history save error:', e);
+             }
+           })();
+         }
       },
       
       getQuizHistory: () => {
