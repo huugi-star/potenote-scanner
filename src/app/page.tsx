@@ -21,6 +21,7 @@ import { MapScreen } from '@/components/screens/MapScreen';
 import { DressUpScreen } from '@/components/screens/DressUpScreen';
 import { FreeQuestScreen } from '@/components/screens/FreeQuestScreen';
 import { TranslationResultScreen } from '@/components/screens/TranslationResultScreen';
+import { TranslationHistoryScreen } from '@/components/screens/TranslationHistoryScreen';
 
 // UI Components
 import { LoginBonusModal } from '@/components/ui/LoginBonusModal';
@@ -45,7 +46,8 @@ type GamePhase =
   | 'map'
   | 'dressup'
   | 'freequest'
-  | 'translation_result';
+  | 'translation_result'
+  | 'translation_history';
 
 interface QuizSession {
   quiz: QuizRaw;
@@ -97,6 +99,7 @@ const HomeScreen = ({
   const totalDistance = useGameStore(state => state.journey.totalDistance);
   const totalQuizzes = useGameStore(state => state.totalQuizzes);
   const quizHistoryCount = useGameStore(state => state.quizHistory.length);
+  const translationHistoryCount = useGameStore(state => state.translationHistory.length);
   const equipment = useGameStore(state => state.equipment);
   // const [showShop, setShowShop] = useState(false); // 一時的に非表示
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
@@ -283,6 +286,27 @@ const HomeScreen = ({
             マップ
           </motion.button>
         </div>
+
+        {/* 翻訳履歴ボタン */}
+        {translationHistoryCount > 0 && (
+          <motion.button
+            onClick={() => {
+              vibrateLight();
+              onNavigate('translation_history');
+            }}
+            className="w-full mt-3 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-medium flex items-center justify-center gap-2"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Languages className="w-5 h-5" />
+            翻訳履歴を見る
+            <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+              {translationHistoryCount}
+            </span>
+          </motion.button>
+        )}
       </div>
 
       {/* ショップモーダル（一時的に非表示） */}
@@ -613,6 +637,32 @@ const AppContent = () => {
             <FreeQuestScreen 
               onBack={handleBackToHome}
               onStartQuiz={handleFreeQuestStart}
+            />
+          </motion.div>
+        )}
+
+        {phase === 'translation_history' && (
+          <motion.div
+            key="translation_history"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <TranslationHistoryScreen 
+              onBack={handleBackToHome}
+            />
+          </motion.div>
+        )}
+
+        {phase === 'translation_history' && (
+          <motion.div
+            key="translation_history"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <TranslationHistoryScreen 
+              onBack={handleBackToHome}
             />
           </motion.div>
         )}
