@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LogIn, LogOut, User, AlertCircle } from 'lucide-react';
+import { LogIn, LogOut, AlertCircle } from 'lucide-react';
 import { signInWithPopup, signOut } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
 import { useGameStore } from '@/store/useGameStore';
