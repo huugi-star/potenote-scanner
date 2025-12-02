@@ -17,7 +17,8 @@ import {
   Search,
   History,
   AlertCircle,
-  Crown
+  Crown,
+  Trash2
 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
@@ -49,6 +50,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
   const isVIP = useGameStore(state => state.isVIP);
   const quizHistory = useGameStore(state => state.quizHistory);
   const addQuestionsToHistory = useGameStore(state => state.addQuestionsToHistory);
+  const deleteQuizHistory = useGameStore(state => state.deleteQuizHistory);
   const checkFreeQuestGenerationLimit = useGameStore(state => state.checkFreeQuestGenerationLimit);
   const incrementFreeQuestGenerationCount = useGameStore(state => state.incrementFreeQuestGenerationCount);
   const recoverFreeQuestGenerationCount = useGameStore(state => state.recoverFreeQuestGenerationCount);
@@ -165,6 +167,23 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
     };
     
     onStartQuiz(retryQuiz);
+  };
+
+  // クイズ履歴の削除
+  const handleDeleteQuiz = async (historyId: string) => {
+    if (!confirm('このクイズを削除しますか？')) {
+      return;
+    }
+    
+    vibrateLight();
+    try {
+      await deleteQuizHistory(historyId);
+      vibrateSuccess();
+      addToast('success', 'クイズを削除しました');
+    } catch (error) {
+      console.error('Delete quiz error:', error);
+      addToast('error', '削除に失敗しました');
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -365,6 +384,18 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
                         新問題
                       </>
                     )}
+                  </motion.button>
+
+                  {/* 削除ボタン */}
+                  <motion.button
+                    onClick={() => handleDeleteQuiz(history.id)}
+                    disabled={isGenerating}
+                    className="px-3 py-2.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-white transition-colors"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    title="削除"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </motion.button>
                 </div>
               </motion.div>

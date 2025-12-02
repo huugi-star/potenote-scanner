@@ -11,7 +11,7 @@ import { ALL_ITEMS, getItemById } from '@/data/items';
 import { REWARDS, DISTANCE, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
 import { db, auth } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit as fsLimit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, orderBy, limit as fsLimit } from 'firebase/firestore';
 
 // ===== Helper Functions =====
 
@@ -107,6 +107,7 @@ interface GameActions {
   // クイズ履歴
   saveQuizHistory: (quiz: QuizRaw, result: QuizResult, ocrText?: string, structuredOCR?: StructuredOCR) => Promise<void>;
   getQuizHistory: () => QuizHistory[];
+  deleteQuizHistory: (historyId: string) => Promise<void>;
   updateQuizHistoryUsedIndices: (historyId: string, newIndices: number[]) => void;
   addQuestionsToHistory: (historyId: string, newQuestions: QuizHistory['quiz']['questions']) => void;
   
@@ -806,6 +807,27 @@ export const useGameStore = create<GameStore>()(
       
       getQuizHistory: () => {
         return get().quizHistory;
+      },
+      
+      // クイズ履歴の削除
+      deleteQuizHistory: async (historyId: string) => {
+        const state = get();
+        
+        // ローカルから削除
+        const updatedHistory = state.quizHistory.filter(h => h.id !== historyId);
+        set({ quizHistory: updatedHistory });
+        
+        // クラウドからも削除
+        const effectiveUid = state.uid ?? auth?.currentUser?.uid ?? null;
+        if (db && effectiveUid) {
+          try {
+            const colRef = collection(db, 'users', effectiveUid, 'quiz_history');
+            await deleteDoc(doc(colRef, historyId));
+            console.log('[deleteQuizHistory] Successfully deleted from Firestore:', historyId);
+          } catch (e) {
+            console.error('[deleteQuizHistory] Cloud quiz history delete error:', e);
+          }
+        }
       },
       
       // フリークエスト用: 出題済みインデックスを更新

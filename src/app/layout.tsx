@@ -18,6 +18,9 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <head>
+        {/* Google AdSense - head タグでは data-nscript がサポートされていないため、body に移動 */}
+      </head>
+      <body className={inter.className}>
         {/* Google AdSense */}
         <Script
           async
@@ -25,8 +28,8 @@ export default function RootLayout({
           crossOrigin="anonymous"
           strategy="afterInteractive"
         />
-      </head>
-      <body className={inter.className}>{children}</body>
+        {children}
+      </body>
     </html>
   );
 }
