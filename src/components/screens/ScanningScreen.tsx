@@ -31,7 +31,7 @@ import { useToast } from '@/components/ui/Toast';
 import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/imageUtils';
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
 import { LIMITS } from '@/lib/constants';
-import type { QuizRaw, StructuredOCR } from '@/types';
+import type { QuizRaw, StructuredOCR, QuizResult } from '@/types';
 
 // ===== Types =====
 
@@ -71,6 +71,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const incrementScanCount = useGameStore(state => state.incrementScanCount);
   const incrementTranslationCount = useGameStore(state => state.incrementTranslationCount);
   const recoverScanCount = useGameStore(state => state.recoverScanCount);
+  const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
   // Toast
@@ -207,6 +208,20 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         if (quizResult.quiz && quizResult.quiz.questions && quizResult.quiz.questions.length > 0) {
           // ★成功時のみスキャン回数を消費
           incrementScanCount();
+
+          // スキャンした時点でクイズを履歴に保存（まだ未プレイのテンプレートとして）
+          const initialResult: QuizResult = {
+            quizId: `scan_${Date.now()}`,
+            correctCount: 0,
+            totalQuestions: quizResult.quiz.questions.length,
+            isPerfect: false,
+            earnedCoins: 0,
+            earnedDistance: 0,
+            isDoubled: false,
+            timestamp: new Date(),
+          };
+          saveQuizHistory(quizResult.quiz, initialResult, quizResult.ocrText, quizResult.structuredOCR);
+
           // ストアに保存（ページ更新後も保持）
           setGeneratedQuiz(quizResult.quiz, compressed.dataUrl, quizResult.ocrText, quizResult.structuredOCR);
           

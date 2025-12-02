@@ -278,20 +278,39 @@ export const useGameStore = create<GameStore>()(
               const quizSnap = await getDocs(
                 query(quizCol, orderBy('createdAt', 'desc'), fsLimit(30))
               );
-              const quizHistory: QuizHistory[] = quizSnap.docs.map((d) => d.data() as QuizHistory);
+              const cloudQuizHistory: QuizHistory[] = quizSnap.docs.map(
+                (d) => d.data() as QuizHistory
+              );
 
               // 翻訳履歴（クラウドは最新30件まで）
               const transCol = collection(db, 'users', uid, 'translation_history');
               const transSnap = await getDocs(
                 query(transCol, orderBy('createdAt', 'desc'), fsLimit(30))
               );
-              const translationHistory: TranslationHistory[] = transSnap.docs.map(
+              const cloudTranslationHistory: TranslationHistory[] = transSnap.docs.map(
                 (d) => d.data() as TranslationHistory
               );
 
+              // 既存ローカル履歴とクラウド履歴をマージ（IDベースで重複除去）
+              const currentState = get();
+
+              const mergedQuizHistory: QuizHistory[] = [
+                ...cloudQuizHistory,
+                ...currentState.quizHistory.filter(
+                  (local) => !cloudQuizHistory.some((cloud) => cloud.id === local.id)
+                ),
+              ];
+
+              const mergedTranslationHistory: TranslationHistory[] = [
+                ...cloudTranslationHistory,
+                ...currentState.translationHistory.filter(
+                  (local) => !cloudTranslationHistory.some((cloud) => cloud.id === local.id)
+                ),
+              ];
+
               set({
-                quizHistory: quizHistory,
-                translationHistory: translationHistory,
+                quizHistory: mergedQuizHistory,
+                translationHistory: mergedTranslationHistory,
               });
             } catch (historyError) {
               console.error('Cloud history load error:', historyError);
