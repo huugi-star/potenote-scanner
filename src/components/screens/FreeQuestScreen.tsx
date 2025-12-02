@@ -29,7 +29,7 @@ import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
 import { useToast } from '@/components/ui/Toast';
 import { LIMITS } from '@/lib/constants';
 import { generateQuizPDF } from '@/lib/pdfUtils';
-import type { QuizHistory, QuizRaw } from '@/types';
+import type { QuizHistory, QuizRaw, QuizResult } from '@/types';
 
 // ===== Types =====
 
@@ -53,6 +53,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
   const quizHistory = useGameStore(state => state.quizHistory);
   const addQuestionsToHistory = useGameStore(state => state.addQuestionsToHistory);
   const deleteQuizHistory = useGameStore(state => state.deleteQuizHistory);
+  const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
   const checkFreeQuestGenerationLimit = useGameStore(state => state.checkFreeQuestGenerationLimit);
   const incrementFreeQuestGenerationCount = useGameStore(state => state.incrementFreeQuestGenerationCount);
   const recoverFreeQuestGenerationCount = useGameStore(state => state.recoverFreeQuestGenerationCount);
@@ -117,6 +118,28 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
           incrementFreeQuestGenerationCount();
           // 新しい問題を履歴に追加（再挑戦用）
           addQuestionsToHistory(history.id, newQuiz.questions);
+          
+          // 新しく生成した問題を新しいクイズ履歴エントリとして保存（ページ更新後も保持するため）
+          const newQuizId = `freequest_new_${Date.now()}`;
+          const tempResult: QuizResult = {
+            quizId: newQuizId,
+            correctCount: 0,
+            totalQuestions: newQuiz.questions.length,
+            isPerfect: false,
+            earnedCoins: 0,
+            earnedDistance: 0,
+            isDoubled: false,
+            timestamp: new Date(),
+          };
+          
+          // 新しいクイズ履歴として保存（ocrTextとstructuredOCRは元の履歴から継承）
+          await saveQuizHistory(
+            newQuiz,
+            tempResult,
+            history.ocrText,
+            history.structuredOCR
+          );
+          
           addToast('success', '新しい問題を生成しました！');
           onStartQuiz(newQuiz);
         } else {
