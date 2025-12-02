@@ -106,8 +106,8 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
   const totalQuestionCount = allQuestions.length;
   const { totalScore, pointsPerQ } = calculateScore(totalQuestionCount);
   
-  // カテゴリ名を取得（最初の履歴のsummaryから、またはキーワードから推測）
-  const categoryName = histories[0]?.quiz.summary || histories[0]?.quiz.keywords?.[0] || '学習クエスト';
+  // カテゴリ名を取得（キーワードのみを使用）
+  const categoryName = histories[0]?.quiz.keywords?.[0] || histories[0]?.quiz.keywords?.[1] || histories[0]?.quiz.keywords?.[2] || '学習クエスト';
   
   const pdf = new jsPDF({
     orientation: 'portrait',
@@ -146,20 +146,22 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
       <!-- ヘッダーエリア（RPGクエスト風） -->
       <div style="flex: 0 0 auto; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 3px solid #333;">
         <!-- メインタイトル -->
-        <div style="font-size: 22px; font-weight: bold; margin-bottom: 8px; color: #1a1a1a; text-align: center;">
+        <div style="font-size: 22px; font-weight: bold; margin-bottom: ${pageIndex === 0 ? '8px' : '0'}; color: #1a1a1a; text-align: center;">
           ${categoryName}
         </div>
-        <!-- スコア欄 -->
+        ${pageIndex === 0 ? `
+        <!-- スコア欄（1ページ目のみ） -->
         <div style="display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 14px; font-weight: bold;">
           <span style="color: #666;">SCORE:</span>
           <span style="border: 2px solid #333; padding: 4px 20px; background-color: #f9f9f9; min-width: 80px; text-align: center;">
-            [       ]
+            
           </span>
           <span style="color: #333;">/ ${totalScore}</span>
           <span style="font-size: 10px; color: #666; font-weight: normal; margin-left: 4px;">
             (Reward: ${pointsPerQ} pts)
           </span>
         </div>
+        ` : ''}
       </div>
       
       <!-- メインコンテンツエリア（問題文と解答を同じ高さで配置） -->
