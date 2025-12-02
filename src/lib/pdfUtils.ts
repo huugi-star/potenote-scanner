@@ -180,16 +180,18 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
     });
     
     // ステップ2: 残りのスペースを計算（ヘッダーとフッターを除いた高さ）
-    // 実際の利用可能高さを計算（パディング12mm × 2 = 24mm + フッターとの間隔8px ≈ 3mmを考慮）
-    const availableHeight = MAIN_AREA_HEIGHT - 24 - 3; // パディング分とフッター間隔を差し引く
+    // 実際の利用可能高さを計算（パディング12mm × 2 = 24mm + フッターとの間隔を考慮）
+    // フッターとの間隔: margin-bottom 12px + margin-top 12px = 24px ≈ 6mm
+    const footerMargin = 6; // フッターとの間隔（mm）
+    const availableHeight = MAIN_AREA_HEIGHT - 24 - footerMargin; // パディング分とフッター間隔を差し引く
     const remainingSpace = availableHeight - totalTextHeight;
     
     // ステップ3: 問題間のギャップを算出
     const questionCount = pageQuestions.length;
     let dynamicGap = questionCount > 1 ? remainingSpace / (questionCount - 1) : 0;
     
-    // 安全策: 最大12mmでキャップ（読みやすさのため）
-    dynamicGap = Math.min(dynamicGap, 12);
+    // 安全策: 最大10mmでキャップ（読みやすさのため、フッターとの間隔を確保）
+    dynamicGap = Math.min(dynamicGap, 10);
     // 最小値も設定（読みやすさのため）
     dynamicGap = Math.max(dynamicGap, 2);
     
@@ -251,12 +253,12 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
         </div>
         
         <!-- 問題リスト（各問題を1行として、問題文と解答を横並び） -->
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 0; justify-content: flex-start; overflow: visible; margin-top: 0; margin-bottom: 8px; position: relative; z-index: 2;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 0; justify-content: flex-start; overflow: visible; margin-top: 0; margin-bottom: 0; position: relative; z-index: 2;">
           ${pageQuestions.map((item, localIndex) => {
             const globalIndex = startQuestionNumber + localIndex - 1;
             const isLast = localIndex === pageQuestions.length - 1;
-            // 動的余白を適用（最後の問題は0）
-            const marginBottom = isLast ? '0' : `${dynamicGapPx}px`;
+            // 動的余白を適用（最後の問題はフッターとの間隔を確保）
+            const marginBottom = isLast ? '12px' : `${dynamicGapPx}px`;
             const correctAnswer = item.question.options[item.question.a];
             
             return `
