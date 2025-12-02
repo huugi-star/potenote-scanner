@@ -61,10 +61,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const scanStructuredOCR = useGameStore(state => state.scanStructuredOCR);
   const setGeneratedQuiz = useGameStore(state => state.setGeneratedQuiz);
   const clearGeneratedQuiz = useGameStore(state => state.clearGeneratedQuiz);
-  
-  // ローカル状態（プレビュー用）
-  const [localOcrText, setLocalOcrText] = useState<string | undefined>(undefined);
-  const [localStructuredOCR, setLocalStructuredOCR] = useState<StructuredOCR | undefined>(undefined);
 
   // Store
   const isVIP = useGameStore(state => state.isVIP);
@@ -213,8 +209,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           incrementScanCount();
           // ストアに保存（ページ更新後も保持）
           setGeneratedQuiz(quizResult.quiz, compressed.dataUrl, quizResult.ocrText, quizResult.structuredOCR);
-          setLocalOcrText(quizResult.ocrText);
-          setLocalStructuredOCR(quizResult.structuredOCR); // 構造化OCRを保存
           
           // ASP広告推奨を保存（クイズ生成成功時のみ）
           if (quizResult.quiz.ad_recommendation) {
@@ -303,8 +297,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
     setScanState('idle');
     setSelectedImage(null);
     clearGeneratedQuiz(); // ストアからもクリア
-    setLocalOcrText(undefined);
-    setLocalStructuredOCR(undefined);
     setErrorMessage('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
