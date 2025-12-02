@@ -8,7 +8,7 @@
  * ★重要: スキャン回数はAPI成功時のみ消費する
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Camera, 
