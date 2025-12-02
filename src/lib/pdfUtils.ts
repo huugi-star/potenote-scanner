@@ -65,9 +65,9 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
     });
   });
 
-  const QUESTIONS_PER_PAGE = 10; // 1ページあたりの問題数（固定）
+  const QUESTIONS_PER_PAGE = 8; // 1ページあたりの問題数（固定）
   
-  // 10問ずつのチャンクに分割
+  // 8問ずつのチャンクに分割
   const pages: Array<typeof allQuestions> = [];
   for (let i = 0; i < allQuestions.length; i += QUESTIONS_PER_PAGE) {
     pages.push(allQuestions.slice(i, i + QUESTIONS_PER_PAGE));
@@ -192,7 +192,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
         <div style="font-size: 13px; font-weight: bold; margin-bottom: 6px; color: #333;">
           【選択肢】問${startQuestionNumber}〜問${endQuestionNumber}
         </div>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(5, 1fr); gap: 5px 10px; font-size: 8px; line-height: 1.3; height: 100%;">
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(4, 1fr); gap: 5px 10px; font-size: 8px; line-height: 1.3; height: 100%;">
           ${pageQuestions.map((item, localIndex) => {
             const globalIndex = startQuestionNumber + localIndex - 1;
             
