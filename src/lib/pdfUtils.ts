@@ -11,24 +11,36 @@ import html2canvas from 'html2canvas';
 import type { QuizHistory } from '@/types';
 
 /**
- * クイズ履歴をPDF化
+ * 複数のクイズ履歴をPDF化
  * Active Recall法：選択肢・分離レイアウト
  * - 上部: 問題文リスト（カッコ付き）
  * - 下部: 選択肢の塊
  * - 右端（縦一列）: 解答欄
  * - 問題と選択肢がページを跨がないように調整
  */
-export async function generateQuizPDF(history: QuizHistory): Promise<void> {
-  const questions = history.quiz.questions;
+export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
+  if (histories.length === 0) {
+    throw new Error('クイズ履歴がありません');
+  }
+
+  // すべての問題を統合
+  const allQuestions: Array<{ question: QuizHistory['quiz']['questions'][0]; quizIndex: number; questionIndex: number }> = [];
+  histories.forEach((history, quizIndex) => {
+    history.quiz.questions.forEach((question, questionIndex) => {
+      allQuestions.push({ question, quizIndex, questionIndex });
+    });
+  });
+
   const maxHeightPerPage = 250; // 1ページあたりの最大高さ（mm、余裕を持たせる）
   
   // ページごとに問題を分割（問題文と選択肢が同じページに収まるように）
-  const pages: Array<{ questions: typeof questions; startIndex: number; endIndex: number }> = [];
-  let currentPageQuestions: typeof questions = [];
+  const pages: Array<{ questions: typeof allQuestions; startIndex: number; endIndex: number }> = [];
+  let currentPageQuestions: typeof allQuestions = [];
   let estimatedHeight = 0;
   let startIndex = 0;
   
-  questions.forEach((question, index) => {
+  allQuestions.forEach((item, index) => {
+    const question = item.question;
     // 問題文の高さを推定（1行あたり約4mm、問題文は平均3行と仮定）
     const questionHeight = Math.max(question.q.length / 30 * 4, 12);
     // 選択肢の高さ（4択 × 3mm）
@@ -43,11 +55,11 @@ export async function generateQuizPDF(history: QuizHistory): Promise<void> {
         startIndex,
         endIndex: index - 1,
       });
-      currentPageQuestions = [question];
+      currentPageQuestions = [item];
       estimatedHeight = totalHeight;
       startIndex = index;
     } else {
-      currentPageQuestions.push(question);
+      currentPageQuestions.push(item);
       estimatedHeight += totalHeight;
     }
   });
@@ -57,7 +69,7 @@ export async function generateQuizPDF(history: QuizHistory): Promise<void> {
     pages.push({
       questions: currentPageQuestions,
       startIndex,
-      endIndex: questions.length - 1,
+      endIndex: allQuestions.length - 1,
     });
   }
   
@@ -92,12 +104,13 @@ export async function generateQuizPDF(history: QuizHistory): Promise<void> {
     
     if (pageIndex === 0) {
       // 最初のページのみタイトルとサマリーを表示
+      const summaries = histories.map(h => h.quiz.summary).join(' / ');
       html += `
         <div style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 20px;">
           学習プリント
         </div>
         <div style="margin-bottom: 25px; font-size: 11px; color: #666; padding-bottom: 15px; border-bottom: 1px solid #ddd;">
-          ${history.quiz.summary}
+          ${summaries}
         </div>
       `;
     }
@@ -112,11 +125,11 @@ export async function generateQuizPDF(history: QuizHistory): Promise<void> {
               【問題】
             </div>
             <div style="line-height: 2.2;">
-              ${pageData.questions.map((question, localIndex) => {
+              ${pageData.questions.map((item, localIndex) => {
                 const globalIndex = pageData.startIndex + localIndex;
                 return `
                   <div style="margin-bottom: 12px; font-size: 11px;">
-                    <span style="font-weight: bold;">（${globalIndex + 1}）</span> ${question.q}
+                    <span style="font-weight: bold;">（${globalIndex + 1}）</span> ${item.question.q}
                   </div>
                 `;
               }).join('')}
@@ -129,8 +142,8 @@ export async function generateQuizPDF(history: QuizHistory): Promise<void> {
               【選択肢】
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; font-size: 10px; line-height: 1.8;">
-              ${pageData.questions.map((question) => 
-                question.options.map((option, optIndex) => 
+              ${pageData.questions.map((item) => 
+                item.question.options.map((option, optIndex) => 
                   `<div style="padding: 5px 0;">
                     <span style="font-weight: bold;">${String.fromCharCode(65 + optIndex)}.</span> ${option}
                   </div>`
@@ -146,17 +159,17 @@ export async function generateQuizPDF(history: QuizHistory): Promise<void> {
             【解答】
           </div>
           <div style="font-size: 11px; line-height: 2.5;">
-            ${pageData.questions.map((question, localIndex) => {
+            ${pageData.questions.map((item, localIndex) => {
               const globalIndex = pageData.startIndex + localIndex;
-              const correctAnswer = question.options[question.a];
+              const correctAnswer = item.question.options[item.question.a];
               return `
                 <div style="margin-bottom: 15px; padding: 8px; background-color: #f5f5f5; border-radius: 4px;">
                   <div style="font-weight: bold; margin-bottom: 5px;">問${globalIndex + 1}</div>
                   <div style="color: #0066cc; font-weight: bold;">
-                    ${String.fromCharCode(65 + question.a)}. ${correctAnswer}
+                    ${String.fromCharCode(65 + item.question.a)}. ${correctAnswer}
                   </div>
                   <div style="font-size: 9px; color: #666; margin-top: 5px; line-height: 1.5;">
-                    ${question.explanation}
+                    ${item.question.explanation}
                   </div>
                 </div>
               `;
@@ -196,10 +209,9 @@ export async function generateQuizPDF(history: QuizHistory): Promise<void> {
   }
   
   // PDFをダウンロード
-  const safeFileName = history.quiz.summary
-    .substring(0, 20)
-    .replace(/[^\w\s-]/g, '') // 特殊文字を除去
-    .trim();
+  const safeFileName = histories.length === 1
+    ? histories[0].quiz.summary.substring(0, 20).replace(/[^\w\s-]/g, '').trim()
+    : `複数クイズ_${histories.length}件`;
   const fileName = `クイズ_${safeFileName || '問題'}_${new Date().toISOString().split('T')[0]}.pdf`;
   pdf.save(fileName);
 }

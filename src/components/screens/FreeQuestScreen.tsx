@@ -46,6 +46,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [showAdsModal, setShowAdsModal] = useState(false);
+  const [selectedQuizIds, setSelectedQuizIds] = useState<Set<string>>(new Set());
   // const [showShopModal, setShowShopModal] = useState(false); // 一時的に非表示
   
   // Store
@@ -121,6 +122,13 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
           
           // 新しく生成した問題を新しいクイズ履歴エントリとして保存（ページ更新後も保持するため）
           const newQuizId = `freequest_new_${Date.now()}`;
+          
+          // タイトルに「②」を追加して識別しやすくする
+          const newQuizWithTitle: QuizRaw = {
+            ...newQuiz,
+            summary: `② ${newQuiz.summary}`,
+          };
+          
           const tempResult: QuizResult = {
             quizId: newQuizId,
             correctCount: 0,
@@ -134,14 +142,14 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
           
           // 新しいクイズ履歴として保存（ocrTextとstructuredOCRは元の履歴から継承）
           await saveQuizHistory(
-            newQuiz,
+            newQuizWithTitle,
             tempResult,
             history.ocrText,
             history.structuredOCR
           );
           
           addToast('success', '新しい問題を生成しました！');
-          onStartQuiz(newQuiz);
+          onStartQuiz(newQuizWithTitle);
         } else {
           throw new Error('No questions generated');
         }
@@ -211,13 +219,57 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
     }
   };
 
-  // PDF化
+  // PDF化（単一）
   const handleExportPDF = async (history: QuizHistory) => {
     vibrateLight();
     try {
-      await generateQuizPDF(history);
+      await generateQuizPDF([history]);
       vibrateSuccess();
       addToast('success', 'PDFを生成しました');
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      addToast('error', 'PDFの生成に失敗しました');
+    }
+  };
+
+  // 選択状態のトグル
+  const toggleQuizSelection = (quizId: string) => {
+    vibrateLight();
+    setSelectedQuizIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(quizId)) {
+        newSet.delete(quizId);
+      } else {
+        newSet.add(quizId);
+      }
+      return newSet;
+    });
+  };
+
+  // 全選択/全解除
+  const toggleSelectAll = () => {
+    vibrateLight();
+    if (selectedQuizIds.size === filteredHistory.length) {
+      setSelectedQuizIds(new Set());
+    } else {
+      setSelectedQuizIds(new Set(filteredHistory.map(h => h.id)));
+    }
+  };
+
+  // 選択した問題をまとめてPDF化
+  const handleExportSelectedPDFs = async () => {
+    if (selectedQuizIds.size === 0) {
+      addToast('info', 'PDF化する問題を選択してください');
+      return;
+    }
+    
+    vibrateLight();
+    try {
+      const selectedHistories = filteredHistory.filter(h => selectedQuizIds.has(h.id));
+      await generateQuizPDF(selectedHistories);
+      vibrateSuccess();
+      addToast('success', `${selectedHistories.length}件のクイズをPDF化しました`);
+      setSelectedQuizIds(new Set()); // 選択をクリア
     } catch (error) {
       console.error('PDF generation error:', error);
       addToast('error', 'PDFの生成に失敗しました');
@@ -318,10 +370,20 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
           />
         </div>
 
-        {/* 履歴数 */}
-        <p className="text-sm text-gray-400 mb-3">
-          {filteredHistory.length} 件のクイズ
-        </p>
+        {/* 履歴数と選択機能 */}
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm text-gray-400">
+            {filteredHistory.length} 件のクイズ
+          </p>
+          {filteredHistory.length > 0 && (
+            <button
+              onClick={toggleSelectAll}
+              className="text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
+            >
+              {selectedQuizIds.size === filteredHistory.length ? '全解除' : '全選択'}
+            </button>
+          )}
+        </div>
 
         {/* クイズ一覧 */}
         <div className="space-y-3">
@@ -339,18 +401,29 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
             filteredHistory.map((history) => (
               <motion.div
                 key={history.id}
-                className="bg-gray-800/50 rounded-xl p-4 border border-gray-700"
+                className={`bg-gray-800/50 rounded-xl p-4 border ${
+                  selectedQuizIds.has(history.id) ? 'border-emerald-500 bg-emerald-500/10' : 'border-gray-700'
+                }`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
               >
                 <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <p className="text-white font-medium line-clamp-2 mb-1">
-                      {history.quiz.summary}
-                    </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <Calendar className="w-3 h-3" />
-                      {formatDate(history.createdAt)}
+                  <div className="flex items-start gap-3 flex-1">
+                    {/* チェックボックス */}
+                    <input
+                      type="checkbox"
+                      checked={selectedQuizIds.has(history.id)}
+                      onChange={() => toggleQuizSelection(history.id)}
+                      className="mt-1 w-5 h-5 rounded border-gray-600 bg-gray-700 text-emerald-500 focus:ring-emerald-500 focus:ring-2"
+                    />
+                    <div className="flex-1">
+                      <p className="text-white font-medium line-clamp-2 mb-1">
+                        {history.quiz.summary}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <Calendar className="w-3 h-3" />
+                        {formatDate(history.createdAt)}
+                      </div>
                     </div>
                   </div>
                   
@@ -501,6 +574,30 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
         onPurchase={handleVIPPurchase}
         isVIP={isVIP}
       /> */}
+
+      {/* 選択した問題をPDF化するボタン（固定フッター） */}
+      {selectedQuizIds.size > 0 && (
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-700 p-4 z-50"
+        >
+          <div className="max-w-2xl mx-auto flex items-center justify-between">
+            <span className="text-white font-medium">
+              {selectedQuizIds.size} 件選択中
+            </span>
+            <motion.button
+              onClick={handleExportSelectedPDFs}
+              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg flex items-center gap-2"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <FileDown className="w-5 h-5" />
+              選択した問題をPDF化
+            </motion.button>
+          </div>
+        </motion.div>
+      )}
 
       {/* クイズ詳細モーダル */}
       <AnimatePresence>
