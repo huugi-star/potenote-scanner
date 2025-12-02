@@ -455,9 +455,11 @@ const AppContent = () => {
 
     // 2. Firebase Auth のログイン状態をストアに反映（リロード後もログイン継続）
     if (auth) {
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
         // user がいれば uid を、いなければ null をセット
-        setUserId(user ? user.uid : null);
+        // 注意: このコールバック内では loginCheck() を実行しない
+        // （loginCheck() は初回マウント時のみ実行される）
+        await setUserId(user ? user.uid : null);
       });
       return () => unsubscribe();
     }

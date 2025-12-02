@@ -219,6 +219,10 @@ export const useGameStore = create<GameStore>()(
           if (snap.exists()) {
             const cloudData = snap.data() as any;
 
+            // ログインボーナスチェック前に lastLoginDate を保存（上書きを防ぐため）
+            const currentLastLoginDate = state.lastLoginDate;
+            const today = getTodayString();
+            
             set({
               // ユーザー状態系（努力の結晶のみ）
               uid,
@@ -239,7 +243,8 @@ export const useGameStore = create<GameStore>()(
                 cloudData.userState?.dailyTranslationCount ?? state.dailyTranslationCount,
               lastTranslationDate:
                 cloudData.userState?.lastTranslationDate ?? state.lastTranslationDate,
-              lastLoginDate: cloudData.userState?.lastLoginDate ?? state.lastLoginDate,
+              // ログインボーナスが既に付与されている場合は、lastLoginDate を上書きしない
+              lastLoginDate: (currentLastLoginDate === today) ? currentLastLoginDate : (cloudData.userState?.lastLoginDate ?? state.lastLoginDate),
               consecutiveLoginDays:
                 cloudData.userState?.consecutiveLoginDays ?? state.consecutiveLoginDays,
               totalScans: cloudData.userState?.totalScans ?? state.totalScans,
@@ -256,6 +261,12 @@ export const useGameStore = create<GameStore>()(
 
               // マップ／旅路
               journey: cloudData.journey ?? state.journey,
+
+              // 生成されたクイズは保持（クラウドには保存しないが、ローカルでは保持）
+              generatedQuiz: state.generatedQuiz,
+              scanImageUrl: state.scanImageUrl,
+              scanOcrText: state.scanOcrText,
+              scanStructuredOCR: state.scanStructuredOCR,
 
               // 履歴はこの後サブコレクションから読み込む
             });
