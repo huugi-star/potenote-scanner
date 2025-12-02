@@ -154,7 +154,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
   // ページサイズ定義
   const PAGE_HEIGHT = 297; // A4高さ（mm）
   const HEADER_HEIGHT = 30; // ヘッダー高さ（mm）
-  const FOOTER_HEIGHT = 55; // フッター高さ（mm）
+  const FOOTER_HEIGHT = 60; // フッター高さ（mm、余裕を持たせる）
   const MAIN_AREA_HEIGHT = PAGE_HEIGHT - HEADER_HEIGHT - FOOTER_HEIGHT; // メインエリア高さ
   
   // 各ページを生成
@@ -248,7 +248,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
         </div>
         
         <!-- 問題リスト（各問題を1行として、問題文と解答を横並び） -->
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 0; justify-content: flex-start;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 0; justify-content: flex-start; overflow: visible;">
           ${pageQuestions.map((item, localIndex) => {
             const globalIndex = startQuestionNumber + localIndex - 1;
             const isLast = localIndex === pageQuestions.length - 1;
@@ -257,14 +257,14 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
             const correctAnswer = item.question.options[item.question.a];
             
             return `
-              <div style="display: flex; gap: 8px; margin-bottom: ${marginBottom}; align-items: flex-start; flex-shrink: 0;">
+              <div style="display: flex; gap: 8px; margin-bottom: ${marginBottom}; align-items: flex-start; flex-shrink: 0; min-height: fit-content;">
                 <!-- 左側: 問題文（65%） -->
-                <div style="flex: 0 0 65%; line-height: 1.15; font-size: 9px; overflow: visible;">
+                <div style="flex: 0 0 65%; line-height: 1.15; font-size: 9px; overflow: visible; padding-right: 4px;">
                   <div style="margin-bottom: ${item.needsInline ? '3px' : '1px'};">
                     <span style="font-weight: bold; color: #333;">（${globalIndex + 1}）</span> ${item.question.q}
                   </div>
                   ${item.needsInline ? `
-                    <div style="margin-left: 15px; font-size: 8px; line-height: 1.2;">
+                    <div style="margin-left: 15px; margin-top: 2px; font-size: 8px; line-height: 1.2;">
                       <div style="display: flex; flex-wrap: wrap; gap: 4px 8px;">
                         ${item.question.options.map((option, optIndex) => 
                           `<span style="white-space: nowrap;">
@@ -277,10 +277,10 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
                 </div>
                 
                 <!-- 右側: 解答欄（35%、折り曲げ用） -->
-                <div style="flex: 0 0 35%; border-left: 2px dotted #999; padding-left: 6px; font-size: 9px; line-height: 1.15; display: flex; align-items: flex-start;">
-                  <div style="padding: 3px; background-color: #f5f5f5; border-radius: 2px; border: 1px solid #e0e0e0; width: 100%;">
-                    <div style="font-weight: bold; margin-bottom: 1px; font-size: 8px; color: #666;">問${globalIndex + 1}</div>
-                    <div style="color: #0066cc; font-weight: bold; font-size: 9px;">
+                <div style="flex: 0 0 35%; border-left: 2px dotted #999; padding-left: 6px; font-size: 9px; line-height: 1.15; display: flex; align-items: flex-start; min-height: fit-content;">
+                  <div style="padding: 4px 6px; background-color: #f5f5f5; border-radius: 2px; border: 1px solid #e0e0e0; width: 100%; box-sizing: border-box; min-height: fit-content;">
+                    <div style="font-weight: bold; margin-bottom: 2px; font-size: 7px; color: #666; line-height: 1.2;">問${globalIndex + 1}</div>
+                    <div style="color: #0066cc; font-weight: bold; font-size: 9px; line-height: 1.3; word-break: break-word;">
                       ${String.fromCharCode(65 + item.question.a)}. ${correctAnswer}
                     </div>
                   </div>
@@ -292,7 +292,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
       </div>
       
       <!-- フッターエリア（固定高さ、4列×4行グリッド） -->
-      <div style="flex: 0 0 auto; margin-top: 4px; padding-top: 6px; border-top: 2px solid #333; min-height: 50mm;">
+      <div style="flex: 0 0 auto; margin-top: 8px; padding-top: 8px; border-top: 2px solid #333; min-height: 50mm; clear: both;">
         <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #333;">
           【選択肢】問${startQuestionNumber}〜問${endQuestionNumber}
         </div>
