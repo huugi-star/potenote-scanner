@@ -17,16 +17,26 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
-      <head>
-        {/* Google AdSense - head タグでは data-nscript がサポートされていないため、body に移動 */}
-      </head>
+      <head />
       <body className={inter.className}>
-        {/* Google AdSense */}
+        {/* Google AdSense - body 内に配置して data-nscript 属性の問題を回避 */}
+        <Script
+          id="adsbygoogle-init"
+          strategy="lazyOnload"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (adsbygoogle = window.adsbygoogle || []).push({
+                google_ad_client: "ca-pub-5524219244906928",
+                enable_page_level_ads: true
+              });
+            `,
+          }}
+        />
         <Script
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5524219244906928"
           crossOrigin="anonymous"
-          strategy="afterInteractive"
+          strategy="lazyOnload"
         />
         {children}
       </body>

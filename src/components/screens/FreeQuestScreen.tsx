@@ -18,7 +18,8 @@ import {
   History,
   AlertCircle,
   Crown,
-  Trash2
+  Trash2,
+  FileDown
 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
@@ -27,6 +28,7 @@ import { AdsModal } from '@/components/ui/AdsModal';
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
 import { useToast } from '@/components/ui/Toast';
 import { LIMITS } from '@/lib/constants';
+import { generateQuizPDF } from '@/lib/pdfUtils';
 import type { QuizHistory, QuizRaw } from '@/types';
 
 // ===== Types =====
@@ -183,6 +185,19 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
     } catch (error) {
       console.error('Delete quiz error:', error);
       addToast('error', '削除に失敗しました');
+    }
+  };
+
+  // PDF化
+  const handleExportPDF = (history: QuizHistory) => {
+    vibrateLight();
+    try {
+      generateQuizPDF(history);
+      vibrateSuccess();
+      addToast('success', 'PDFを生成しました');
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      addToast('error', 'PDFの生成に失敗しました');
     }
   };
 
@@ -384,6 +399,18 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
                         新問題
                       </>
                     )}
+                  </motion.button>
+
+                  {/* PDF化ボタン */}
+                  <motion.button
+                    onClick={() => handleExportPDF(history)}
+                    disabled={isGenerating}
+                    className="px-3 py-2.5 rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white transition-colors"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    title="PDF化"
+                  >
+                    <FileDown className="w-4 h-4" />
                   </motion.button>
 
                   {/* 削除ボタン */}
