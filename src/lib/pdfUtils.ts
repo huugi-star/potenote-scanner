@@ -238,7 +238,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
       <!-- メインコンテンツエリア（問題文と解答を並列配置、動的余白、平行配置） -->
       <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 0;">
         <!-- ヘッダー行 -->
-        <div style="display: flex; gap: 8px; margin-bottom: 4px; flex: 0 0 auto;">
+        <div style="display: flex; gap: 8px; margin-bottom: 8px; flex: 0 0 auto;">
           <div style="flex: 0 0 65%; font-size: 11px; font-weight: bold; color: #333;">
             【問題】問${startQuestionNumber}〜問${endQuestionNumber}
           </div>
@@ -248,7 +248,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
         </div>
         
         <!-- 問題リスト（各問題を1行として、問題文と解答を横並び） -->
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 0; justify-content: flex-start; overflow: visible;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 0; justify-content: flex-start; overflow: visible; margin-top: 0;">
           ${pageQuestions.map((item, localIndex) => {
             const globalIndex = startQuestionNumber + localIndex - 1;
             const isLast = localIndex === pageQuestions.length - 1;
@@ -292,8 +292,8 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
       </div>
       
       <!-- フッターエリア（固定高さ、4列×4行グリッド） -->
-      <div style="flex: 0 0 auto; margin-top: 8px; padding-top: 8px; border-top: 2px solid #333; min-height: 50mm; clear: both;">
-        <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #333;">
+      <div style="flex: 0 0 auto; margin-top: 12px; padding-top: 8px; border-top: 2px solid #333; min-height: 50mm; clear: both;">
+        <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #333;">
           【選択肢】問${startQuestionNumber}〜問${endQuestionNumber}
         </div>
         <div style="display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); gap: 3px 6px; font-size: 7px; line-height: 1.2; height: 100%;">
