@@ -2,7 +2,7 @@
  * pdfUtils.ts
  * 
  * クイズをPDF化するユーティリティ
- * 学習プリント形式（2カラム構成、折り目付き）
+ * 学習プリント形式（Active Recall法：選択肢・分離レイアウト）
  * html2canvasを使用して日本語フォントを正しく表示
  */
 
@@ -12,122 +12,194 @@ import type { QuizHistory } from '@/types';
 
 /**
  * クイズ履歴をPDF化
- * 2カラム構成（左75%：問題、右25%：正解と解説）
- * 折り目の点線付き
+ * Active Recall法：選択肢・分離レイアウト
+ * - 上部: 問題文リスト（カッコ付き）
+ * - 下部: 選択肢の塊
+ * - 右端（縦一列）: 解答欄
+ * - 問題と選択肢がページを跨がないように調整
  */
 export async function generateQuizPDF(history: QuizHistory): Promise<void> {
-  // HTML要素を作成
-  const container = document.createElement('div');
-  container.style.position = 'absolute';
-  container.style.left = '-9999px';
-  container.style.width = '210mm'; // A4幅
-  container.style.padding = '15mm';
-  container.style.fontFamily = 'sans-serif';
-  container.style.backgroundColor = '#ffffff';
-  container.style.color = '#000000';
-  container.style.fontSize = '12px';
-  container.style.lineHeight = '1.6';
+  const questions = history.quiz.questions;
+  const maxHeightPerPage = 250; // 1ページあたりの最大高さ（mm、余裕を持たせる）
   
-  // コンテンツを作成
-  let html = `
-    <div style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 15px;">
-      学習プリント
-    </div>
-    <div style="margin-bottom: 20px; font-size: 11px; color: #666;">
-      ${history.quiz.summary}
-    </div>
-  `;
+  // ページごとに問題を分割（問題文と選択肢が同じページに収まるように）
+  const pages: Array<{ questions: typeof questions; startIndex: number; endIndex: number }> = [];
+  let currentPageQuestions: typeof questions = [];
+  let estimatedHeight = 0;
+  let startIndex = 0;
   
-  // 問題を1問ずつ処理
-  history.quiz.questions.forEach((question, index) => {
-    const questionHtml = `
-      <div style="margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 15px;">
-        <div style="display: flex;">
-          <!-- 左カラム：問題（75%） -->
-          <div style="width: 75%; padding-right: 10px; border-right: 2px dotted #999;">
-            <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">
-              問${index + 1}
+  questions.forEach((question, index) => {
+    // 問題文の高さを推定（1行あたり約4mm、問題文は平均3行と仮定）
+    const questionHeight = Math.max(question.q.length / 30 * 4, 12);
+    // 選択肢の高さ（4択 × 3mm）
+    const optionsHeight = 12;
+    // 合計高さ
+    const totalHeight = questionHeight + optionsHeight + 15; // 15mmはマージン
+    
+    if (estimatedHeight + totalHeight > maxHeightPerPage && currentPageQuestions.length > 0) {
+      // 現在のページを保存して新しいページを開始
+      pages.push({
+        questions: currentPageQuestions,
+        startIndex,
+        endIndex: index - 1,
+      });
+      currentPageQuestions = [question];
+      estimatedHeight = totalHeight;
+      startIndex = index;
+    } else {
+      currentPageQuestions.push(question);
+      estimatedHeight += totalHeight;
+    }
+  });
+  
+  // 最後のページを追加
+  if (currentPageQuestions.length > 0) {
+    pages.push({
+      questions: currentPageQuestions,
+      startIndex,
+      endIndex: questions.length - 1,
+    });
+  }
+  
+  const pdf = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+  
+  // 各ページを生成
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+    if (pageIndex > 0) {
+      pdf.addPage();
+    }
+    
+    const pageData = pages[pageIndex];
+    
+    // HTML要素を作成
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.width = '210mm'; // A4幅
+    container.style.padding = '15mm';
+    container.style.fontFamily = 'sans-serif';
+    container.style.backgroundColor = '#ffffff';
+    container.style.color = '#000000';
+    container.style.fontSize = '12px';
+    container.style.lineHeight = '1.6';
+    
+    // コンテンツを作成
+    let html = '';
+    
+    if (pageIndex === 0) {
+      // 最初のページのみタイトルとサマリーを表示
+      html += `
+        <div style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 20px;">
+          学習プリント
+        </div>
+        <div style="margin-bottom: 25px; font-size: 11px; color: #666; padding-bottom: 15px; border-bottom: 1px solid #ddd;">
+          ${history.quiz.summary}
+        </div>
+      `;
+    }
+    
+    html += `
+      <div style="display: flex; gap: 15px;">
+        <!-- メインコンテンツエリア（左側） -->
+        <div style="flex: 1;">
+          <!-- 上部: 問題文リスト -->
+          <div style="margin-bottom: 30px;">
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 15px; color: #333;">
+              【問題】
             </div>
-            <div style="font-size: 11px; margin-bottom: 10px; line-height: 1.8;">
-              ${question.q}
-            </div>
-            <div style="font-size: 10px; line-height: 1.8;">
-              ${question.options.map((option, optIndex) => 
-                `<div style="margin-bottom: 5px;">${String.fromCharCode(65 + optIndex)}. ${option}</div>`
-              ).join('')}
+            <div style="line-height: 2.2;">
+              ${pageData.questions.map((question, localIndex) => {
+                const globalIndex = pageData.startIndex + localIndex;
+                return `
+                  <div style="margin-bottom: 12px; font-size: 11px;">
+                    <span style="font-weight: bold;">（${globalIndex + 1}）</span> ${question.q}
+                  </div>
+                `;
+              }).join('')}
             </div>
           </div>
           
-          <!-- 右カラム：正解と解説（25%） -->
-          <div style="width: 25%; padding-left: 10px;">
-            <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">
-              答${index + 1}
+          <!-- 下部: 選択肢の塊 -->
+          <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #333;">
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 15px; color: #333;">
+              【選択肢】
             </div>
-            <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #0066cc;">
-              正解: ${String.fromCharCode(65 + question.a)}. ${question.options[question.a]}
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; font-size: 10px; line-height: 1.8;">
+              ${pageData.questions.map((question) => 
+                question.options.map((option, optIndex) => 
+                  `<div style="padding: 5px 0;">
+                    <span style="font-weight: bold;">${String.fromCharCode(65 + optIndex)}.</span> ${option}
+                  </div>`
+                ).join('')
+              ).join('')}
             </div>
-            <div style="font-size: 9px; line-height: 1.6; color: #333;">
-              ${question.explanation}
-            </div>
+          </div>
+        </div>
+        
+        <!-- 右端: 解答欄（縦一列） -->
+        <div style="width: 40mm; border-left: 2px dotted #999; padding-left: 10px;">
+          <div style="font-size: 14px; font-weight: bold; margin-bottom: 15px; color: #333; text-align: center;">
+            【解答】
+          </div>
+          <div style="font-size: 11px; line-height: 2.5;">
+            ${pageData.questions.map((question, localIndex) => {
+              const globalIndex = pageData.startIndex + localIndex;
+              const correctAnswer = question.options[question.a];
+              return `
+                <div style="margin-bottom: 15px; padding: 8px; background-color: #f5f5f5; border-radius: 4px;">
+                  <div style="font-weight: bold; margin-bottom: 5px;">問${globalIndex + 1}</div>
+                  <div style="color: #0066cc; font-weight: bold;">
+                    ${String.fromCharCode(65 + question.a)}. ${correctAnswer}
+                  </div>
+                  <div style="font-size: 9px; color: #666; margin-top: 5px; line-height: 1.5;">
+                    ${question.explanation}
+                  </div>
+                </div>
+              `;
+            }).join('')}
           </div>
         </div>
       </div>
     `;
-    html += questionHtml;
-  });
-  
-  container.innerHTML = html;
-  document.body.appendChild(container);
-  
-  try {
-    // html2canvasでキャンバスに変換
-    const canvas = await html2canvas(container, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      width: container.scrollWidth,
-      height: container.scrollHeight,
-    });
     
-    const imgData = canvas.toDataURL('image/png');
-    const imgWidth = 210; // A4幅（mm）
-    const pageHeight = 297; // A4高さ（mm）
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    container.innerHTML = html;
+    document.body.appendChild(container);
     
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-    });
-    
-    let heightLeft = imgHeight;
-    let position = 0;
-    
-    // 最初のページを追加
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-    
-    // 複数ページに対応
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+    try {
+      // html2canvasでキャンバスに変換
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        width: container.scrollWidth,
+        height: container.scrollHeight,
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = 210; // A4幅（mm）
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      // PDFに画像を追加
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      throw error;
+    } finally {
+      // 一時要素を削除
+      document.body.removeChild(container);
     }
-    
-    // PDFをダウンロード
-    const safeFileName = history.quiz.summary
-      .substring(0, 20)
-      .replace(/[^\w\s-]/g, '') // 特殊文字を除去
-      .trim();
-    const fileName = `クイズ_${safeFileName || '問題'}_${new Date().toISOString().split('T')[0]}.pdf`;
-    pdf.save(fileName);
-  } catch (error) {
-    console.error('PDF generation error:', error);
-    throw error;
-  } finally {
-    // 一時要素を削除
-    document.body.removeChild(container);
   }
+  
+  // PDFをダウンロード
+  const safeFileName = history.quiz.summary
+    .substring(0, 20)
+    .replace(/[^\w\s-]/g, '') // 特殊文字を除去
+    .trim();
+  const fileName = `クイズ_${safeFileName || '問題'}_${new Date().toISOString().split('T')[0]}.pdf`;
+  pdf.save(fileName);
 }
