@@ -69,6 +69,9 @@ interface GameState extends UserState {
   scanImageUrl: string | null;
   scanOcrText: string | undefined;
   scanStructuredOCR: StructuredOCR | undefined;
+  
+  // スキャン時に保存したクイズの quizId（重複防止用）
+  lastScanQuizId: string | null;
 }
 
 interface GameActions {
@@ -194,6 +197,8 @@ const initialState: GameState = {
   scanImageUrl: null,
   scanOcrText: undefined,
   scanStructuredOCR: undefined,
+  
+  lastScanQuizId: null,
 };
 
 // ===== Store Implementation =====
@@ -575,6 +580,11 @@ export const useGameStore = create<GameStore>()(
         });
       },
       
+      // スキャン時に保存した quizId を記録
+      setLastScanQuizId: (quizId: string | null) => {
+        set({ lastScanQuizId: quizId });
+      },
+      
       // 生成されたクイズのクリア
       clearGeneratedQuiz: () => {
         set({
@@ -688,19 +698,50 @@ export const useGameStore = create<GameStore>()(
       saveQuizHistory: async (quiz, result, ocrText, structuredOCR) => {
         const state = get();
         
-        const history: QuizHistory = {
-          id: result.quizId,
-          quiz,
-          result,
-          createdAt: new Date().toISOString(),
-          usedQuestionIndices: [],
-          ocrText,
-          structuredOCR, // 構造化OCRを保存（位置情報付き）
-        };
+        // スキャン時に保存した quizId が存在し、それが結果画面で保存しようとしている quizId と一致する場合は、既存の履歴を更新する
+        let targetQuizId = result.quizId;
+        const existingHistoryIndex = state.quizHistory.findIndex(h => h.id === state.lastScanQuizId);
         
-        // 端末ローカルでは履歴を無制限に保持（クラウド側で最新件数を制御）
-        const newHistory = [history, ...state.quizHistory];
-        set({ quizHistory: newHistory });
+        let history: QuizHistory;
+        
+        if (state.lastScanQuizId && existingHistoryIndex >= 0) {
+          // 既存の履歴を更新（スキャン時のテンプレートを結果で上書き）
+          targetQuizId = state.lastScanQuizId;
+          const updatedHistory = [...state.quizHistory];
+          updatedHistory[existingHistoryIndex] = {
+            ...updatedHistory[existingHistoryIndex],
+            quiz,
+            result: {
+              ...result,
+              quizId: targetQuizId, // quizId を統一
+            },
+            ocrText: ocrText ?? updatedHistory[existingHistoryIndex].ocrText,
+            structuredOCR: structuredOCR ?? updatedHistory[existingHistoryIndex].structuredOCR,
+          };
+          set({ 
+            quizHistory: updatedHistory,
+            lastScanQuizId: null, // 使用したのでクリア
+          });
+          history = updatedHistory[existingHistoryIndex];
+        } else {
+          // 新規保存
+          history = {
+            id: targetQuizId,
+            quiz,
+            result: {
+              ...result,
+              quizId: targetQuizId,
+            },
+            createdAt: new Date().toISOString(),
+            usedQuestionIndices: [],
+            ocrText,
+            structuredOCR, // 構造化OCRを保存（位置情報付き）
+          };
+          
+          // 端末ローカルでは履歴を無制限に保持（クラウド側で最新件数を制御）
+          const newHistory = [history, ...state.quizHistory];
+          set({ quizHistory: newHistory });
+        }
 
         // クラウドにも保存（テキスト＋スコア程度なので軽量）
         // uid がストアにまだ反映されていない場合でも、Firebase Auth の currentUser から取得して保存を試みる
@@ -713,6 +754,7 @@ export const useGameStore = create<GameStore>()(
           effectiveUid,
           dbExists: !!db,
           historyId: history.id,
+          isUpdate: state.lastScanQuizId && existingHistoryIndex >= 0,
         });
 
         if (db && effectiveUid) {
@@ -1172,6 +1214,7 @@ export const useGameStore = create<GameStore>()(
         scanImageUrl: state.scanImageUrl,
         scanOcrText: state.scanOcrText,
         scanStructuredOCR: state.scanStructuredOCR,
+        lastScanQuizId: state.lastScanQuizId,
       }),
     }
   )

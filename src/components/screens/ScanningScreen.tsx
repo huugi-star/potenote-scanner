@@ -210,8 +210,9 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           incrementScanCount();
 
           // スキャンした時点でクイズを履歴に保存（まだ未プレイのテンプレートとして）
+          const scanQuizId = `scan_${Date.now()}`;
           const initialResult: QuizResult = {
-            quizId: `scan_${Date.now()}`,
+            quizId: scanQuizId,
             correctCount: 0,
             totalQuestions: quizResult.quiz.questions.length,
             isPerfect: false,
@@ -220,6 +221,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
             isDoubled: false,
             timestamp: new Date(),
           };
+          // ★スキャン時の quizId を記録（結果画面で重複防止に使用）
+          useGameStore.getState().setLastScanQuizId(scanQuizId);
           // ★ここでクラウドへの書き込み完了まで await する
           console.log('[ScanningScreen] Calling saveQuizHistory...');
           await saveQuizHistory(quizResult.quiz, initialResult, quizResult.ocrText, quizResult.structuredOCR);

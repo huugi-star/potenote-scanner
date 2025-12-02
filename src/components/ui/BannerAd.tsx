@@ -34,11 +34,18 @@ export const BannerAd = ({
   // Google AdSense広告を初期化
   useEffect(() => {
     if (isVisible && !isDismissed && typeof window !== 'undefined') {
-      try {
-        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-      } catch (err) {
-        console.error('AdSense initialization error:', err);
-      }
+      // 広告コンテナが DOM に追加されてから初期化するため、少し遅延させる
+      const timer = setTimeout(() => {
+        try {
+          const adsbygoogle = (window as any).adsbygoogle || [];
+          (window as any).adsbygoogle = adsbygoogle;
+          adsbygoogle.push({});
+        } catch (err) {
+          console.error('AdSense initialization error:', err);
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
     }
   }, [isVisible, isDismissed]);
 
@@ -73,10 +80,16 @@ export const BannerAd = ({
             {/* Google AdSense 広告ユニット（1種類のみ表示） */}
             <ins
               className="adsbygoogle"
-              style={{ display: 'block' }}
+              style={{ 
+                display: 'block',
+                minWidth: '320px',
+                minHeight: '50px',
+                width: '100%',
+                maxWidth: '728px',
+              }}
               data-ad-client="ca-pub-5524219244906928"
               data-ad-slot="5707417970"
-              data-ad-format="auto"
+              data-ad-format="horizontal"
               data-full-width-responsive="true"
             />
           </motion.div>
