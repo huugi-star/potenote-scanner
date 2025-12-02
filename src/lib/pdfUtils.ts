@@ -3,9 +3,11 @@
  * 
  * クイズをPDF化するユーティリティ
  * 学習プリント形式（2カラム構成、折り目付き）
+ * html2canvasを使用して日本語フォントを正しく表示
  */
 
 import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import type { QuizHistory } from '@/types';
 
 /**
@@ -13,126 +15,119 @@ import type { QuizHistory } from '@/types';
  * 2カラム構成（左75%：問題、右25%：正解と解説）
  * 折り目の点線付き
  */
-export function generateQuizPDF(history: QuizHistory): void {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-  });
-
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 15; // 上下左右のマージン
-  const foldLineX = margin + (pageWidth - margin * 2) * 0.75; // 折り目位置（左75%）
+export async function generateQuizPDF(history: QuizHistory): Promise<void> {
+  // HTML要素を作成
+  const container = document.createElement('div');
+  container.style.position = 'absolute';
+  container.style.left = '-9999px';
+  container.style.width = '210mm'; // A4幅
+  container.style.padding = '15mm';
+  container.style.fontFamily = 'sans-serif';
+  container.style.backgroundColor = '#ffffff';
+  container.style.color = '#000000';
+  container.style.fontSize = '12px';
+  container.style.lineHeight = '1.6';
   
-  const leftColumnWidth = foldLineX - margin - 5; // 左カラム幅（マージン考慮）
-  const rightColumnWidth = pageWidth - foldLineX - margin - 5; // 右カラム幅（マージン考慮）
+  // コンテンツを作成
+  let html = `
+    <div style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 15px;">
+      学習プリント
+    </div>
+    <div style="margin-bottom: 20px; font-size: 11px; color: #666;">
+      ${history.quiz.summary}
+    </div>
+  `;
   
-  let currentY = margin + 10; // 現在のY位置
-
-  // タイトル
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('学習プリント', pageWidth / 2, currentY, { align: 'center' });
-  currentY += 8;
-
-  // サマリー
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  const summaryLines = doc.splitTextToSize(history.quiz.summary, pageWidth - margin * 2);
-  doc.text(summaryLines, margin, currentY);
-  currentY += summaryLines.length * 5 + 8;
-
   // 問題を1問ずつ処理
   history.quiz.questions.forEach((question, index) => {
-    // ページを超える場合は改ページ
-    if (currentY > pageHeight - margin - 50) {
-      doc.addPage();
-      currentY = margin + 10;
-    }
-
-    const questionStartY = currentY;
-
-    // ===== 左カラム：問題文 =====
-    let leftY = questionStartY;
-    
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`問${index + 1}`, margin, leftY);
-    leftY += 6;
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    const questionLines = doc.splitTextToSize(question.q, leftColumnWidth);
-    doc.text(questionLines, margin + 5, leftY);
-    leftY += questionLines.length * 4.5 + 3;
-
-    // 選択肢
-    question.options.forEach((option, optIndex) => {
-      const optionText = `${String.fromCharCode(65 + optIndex)}. ${option}`;
-      const optionLines = doc.splitTextToSize(optionText, leftColumnWidth - 5);
-      doc.setFontSize(9);
-      doc.text(optionLines, margin + 5, leftY);
-      leftY += optionLines.length * 4.5;
-    });
-
-    const leftEndY = leftY;
-
-    // ===== 右カラム：正解と解説 =====
-    let rightY = questionStartY;
-    
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`答${index + 1}`, foldLineX + 5, rightY);
-    rightY += 6;
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    const correctAnswer = question.options[question.a];
-    const answerText = `正解: ${String.fromCharCode(65 + question.a)}. ${correctAnswer}`;
-    const answerLines = doc.splitTextToSize(answerText, rightColumnWidth);
-    doc.text(answerLines, foldLineX + 5, rightY);
-    rightY += answerLines.length * 4.5 + 3;
-    
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    const explanationLines = doc.splitTextToSize(question.explanation, rightColumnWidth);
-    doc.text(explanationLines, foldLineX + 5, rightY);
-    rightY += explanationLines.length * 4.5;
-
-    const rightEndY = rightY;
-
-    // 左と右の高い方に合わせて次の問題の位置を決定
-    currentY = Math.max(leftEndY, rightEndY) + 5;
-
-    // 区切り線
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.2);
-    doc.line(margin, currentY - 2, pageWidth - margin, currentY - 2);
-    currentY += 3;
+    const questionHtml = `
+      <div style="margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 15px;">
+        <div style="display: flex;">
+          <!-- 左カラム：問題（75%） -->
+          <div style="width: 75%; padding-right: 10px; border-right: 2px dotted #999;">
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">
+              問${index + 1}
+            </div>
+            <div style="font-size: 11px; margin-bottom: 10px; line-height: 1.8;">
+              ${question.q}
+            </div>
+            <div style="font-size: 10px; line-height: 1.8;">
+              ${question.options.map((option, optIndex) => 
+                `<div style="margin-bottom: 5px;">${String.fromCharCode(65 + optIndex)}. ${option}</div>`
+              ).join('')}
+            </div>
+          </div>
+          
+          <!-- 右カラム：正解と解説（25%） -->
+          <div style="width: 25%; padding-left: 10px;">
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">
+              答${index + 1}
+            </div>
+            <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #0066cc;">
+              正解: ${String.fromCharCode(65 + question.a)}. ${question.options[question.a]}
+            </div>
+            <div style="font-size: 9px; line-height: 1.6; color: #333;">
+              ${question.explanation}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    html += questionHtml;
   });
-
-  // 折り目の点線を各ページに描画
-  const totalPages = doc.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setDrawColor(100, 100, 100);
-    doc.setLineWidth(0.3);
+  
+  container.innerHTML = html;
+  document.body.appendChild(container);
+  
+  try {
+    // html2canvasでキャンバスに変換
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      width: container.scrollWidth,
+      height: container.scrollHeight,
+    });
     
-    // 点線を描画（短い線を繰り返し描画）
-    let y = margin;
-    while (y < pageHeight - margin) {
-      doc.line(foldLineX, y, foldLineX, y + 2);
-      y += 4;
+    const imgData = canvas.toDataURL('image/png');
+    const imgWidth = 210; // A4幅（mm）
+    const pageHeight = 297; // A4高さ（mm）
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+    
+    let heightLeft = imgHeight;
+    let position = 0;
+    
+    // 最初のページを追加
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+    
+    // 複数ページに対応
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
     }
+    
+    // PDFをダウンロード
+    const safeFileName = history.quiz.summary
+      .substring(0, 20)
+      .replace(/[^\w\s-]/g, '') // 特殊文字を除去
+      .trim();
+    const fileName = `クイズ_${safeFileName || '問題'}_${new Date().toISOString().split('T')[0]}.pdf`;
+    pdf.save(fileName);
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    throw error;
+  } finally {
+    // 一時要素を削除
+    document.body.removeChild(container);
   }
-
-  // PDFをダウンロード
-  const safeFileName = history.quiz.summary
-    .substring(0, 20)
-    .replace(/[^\w\s-]/g, '') // 特殊文字を除去
-    .trim();
-  const fileName = `クイズ_${safeFileName || '問題'}_${new Date().toISOString().split('T')[0]}.pdf`;
-  doc.save(fileName);
 }
-

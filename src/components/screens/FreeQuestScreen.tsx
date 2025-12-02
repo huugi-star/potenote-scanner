@@ -189,10 +189,10 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
   };
 
   // PDF化
-  const handleExportPDF = (history: QuizHistory) => {
+  const handleExportPDF = async (history: QuizHistory) => {
     vibrateLight();
     try {
-      generateQuizPDF(history);
+      await generateQuizPDF(history);
       vibrateSuccess();
       addToast('success', 'PDFを生成しました');
     } catch (error) {
