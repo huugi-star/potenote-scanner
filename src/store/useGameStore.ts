@@ -63,6 +63,12 @@ interface GameState extends UserState {
   // スキャンタイプと翻訳結果
   scanType: 'quiz' | 'translation';
   translationResult: TranslationResult | null;
+  
+  // 生成されたクイズ（ページ更新後も保持）
+  generatedQuiz: QuizRaw | null;
+  scanImageUrl: string | null;
+  scanOcrText: string | undefined;
+  scanStructuredOCR: StructuredOCR | undefined;
 }
 
 interface GameActions {
@@ -81,6 +87,10 @@ interface GameActions {
   
   setScanType: (type: 'quiz' | 'translation') => void;
   setTranslationResult: (result: TranslationResult | null) => void;
+  
+  // 生成されたクイズの保存・取得
+  setGeneratedQuiz: (quiz: QuizRaw | null, imageUrl?: string | null, ocrText?: string, structuredOCR?: StructuredOCR) => void;
+  clearGeneratedQuiz: () => void;
   
   // 翻訳履歴管理
   saveTranslationHistory: (result: TranslationResult, imageUrl?: string) => void;
@@ -179,6 +189,11 @@ const initialState: GameState = {
   
   scanType: 'quiz',
   translationResult: null,
+  
+  generatedQuiz: null,
+  scanImageUrl: null,
+  scanOcrText: undefined,
+  scanStructuredOCR: undefined,
 };
 
 // ===== Store Implementation =====
@@ -518,6 +533,26 @@ export const useGameStore = create<GameStore>()(
       
       setTranslationResult: (result) => {
         set({ translationResult: result });
+      },
+      
+      // 生成されたクイズの保存
+      setGeneratedQuiz: (quiz, imageUrl, ocrText, structuredOCR) => {
+        set({
+          generatedQuiz: quiz,
+          scanImageUrl: imageUrl ?? null,
+          scanOcrText: ocrText,
+          scanStructuredOCR: structuredOCR,
+        });
+      },
+      
+      // 生成されたクイズのクリア
+      clearGeneratedQuiz: () => {
+        set({
+          generatedQuiz: null,
+          scanImageUrl: null,
+          scanOcrText: undefined,
+          scanStructuredOCR: undefined,
+        });
       },
       
       // ===== Translation History Management =====
@@ -1057,6 +1092,10 @@ export const useGameStore = create<GameStore>()(
         translationHistory: state.translationHistory,
         scanType: state.scanType,
         translationResult: state.translationResult,
+        generatedQuiz: state.generatedQuiz,
+        scanImageUrl: state.scanImageUrl,
+        scanOcrText: state.scanOcrText,
+        scanStructuredOCR: state.scanStructuredOCR,
       }),
     }
   )

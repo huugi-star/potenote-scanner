@@ -54,9 +54,17 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const [showASPSalesModal, setShowASPSalesModal] = useState(false);
   const [aspAdRecommendation, setAspAdRecommendation] = useState<{ ad_id: string; reason: string } | null>(null);
   // const [showShopModal, setShowShopModal] = useState(false); // 一時的に非表示
-  const [generatedQuiz, setGeneratedQuiz] = useState<QuizRaw | null>(null);
-  const [ocrText, setOcrText] = useState<string | undefined>(undefined);
-  const [structuredOCR, setStructuredOCR] = useState<StructuredOCR | undefined>(undefined);
+  // ストアから生成されたクイズを取得
+  const generatedQuiz = useGameStore(state => state.generatedQuiz);
+  const scanImageUrl = useGameStore(state => state.scanImageUrl);
+  const scanOcrText = useGameStore(state => state.scanOcrText);
+  const scanStructuredOCR = useGameStore(state => state.scanStructuredOCR);
+  const setGeneratedQuiz = useGameStore(state => state.setGeneratedQuiz);
+  const clearGeneratedQuiz = useGameStore(state => state.clearGeneratedQuiz);
+  
+  // ローカル状態（プレビュー用）
+  const [localOcrText, setLocalOcrText] = useState<string | undefined>(undefined);
+  const [localStructuredOCR, setLocalStructuredOCR] = useState<StructuredOCR | undefined>(undefined);
 
   // Store
   const isVIP = useGameStore(state => state.isVIP);
@@ -76,6 +84,22 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canScan = isVIP || remainingScans > 0;
+
+  // ページ更新後にストアから復元されたクイズがある場合は、ready状態にする
+  useEffect(() => {
+    if (generatedQuiz && scanImageUrl && scanState === 'idle') {
+      setScanState('ready');
+      setSelectedImage(scanImageUrl);
+    }
+  }, [generatedQuiz, scanImageUrl, scanState]);
+
+  // ページ更新後にストアから復元されたクイズがある場合は、ready状態にする
+  useEffect(() => {
+    if (generatedQuiz && scanImageUrl && scanState === 'idle') {
+      setScanState('ready');
+      setSelectedImage(scanImageUrl);
+    }
+  }, [generatedQuiz, scanImageUrl, scanState]);
 
   // ファイル選択
   const handleFileSelect = useCallback(async (file: File) => {
@@ -187,9 +211,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         if (quizResult.quiz && quizResult.quiz.questions && quizResult.quiz.questions.length > 0) {
           // ★成功時のみスキャン回数を消費
           incrementScanCount();
-          setGeneratedQuiz(quizResult.quiz);
-          setOcrText(quizResult.ocrText);
-          setStructuredOCR(quizResult.structuredOCR); // 構造化OCRを保存
+          // ストアに保存（ページ更新後も保持）
+          setGeneratedQuiz(quizResult.quiz, compressed.dataUrl, quizResult.ocrText, quizResult.structuredOCR);
+          setLocalOcrText(quizResult.ocrText);
+          setLocalStructuredOCR(quizResult.structuredOCR); // 構造化OCRを保存
           
           // ASP広告推奨を保存（クイズ生成成功時のみ）
           if (quizResult.quiz.ad_recommendation) {
@@ -249,8 +274,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   // クイズ開始
   const handleStartQuiz = () => {
     vibrateLight();
-    if (generatedQuiz && selectedImage) {
-      onQuizReady(generatedQuiz, selectedImage, ocrText, structuredOCR);
+    if (generatedQuiz && scanImageUrl) {
+      onQuizReady(generatedQuiz, scanImageUrl, scanOcrText, scanStructuredOCR);
     }
   };
 
@@ -277,7 +302,9 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
     vibrateLight();
     setScanState('idle');
     setSelectedImage(null);
-    setGeneratedQuiz(null);
+    clearGeneratedQuiz(); // ストアからもクリア
+    setLocalOcrText(undefined);
+    setLocalStructuredOCR(undefined);
     setErrorMessage('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -499,10 +526,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
               exit={{ opacity: 0, scale: 0.95 }}
             >
               <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700 mb-6">
-                {selectedImage && (
+                {(selectedImage || scanImageUrl) && (
                   <div className="w-full h-40 mb-4 rounded-xl overflow-hidden">
                     <img 
-                      src={selectedImage} 
+                      src={selectedImage || scanImageUrl || ''} 
                       alt="Scanned" 
                       className="w-full h-full object-cover"
                     />

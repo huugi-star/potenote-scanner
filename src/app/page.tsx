@@ -6,7 +6,7 @@
  * GamePhase管理とすべての画面を統合
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Languages } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
@@ -429,11 +429,17 @@ const AppContent = () => {
   const setUserId = useGameStore(state => state.setUserId);
 
   // 初回起動時のログインチェック & Firebase認証状態の反映（1回のみ）
+  const hasInitializedRef = useRef(false);
+  
   useEffect(() => {
+    // 初回のみ実行
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+
     const loginCheck = useGameStore.getState().loginCheck;
     const launched = useGameStore.getState().hasLaunched;
 
-    // 1. ローカルのログインボーナスなど
+    // 1. ローカルのログインボーナスなど（初回のみ）
     const result = loginCheck();
     if (result.isNewDay && result.bonusCoins > 0) {
       setLoginBonusData({
