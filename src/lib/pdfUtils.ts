@@ -2,7 +2,7 @@
  * pdfUtils.ts
  * 
  * クイズをPDF化するユーティリティ
- * 学習プリント形式（1ページ8問固定、RPGクエスト風デザイン）
+ * 学習プリント形式（1ページ最大15問、高密度レイアウト）
  * html2canvasを使用して日本語フォントを正しく表示
  */
 
@@ -68,7 +68,7 @@ function calculateScore(qCount: number): { totalScore: number; pointsPerQ: numbe
 
 /**
  * 複数のクイズ履歴をPDF化
- * 1ページ8問固定のページネーション + RPGクエスト風デザイン
+ * 1ページ最大15問の高密度レイアウト
  */
 export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
   if (histories.length === 0) {
@@ -94,12 +94,37 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
     });
   });
 
-  const QUESTIONS_PER_PAGE = 8; // 1ページあたりの問題数（固定）
+  const QUESTIONS_PER_PAGE = 15; // 1ページあたりの問題数（最大）
   
-  // 8問ずつのチャンクに分割
+  // 15問ずつのチャンクに分割（自動改ページ判定付き）
   const pages: Array<typeof allQuestions> = [];
-  for (let i = 0; i < allQuestions.length; i += QUESTIONS_PER_PAGE) {
-    pages.push(allQuestions.slice(i, i + QUESTIONS_PER_PAGE));
+  let currentPageQuestions: typeof allQuestions = [];
+  let estimatedHeight = 0;
+  const maxHeightBeforeFooter = 200; // フッター開始位置までの最大高さ（mm）
+  
+  for (let i = 0; i < allQuestions.length; i++) {
+    const item = allQuestions[i];
+    const question = item.question;
+    
+    // 問題文の高さを推定（高密度モード）
+    const questionHeight = Math.max(question.q.length / 40 * 3, 8); // より小さく推定
+    const optionsHeight = item.needsInline ? 6 : 0; // インライン選択肢の高さ
+    const totalHeight = questionHeight + optionsHeight + 3; // マージン3mm
+    
+    // 自動改ページ判定: 15問に達していなくても、高さが上限を超えたら改ページ
+    if ((estimatedHeight + totalHeight > maxHeightBeforeFooter || currentPageQuestions.length >= QUESTIONS_PER_PAGE) && currentPageQuestions.length > 0) {
+      pages.push([...currentPageQuestions]);
+      currentPageQuestions = [item];
+      estimatedHeight = totalHeight;
+    } else {
+      currentPageQuestions.push(item);
+      estimatedHeight += totalHeight;
+    }
+  }
+  
+  // 最後のページを追加
+  if (currentPageQuestions.length > 0) {
+    pages.push(currentPageQuestions);
   }
   
   // 全体の問題数からスコアを計算
@@ -122,7 +147,10 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
     }
     
     const pageQuestions = pages[pageIndex];
-    const startQuestionNumber = pageIndex * QUESTIONS_PER_PAGE + 1;
+    // 問題番号を計算（前のページまでの問題数を合計）
+    const startQuestionNumber = pageIndex === 0 
+      ? 1 
+      : pages.slice(0, pageIndex).reduce((sum, p) => sum + p.length, 0) + 1;
     const endQuestionNumber = startQuestionNumber + pageQuestions.length - 1;
     
     // HTML要素を作成
@@ -130,12 +158,12 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
     container.style.position = 'absolute';
     container.style.left = '-9999px';
     container.style.width = '210mm'; // A4幅
-    container.style.padding = '15mm';
+    container.style.padding = '12mm'; // パディングを少し小さく
     container.style.fontFamily = 'sans-serif';
     container.style.backgroundColor = '#ffffff';
     container.style.color = '#000000';
-    container.style.fontSize = '12px';
-    container.style.lineHeight = '1.6';
+    container.style.fontSize = '9px'; // ベースフォントサイズを小さく
+    container.style.lineHeight = '1.15'; // 行間を詰める
     container.style.height = '297mm'; // A4高さ（固定）
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
@@ -144,38 +172,38 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
     // コンテンツを作成
     let html = `
       <!-- ヘッダーエリア（RPGクエスト風、コンパクト） -->
-      <div style="flex: 0 0 auto; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid #333;">
+      <div style="flex: 0 0 auto; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 2px solid #333;">
         <!-- メインタイトル -->
-        <div style="font-size: 18px; font-weight: bold; margin-bottom: ${pageIndex === 0 ? '6px' : '0'}; color: #1a1a1a; text-align: center;">
+        <div style="font-size: 16px; font-weight: bold; margin-bottom: ${pageIndex === 0 ? '4px' : '0'}; color: #1a1a1a; text-align: center;">
           QUEST ${categoryName}
         </div>
         ${pageIndex === 0 ? `
         <!-- スコア欄（1ページ目のみ） -->
-        <div style="display: flex; justify-content: center; align-items: center; gap: 12px; font-size: 13px; font-weight: bold;">
+        <div style="display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 11px; font-weight: bold;">
           <span style="color: #666;">SCORE:</span>
-          <span style="padding: 2px 30px; min-width: 60px; text-align: center;">
+          <span style="padding: 2px 25px; min-width: 50px; text-align: center;">
             
           </span>
           <span style="color: #333;">/ ${totalScore}</span>
-          <span style="font-size: 11px; color: #666; font-weight: normal; margin-left: 12px;">
+          <span style="font-size: 9px; color: #666; font-weight: normal; margin-left: 10px;">
             (1問${pointsPerQ}点)
           </span>
         </div>
         ` : ''}
       </div>
       
-      <!-- メインコンテンツエリア（問題文と解答を並列配置） -->
-      <div style="flex: 1; display: flex; gap: 10px; min-height: 0; margin-bottom: 10px;">
+      <!-- メインコンテンツエリア（問題文と解答を並列配置、高密度） -->
+      <div style="flex: 1; display: flex; gap: 8px; min-height: 0; margin-bottom: 6px;">
         <!-- 左カラム: 問題文（65%） -->
         <div style="flex: 0 0 65%; display: flex; flex-direction: column; overflow: visible;">
-          <div style="font-size: 13px; font-weight: bold; margin-bottom: 6px; color: #333; flex: 0 0 auto;">
+          <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #333; flex: 0 0 auto;">
             【問題】問${startQuestionNumber}〜問${endQuestionNumber}
           </div>
-          <div style="flex: 1; line-height: 1.6; font-size: 11px;">
+          <div style="flex: 1; line-height: 1.15; font-size: 9px;">
             ${pageQuestions.map((item, localIndex) => {
               const globalIndex = startQuestionNumber + localIndex - 1;
               let questionHtml = `
-                <div style="margin-bottom: ${item.needsInline ? '14px' : '8px'}; padding-bottom: ${item.needsInline ? '6px' : '2px'};">
+                <div style="margin-bottom: ${item.needsInline ? '6px' : '3px'}; padding-bottom: ${item.needsInline ? '3px' : '1px'};">
                   <span style="font-weight: bold; color: #333;">（${globalIndex + 1}）</span> ${item.question.q}
                 </div>
               `;
@@ -183,8 +211,8 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
               // インライン表示が必要な場合は、問題文の下に選択肢を横一列で表示
               if (item.needsInline) {
                 questionHtml += `
-                  <div style="margin-left: 18px; margin-bottom: 6px; font-size: 9px; line-height: 1.5;">
-                    <div style="display: flex; flex-wrap: wrap; gap: 6px 10px;">
+                  <div style="margin-left: 15px; margin-bottom: 3px; font-size: 8px; line-height: 1.2;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px 8px;">
                       ${item.question.options.map((option, optIndex) => 
                         `<span style="white-space: nowrap;">
                           <span style="font-weight: bold;">${String.fromCharCode(65 + optIndex)}.</span> ${option}
@@ -201,18 +229,18 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
         </div>
         
         <!-- 右カラム: 解答欄（35%、折り曲げ用） -->
-        <div style="flex: 0 0 35%; border-left: 2px dotted #999; padding-left: 8px; display: flex; flex-direction: column; overflow: visible;">
-          <div style="font-size: 13px; font-weight: bold; margin-bottom: 6px; color: #333; text-align: center; flex: 0 0 auto;">
+        <div style="flex: 0 0 35%; border-left: 2px dotted #999; padding-left: 6px; display: flex; flex-direction: column; overflow: visible;">
+          <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #333; text-align: center; flex: 0 0 auto;">
             【解答】
           </div>
-          <div style="flex: 1; font-size: 10px; line-height: 1.6;">
+          <div style="flex: 1; font-size: 9px; line-height: 1.15;">
             ${pageQuestions.map((item, localIndex) => {
               const globalIndex = startQuestionNumber + localIndex - 1;
               const correctAnswer = item.question.options[item.question.a];
               return `
-                <div style="margin-bottom: ${item.needsInline ? '14px' : '8px'}; padding: 4px; background-color: #f5f5f5; border-radius: 3px; border: 1px solid #e0e0e0;">
-                  <div style="font-weight: bold; margin-bottom: 2px; font-size: 9px; color: #666;">問${globalIndex + 1}</div>
-                  <div style="color: #0066cc; font-weight: bold; font-size: 10px;">
+                <div style="margin-bottom: ${item.needsInline ? '6px' : '3px'}; padding: 3px; background-color: #f5f5f5; border-radius: 2px; border: 1px solid #e0e0e0;">
+                  <div style="font-weight: bold; margin-bottom: 1px; font-size: 8px; color: #666;">問${globalIndex + 1}</div>
+                  <div style="color: #0066cc; font-weight: bold; font-size: 9px;">
                     ${String.fromCharCode(65 + item.question.a)}. ${correctAnswer}
                   </div>
                 </div>
@@ -222,12 +250,12 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
         </div>
       </div>
       
-      <!-- フッターエリア（固定高さ、固定グリッドシステム、選択肢の高さを拡大） -->
-      <div style="flex: 0 0 auto; margin-top: 8px; padding-top: 10px; border-top: 2px solid #333; min-height: 70mm;">
-        <div style="font-size: 13px; font-weight: bold; margin-bottom: 6px; color: #333;">
+      <!-- フッターエリア（固定高さ、4列×4行グリッド） -->
+      <div style="flex: 0 0 auto; margin-top: 4px; padding-top: 6px; border-top: 2px solid #333; min-height: 50mm;">
+        <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #333;">
           【選択肢】問${startQuestionNumber}〜問${endQuestionNumber}
         </div>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(4, 1fr); gap: 6px 10px; font-size: 8px; line-height: 1.4; height: 100%;">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); gap: 3px 6px; font-size: 7px; line-height: 1.2; height: 100%;">
           ${pageQuestions.map((item, localIndex) => {
             const globalIndex = startQuestionNumber + localIndex - 1;
             
@@ -238,11 +266,11 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
             
             // フッター表示の問題のみ選択肢を表示
             return `
-              <div style="padding: 6px 5px; background-color: #f9f9f9; border-radius: 3px; border: 1px solid #ddd; overflow: visible; display: flex; flex-direction: column; min-height: 0;">
-                <div style="font-weight: bold; margin-bottom: 3px; color: #333; font-size: 8px; flex: 0 0 auto;">[問${globalIndex + 1}]</div>
-                <div style="flex: 1; display: flex; flex-direction: column; gap: 2px; overflow: visible;">
+              <div style="padding: 3px; background-color: #f9f9f9; border-radius: 2px; border: 1px solid #ddd; overflow: hidden; display: flex; flex-direction: column; min-height: 0;">
+                <div style="font-weight: bold; margin-bottom: 1px; color: #333; font-size: 7px; flex: 0 0 auto;">[問${globalIndex + 1}]</div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 1px; overflow: visible;">
                   ${item.question.options.map((option, optIndex) => 
-                    `<div style="white-space: normal; overflow: visible; font-size: 7.5px; line-height: 1.3;">
+                    `<div style="white-space: normal; overflow: visible; font-size: 6.5px; line-height: 1.15; word-break: break-word;">
                       <span style="font-weight: bold;">${String.fromCharCode(65 + optIndex)}.</span> ${option}
                     </div>`
                   ).join('')}
