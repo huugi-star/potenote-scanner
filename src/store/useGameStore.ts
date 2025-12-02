@@ -94,6 +94,7 @@ interface GameActions {
   // 生成されたクイズの保存・取得
   setGeneratedQuiz: (quiz: QuizRaw | null, imageUrl?: string | null, ocrText?: string, structuredOCR?: StructuredOCR) => void;
   clearGeneratedQuiz: () => void;
+  setLastScanQuizId: (quizId: string | null) => void;
   
   // 翻訳履歴管理
   saveTranslationHistory: (result: TranslationResult, imageUrl?: string) => void;
