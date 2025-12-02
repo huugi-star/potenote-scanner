@@ -165,18 +165,18 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
       </div>
       
       <!-- メインコンテンツエリア（問題文と解答を並列配置） -->
-      <div style="flex: 1; display: flex; gap: 10px; min-height: 0; margin-bottom: 10px;">
+      <div style="flex: 1; display: flex; gap: 10px; min-height: 0; margin-bottom: 0;">
         <!-- 左カラム: 問題文（65%） -->
         <div style="flex: 0 0 65%; display: flex; flex-direction: column; overflow: visible;">
           <div style="font-size: 13px; font-weight: bold; margin-bottom: 6px; color: #333; flex: 0 0 auto;">
             【問題】問${startQuestionNumber}〜問${endQuestionNumber}
           </div>
-          <div style="flex: 1; line-height: 1.6; font-size: 11px; display: flex; flex-direction: column; justify-content: flex-start;">
+          <div style="flex: 1; line-height: 1.6; font-size: 11px; display: flex; flex-direction: column; justify-content: flex-start; margin-bottom: 0; padding-bottom: 0;">
             ${pageQuestions.map((item, localIndex) => {
               const globalIndex = startQuestionNumber + localIndex - 1;
               const isLast = localIndex === pageQuestions.length - 1;
               let questionHtml = `
-                <div style="margin-bottom: ${isLast ? '0' : (item.needsInline ? '18px' : '14px')}; padding-bottom: ${item.needsInline ? '8px' : '4px'};">
+                <div style="margin-bottom: ${isLast ? '0' : (item.needsInline ? '18px' : '14px')}; padding-bottom: ${isLast ? '0' : (item.needsInline ? '8px' : '4px')};">
                   <span style="font-weight: bold; color: #333;">（${globalIndex + 1}）</span> ${item.question.q}
                 </div>
               `;
@@ -206,13 +206,13 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
           <div style="font-size: 13px; font-weight: bold; margin-bottom: 6px; color: #333; text-align: center; flex: 0 0 auto;">
             【解答】
           </div>
-          <div style="flex: 1; font-size: 10px; line-height: 1.6; display: flex; flex-direction: column; justify-content: flex-start;">
+          <div style="flex: 1; font-size: 10px; line-height: 1.6; display: flex; flex-direction: column; justify-content: flex-start; margin-bottom: 0; padding-bottom: 0;">
             ${pageQuestions.map((item, localIndex) => {
               const globalIndex = startQuestionNumber + localIndex - 1;
               const isLast = localIndex === pageQuestions.length - 1;
               const correctAnswer = item.question.options[item.question.a];
               return `
-                <div style="margin-bottom: ${isLast ? '0' : (item.needsInline ? '18px' : '14px')}; padding: 4px; background-color: #f5f5f5; border-radius: 3px; border: 1px solid #e0e0e0;">
+                <div style="margin-bottom: ${isLast ? '0' : (item.needsInline ? '18px' : '14px')}; padding: ${isLast ? '4px 4px 0 4px' : '4px'}; background-color: #f5f5f5; border-radius: 3px; border: 1px solid #e0e0e0;">
                   <div style="font-weight: bold; margin-bottom: 2px; font-size: 9px; color: #666;">問${globalIndex + 1}</div>
                   <div style="color: #0066cc; font-weight: bold; font-size: 10px;">
                     ${String.fromCharCode(65 + item.question.a)}. ${correctAnswer}
