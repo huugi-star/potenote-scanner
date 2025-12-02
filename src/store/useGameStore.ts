@@ -705,14 +705,59 @@ export const useGameStore = create<GameStore>()(
         // クラウドにも保存（テキスト＋スコア程度なので軽量）
         // uid がストアにまだ反映されていない場合でも、Firebase Auth の currentUser から取得して保存を試みる
         const effectiveUid = state.uid ?? auth?.currentUser?.uid ?? null;
+        
+        // デバッグログ
+        console.log('[saveQuizHistory] Debug:', {
+          stateUid: state.uid,
+          authCurrentUserUid: auth?.currentUser?.uid,
+          effectiveUid,
+          dbExists: !!db,
+          historyId: history.id,
+        });
 
         if (db && effectiveUid) {
           try {
             const colRef = collection(db, 'users', effectiveUid, 'quiz_history');
-            await setDoc(doc(colRef, history.id), history, { merge: true });
+            console.log('[saveQuizHistory] Attempting to save to Firestore:', {
+              path: `users/${effectiveUid}/quiz_history/${history.id}`,
+            });
+            
+            // Firestore は undefined をサポートしていないため、undefined のフィールドを削除
+            const historyForFirestore: any = {
+              id: history.id,
+              quiz: history.quiz,
+              result: {
+                quizId: history.result.quizId,
+                correctCount: history.result.correctCount,
+                totalQuestions: history.result.totalQuestions,
+                isPerfect: history.result.isPerfect,
+                earnedCoins: history.result.earnedCoins,
+                earnedDistance: history.result.earnedDistance,
+                isDoubled: history.result.isDoubled,
+                timestamp: history.result.timestamp.toISOString?.() ?? history.result.timestamp,
+              },
+              createdAt: history.createdAt,
+              usedQuestionIndices: history.usedQuestionIndices,
+            };
+            
+            // undefined でない場合のみ追加
+            if (history.ocrText !== undefined) {
+              historyForFirestore.ocrText = history.ocrText;
+            }
+            if (history.structuredOCR !== undefined) {
+              historyForFirestore.structuredOCR = history.structuredOCR;
+            }
+            
+            await setDoc(doc(colRef, history.id), historyForFirestore, { merge: true });
+            console.log('[saveQuizHistory] Successfully saved to Firestore!');
           } catch (e) {
-            console.error('Cloud quiz history save error:', e);
+            console.error('[saveQuizHistory] Cloud quiz history save error:', e);
           }
+        } else {
+          console.warn('[saveQuizHistory] Skipping cloud save:', {
+            db: !!db,
+            effectiveUid,
+          });
         }
       },
       

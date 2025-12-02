@@ -221,7 +221,9 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
             timestamp: new Date(),
           };
           // ★ここでクラウドへの書き込み完了まで await する
+          console.log('[ScanningScreen] Calling saveQuizHistory...');
           await saveQuizHistory(quizResult.quiz, initialResult, quizResult.ocrText, quizResult.structuredOCR);
+          console.log('[ScanningScreen] saveQuizHistory completed');
 
           // ストアに保存（ページ更新後も保持）
           setGeneratedQuiz(quizResult.quiz, compressed.dataUrl, quizResult.ocrText, quizResult.structuredOCR);
