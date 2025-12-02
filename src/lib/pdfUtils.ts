@@ -278,9 +278,9 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
                 
                 <!-- 右側: 解答欄（35%、折り曲げ用） -->
                 <div style="flex: 0 0 35%; border-left: 2px dotted #999; padding-left: 6px; font-size: 9px; line-height: 1.15; display: flex; align-items: flex-start; min-height: fit-content;">
-                  <div style="padding: 4px 6px; background-color: #f5f5f5; border-radius: 2px; border: 1px solid #e0e0e0; width: 100%; box-sizing: border-box; min-height: fit-content;">
-                    <div style="font-weight: bold; margin-bottom: 2px; font-size: 7px; color: #666; line-height: 1.2;">問${globalIndex + 1}</div>
-                    <div style="color: #0066cc; font-weight: bold; font-size: 9px; line-height: 1.3; word-break: break-word;">
+                  <div style="padding: 3px 6px; background-color: #f5f5f5; border-radius: 2px; border: 1px solid #e0e0e0; width: 100%; box-sizing: border-box; min-height: fit-content; display: flex; flex-direction: column; justify-content: flex-start;">
+                    <div style="font-weight: bold; margin-bottom: 3px; font-size: 7px; color: #666; line-height: 1.2; flex-shrink: 0;">問${globalIndex + 1}</div>
+                    <div style="color: #0066cc; font-weight: bold; font-size: 9px; line-height: 1.3; word-break: break-word; flex-shrink: 0;">
                       ${String.fromCharCode(65 + item.question.a)}. ${correctAnswer}
                     </div>
                   </div>
