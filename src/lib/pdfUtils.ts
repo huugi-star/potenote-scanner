@@ -173,20 +173,28 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
     // ステップ1: 全問題のテキスト高さを仮計算（余白ゼロ）
     let totalTextHeight = 0;
     pageQuestions.forEach(item => {
-      totalTextHeight += estimateQuestionHeight(item.question, item.needsInline);
+      const baseHeight = estimateQuestionHeight(item.question, item.needsInline);
+      // インライン選択肢の高さも考慮
+      const inlineHeight = item.needsInline ? 5 : 0;
+      totalTextHeight += baseHeight + inlineHeight;
     });
     
-    // ステップ2: 残りのスペースを計算
-    const remainingSpace = MAIN_AREA_HEIGHT - totalTextHeight;
+    // ステップ2: 残りのスペースを計算（ヘッダーとフッターを除いた高さ）
+    // 実際の利用可能高さを計算（パディング12mm × 2 = 24mmを考慮）
+    const availableHeight = MAIN_AREA_HEIGHT - 24; // パディング分を差し引く
+    const remainingSpace = availableHeight - totalTextHeight;
     
     // ステップ3: 問題間のギャップを算出
     const questionCount = pageQuestions.length;
     let dynamicGap = questionCount > 1 ? remainingSpace / (questionCount - 1) : 0;
     
-    // 安全策: 最大15mmでキャップ
-    dynamicGap = Math.min(dynamicGap, 15);
+    // 安全策: 最大12mmでキャップ（読みやすさのため）
+    dynamicGap = Math.min(dynamicGap, 12);
     // 最小値も設定（読みやすさのため）
     dynamicGap = Math.max(dynamicGap, 2);
+    
+    // px単位に変換（1mm ≈ 3.78px）
+    const dynamicGapPx = dynamicGap * 3.78;
     
     // HTML要素を作成
     const container = document.createElement('div');
@@ -228,19 +236,20 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
       </div>
       
       <!-- メインコンテンツエリア（問題文と解答を並列配置、動的余白） -->
-      <div style="flex: 1; display: flex; gap: 8px; min-height: 0; margin-bottom: 6px;">
+      <div style="flex: 1; display: flex; gap: 8px; min-height: 0; margin-bottom: 0;">
         <!-- 左カラム: 問題文（65%） -->
         <div style="flex: 0 0 65%; display: flex; flex-direction: column; overflow: visible;">
           <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #333; flex: 0 0 auto;">
             【問題】問${startQuestionNumber}〜問${endQuestionNumber}
           </div>
-          <div style="flex: 1; line-height: 1.15; font-size: 9px;">
+          <div style="flex: 1; line-height: 1.15; font-size: 9px; display: flex; flex-direction: column; justify-content: flex-start;">
             ${pageQuestions.map((item, localIndex) => {
               const globalIndex = startQuestionNumber + localIndex - 1;
               const isLast = localIndex === pageQuestions.length - 1;
-              const marginBottom = isLast ? '0' : `${dynamicGap}px`;
+              // 動的余白を適用（最後の問題は0）
+              const marginBottom = isLast ? '0' : `${dynamicGapPx}px`;
               let questionHtml = `
-                <div style="margin-bottom: ${marginBottom}; padding-bottom: ${item.needsInline ? '3px' : '1px'};">
+                <div style="margin-bottom: ${marginBottom}; padding-bottom: ${item.needsInline ? '3px' : '1px'}; flex-shrink: 0;">
                   <span style="font-weight: bold; color: #333;">（${globalIndex + 1}）</span> ${item.question.q}
                 </div>
               `;
@@ -248,7 +257,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
               // インライン表示が必要な場合は、問題文の下に選択肢を横一列で表示
               if (item.needsInline) {
                 questionHtml += `
-                  <div style="margin-left: 15px; margin-bottom: ${isLast ? '0' : '2px'}; font-size: 8px; line-height: 1.2;">
+                  <div style="margin-left: 15px; margin-bottom: ${isLast ? '0' : '2px'}; font-size: 8px; line-height: 1.2; flex-shrink: 0;">
                     <div style="display: flex; flex-wrap: wrap; gap: 4px 8px;">
                       ${item.question.options.map((option, optIndex) => 
                         `<span style="white-space: nowrap;">
@@ -270,14 +279,15 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
           <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #333; text-align: center; flex: 0 0 auto;">
             【解答】
           </div>
-          <div style="flex: 1; font-size: 9px; line-height: 1.15;">
+          <div style="flex: 1; font-size: 9px; line-height: 1.15; display: flex; flex-direction: column; justify-content: flex-start;">
             ${pageQuestions.map((item, localIndex) => {
               const globalIndex = startQuestionNumber + localIndex - 1;
               const isLast = localIndex === pageQuestions.length - 1;
-              const marginBottom = isLast ? '0' : `${dynamicGap}px`;
+              // 動的余白を適用（最後の問題は0）
+              const marginBottom = isLast ? '0' : `${dynamicGapPx}px`;
               const correctAnswer = item.question.options[item.question.a];
               return `
-                <div style="margin-bottom: ${marginBottom}; padding: 3px; background-color: #f5f5f5; border-radius: 2px; border: 1px solid #e0e0e0;">
+                <div style="margin-bottom: ${marginBottom}; padding: 3px; background-color: #f5f5f5; border-radius: 2px; border: 1px solid #e0e0e0; flex-shrink: 0;">
                   <div style="font-weight: bold; margin-bottom: 1px; font-size: 8px; color: #666;">問${globalIndex + 1}</div>
                   <div style="color: #0066cc; font-weight: bold; font-size: 9px;">
                     ${String.fromCharCode(65 + item.question.a)}. ${correctAnswer}
