@@ -9,14 +9,6 @@ import jsPDF from 'jspdf';
 import type { QuizHistory } from '@/types';
 
 /**
- * テキストの高さを計算（複数行対応）
- */
-function getTextHeight(doc: jsPDF, text: string, maxWidth: number, fontSize: number, lineHeight: number): number {
-  const lines = doc.splitTextToSize(text, maxWidth);
-  return lines.length * lineHeight;
-}
-
-/**
  * クイズ履歴をPDF化
  * 2カラム構成（左75%：問題、右25%：正解と解説）
  * 折り目の点線付き
