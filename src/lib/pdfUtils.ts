@@ -153,7 +153,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
         <!-- スコア欄（1ページ目のみ） -->
         <div style="display: flex; justify-content: center; align-items: center; gap: 12px; font-size: 13px; font-weight: bold;">
           <span style="color: #666;">SCORE:</span>
-          <span style="border-bottom: 2px solid #333; padding: 2px 30px; min-width: 60px; text-align: center;">
+          <span style="padding: 2px 30px; min-width: 60px; text-align: center;">
             
           </span>
           <span style="color: #333;">/ ${totalScore}</span>
@@ -164,18 +164,18 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
         ` : ''}
       </div>
       
-      <!-- メインコンテンツエリア（問題文と解答を同じ高さで配置） -->
-      <div style="flex: 1; display: flex; gap: 12px; min-height: 0; margin-bottom: 10px;">
-        <!-- 左カラム: 問題文（68%） -->
-        <div style="flex: 0 0 68%; display: flex; flex-direction: column; overflow: visible;">
-          <div style="font-size: 13px; font-weight: bold; margin-bottom: 8px; color: #333; flex: 0 0 auto;">
+      <!-- メインコンテンツエリア（問題文と解答を並列配置） -->
+      <div style="flex: 1; display: flex; gap: 10px; min-height: 0; margin-bottom: 10px;">
+        <!-- 左カラム: 問題文（65%） -->
+        <div style="flex: 0 0 65%; display: flex; flex-direction: column; overflow: visible;">
+          <div style="font-size: 13px; font-weight: bold; margin-bottom: 6px; color: #333; flex: 0 0 auto;">
             【問題】問${startQuestionNumber}〜問${endQuestionNumber}
           </div>
-          <div style="flex: 1; line-height: 1.7; font-size: 11px;">
+          <div style="flex: 1; line-height: 1.6; font-size: 11px;">
             ${pageQuestions.map((item, localIndex) => {
               const globalIndex = startQuestionNumber + localIndex - 1;
               let questionHtml = `
-                <div style="margin-bottom: ${item.needsInline ? '16px' : '10px'}; padding-bottom: ${item.needsInline ? '8px' : '4px'};">
+                <div style="margin-bottom: ${item.needsInline ? '14px' : '8px'}; padding-bottom: ${item.needsInline ? '6px' : '2px'};">
                   <span style="font-weight: bold; color: #333;">（${globalIndex + 1}）</span> ${item.question.q}
                 </div>
               `;
@@ -183,7 +183,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
               // インライン表示が必要な場合は、問題文の下に選択肢を横一列で表示
               if (item.needsInline) {
                 questionHtml += `
-                  <div style="margin-left: 18px; margin-bottom: 8px; font-size: 9px; line-height: 1.5;">
+                  <div style="margin-left: 18px; margin-bottom: 6px; font-size: 9px; line-height: 1.5;">
                     <div style="display: flex; flex-wrap: wrap; gap: 6px 10px;">
                       ${item.question.options.map((option, optIndex) => 
                         `<span style="white-space: nowrap;">
@@ -200,17 +200,17 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
           </div>
         </div>
         
-        <!-- 右カラム: 解答欄（32%、折り曲げ用） -->
-        <div style="flex: 0 0 32%; border-left: 2px dotted #999; padding-left: 8px; display: flex; flex-direction: column; overflow: visible;">
-          <div style="font-size: 13px; font-weight: bold; margin-bottom: 8px; color: #333; text-align: center; flex: 0 0 auto;">
+        <!-- 右カラム: 解答欄（35%、折り曲げ用） -->
+        <div style="flex: 0 0 35%; border-left: 2px dotted #999; padding-left: 8px; display: flex; flex-direction: column; overflow: visible;">
+          <div style="font-size: 13px; font-weight: bold; margin-bottom: 6px; color: #333; text-align: center; flex: 0 0 auto;">
             【解答】
           </div>
-          <div style="flex: 1; font-size: 10px; line-height: 1.7;">
+          <div style="flex: 1; font-size: 10px; line-height: 1.6;">
             ${pageQuestions.map((item, localIndex) => {
               const globalIndex = startQuestionNumber + localIndex - 1;
               const correctAnswer = item.question.options[item.question.a];
               return `
-                <div style="margin-bottom: ${item.needsInline ? '16px' : '10px'}; padding: 5px; background-color: #f5f5f5; border-radius: 3px; border: 1px solid #e0e0e0;">
+                <div style="margin-bottom: ${item.needsInline ? '14px' : '8px'}; padding: 4px; background-color: #f5f5f5; border-radius: 3px; border: 1px solid #e0e0e0;">
                   <div style="font-weight: bold; margin-bottom: 2px; font-size: 9px; color: #666;">問${globalIndex + 1}</div>
                   <div style="color: #0066cc; font-weight: bold; font-size: 10px;">
                     ${String.fromCharCode(65 + item.question.a)}. ${correctAnswer}
