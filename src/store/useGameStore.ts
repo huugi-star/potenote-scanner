@@ -10,7 +10,7 @@ import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinat
 import { ALL_ITEMS, getItemById } from '@/data/items';
 import { REWARDS, DISTANCE, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit as fsLimit } from 'firebase/firestore';
 
 // ===== Helper Functions =====
@@ -703,9 +703,12 @@ export const useGameStore = create<GameStore>()(
         set({ quizHistory: newHistory });
 
         // クラウドにも保存（テキスト＋スコア程度なので軽量）
-        if (db && state.uid) {
+        // uid がストアにまだ反映されていない場合でも、Firebase Auth の currentUser から取得して保存を試みる
+        const effectiveUid = state.uid ?? auth?.currentUser?.uid ?? null;
+
+        if (db && effectiveUid) {
           try {
-            const colRef = collection(db, 'users', state.uid!, 'quiz_history');
+            const colRef = collection(db, 'users', effectiveUid, 'quiz_history');
             await setDoc(doc(colRef, history.id), history, { merge: true });
           } catch (e) {
             console.error('Cloud quiz history save error:', e);
