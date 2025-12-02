@@ -2,7 +2,7 @@
  * pdfUtils.ts
  * 
  * クイズをPDF化するユーティリティ
- * 学習プリント形式（1ページ最大15問、高密度レイアウト + 動的余白調整）
+ * 学習プリント形式（1ページ最大15問、高密度レイアウト + 動的余白調整 + 平行配置）
  * html2canvasを使用して日本語フォントを正しく表示
  */
 
@@ -80,7 +80,7 @@ function estimateQuestionHeight(question: QuizHistory['quiz']['questions'][0], n
 
 /**
  * 複数のクイズ履歴をPDF化
- * 1ページ最大15問の高密度レイアウト + 動的余白調整
+ * 1ページ最大15問の高密度レイアウト + 動的余白調整 + 平行配置
  */
 export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
   if (histories.length === 0) {
@@ -235,8 +235,8 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
         ` : ''}
       </div>
       
-      <!-- メインコンテンツエリア（問題文と解答を並列配置、動的余白） -->
-      <div style="flex: 1; display: flex; gap: 8px; min-height: 0; margin-bottom: 0;">
+      <!-- メインコンテンツエリア（問題文と解答を並列配置、動的余白、平行配置） -->
+      <div style="flex: 1; display: flex; gap: 8px; min-height: 0; margin-bottom: 0; align-items: flex-start;">
         <!-- 左カラム: 問題文（65%） -->
         <div style="flex: 0 0 65%; display: flex; flex-direction: column; overflow: visible;">
           <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #333; flex: 0 0 auto;">
