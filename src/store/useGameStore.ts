@@ -101,7 +101,7 @@ interface GameActions {
   applyQuizResult: (result: QuizResult) => void;
   
   // クイズ履歴
-  saveQuizHistory: (quiz: QuizRaw, result: QuizResult, ocrText?: string, structuredOCR?: StructuredOCR) => void;
+  saveQuizHistory: (quiz: QuizRaw, result: QuizResult, ocrText?: string, structuredOCR?: StructuredOCR) => Promise<void>;
   getQuizHistory: () => QuizHistory[];
   updateQuizHistoryUsedIndices: (historyId: string, newIndices: number[]) => void;
   addQuestionsToHistory: (historyId: string, newQuestions: QuizHistory['quiz']['questions']) => void;
@@ -685,7 +685,7 @@ export const useGameStore = create<GameStore>()(
       
       // ===== Quiz History =====
       
-      saveQuizHistory: (quiz, result, ocrText, structuredOCR) => {
+      saveQuizHistory: async (quiz, result, ocrText, structuredOCR) => {
         const state = get();
         
         const history: QuizHistory = {
@@ -702,17 +702,15 @@ export const useGameStore = create<GameStore>()(
         const newHistory = [history, ...state.quizHistory];
         set({ quizHistory: newHistory });
 
-         // クラウドにも保存（テキスト＋スコア程度なので軽量）
-         if (db && state.uid) {
-           (async () => {
-             try {
-               const colRef = collection(db, 'users', state.uid!, 'quiz_history');
-               await setDoc(doc(colRef, history.id), history, { merge: true });
-             } catch (e) {
-               console.error('Cloud quiz history save error:', e);
-             }
-           })();
-         }
+        // クラウドにも保存（テキスト＋スコア程度なので軽量）
+        if (db && state.uid) {
+          try {
+            const colRef = collection(db, 'users', state.uid!, 'quiz_history');
+            await setDoc(doc(colRef, history.id), history, { merge: true });
+          } catch (e) {
+            console.error('Cloud quiz history save error:', e);
+          }
+        }
       },
       
       getQuizHistory: () => {

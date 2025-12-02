@@ -220,7 +220,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
             isDoubled: false,
             timestamp: new Date(),
           };
-          saveQuizHistory(quizResult.quiz, initialResult, quizResult.ocrText, quizResult.structuredOCR);
+          // ★ここでクラウドへの書き込み完了まで await する
+          await saveQuizHistory(quizResult.quiz, initialResult, quizResult.ocrText, quizResult.structuredOCR);
 
           // ストアに保存（ページ更新後も保持）
           setGeneratedQuiz(quizResult.quiz, compressed.dataUrl, quizResult.ocrText, quizResult.structuredOCR);
