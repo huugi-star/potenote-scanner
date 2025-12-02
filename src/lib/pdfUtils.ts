@@ -236,66 +236,58 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
       </div>
       
       <!-- メインコンテンツエリア（問題文と解答を並列配置、動的余白、平行配置） -->
-      <div style="flex: 1; display: flex; gap: 8px; min-height: 0; margin-bottom: 0; align-items: flex-start;">
-        <!-- 左カラム: 問題文（65%） -->
-        <div style="flex: 0 0 65%; display: flex; flex-direction: column; overflow: visible;">
-          <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #333; flex: 0 0 auto;">
+      <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 0;">
+        <!-- ヘッダー行 -->
+        <div style="display: flex; gap: 8px; margin-bottom: 4px; flex: 0 0 auto;">
+          <div style="flex: 0 0 65%; font-size: 11px; font-weight: bold; color: #333;">
             【問題】問${startQuestionNumber}〜問${endQuestionNumber}
           </div>
-          <div style="flex: 1; line-height: 1.15; font-size: 9px; display: flex; flex-direction: column; justify-content: flex-start;">
-            ${pageQuestions.map((item, localIndex) => {
-              const globalIndex = startQuestionNumber + localIndex - 1;
-              const isLast = localIndex === pageQuestions.length - 1;
-              // 動的余白を適用（最後の問題は0）
-              const marginBottom = isLast ? '0' : `${dynamicGapPx}px`;
-              let questionHtml = `
-                <div style="margin-bottom: ${marginBottom}; padding-bottom: ${item.needsInline ? '3px' : '1px'}; flex-shrink: 0;">
-                  <span style="font-weight: bold; color: #333;">（${globalIndex + 1}）</span> ${item.question.q}
-                </div>
-              `;
-              
-              // インライン表示が必要な場合は、問題文の下に選択肢を横一列で表示
-              if (item.needsInline) {
-                questionHtml += `
-                  <div style="margin-left: 15px; margin-bottom: ${isLast ? '0' : '2px'}; font-size: 8px; line-height: 1.2; flex-shrink: 0;">
-                    <div style="display: flex; flex-wrap: wrap; gap: 4px 8px;">
-                      ${item.question.options.map((option, optIndex) => 
-                        `<span style="white-space: nowrap;">
-                          <span style="font-weight: bold;">${String.fromCharCode(65 + optIndex)}.</span> ${option}
-                        </span>`
-                      ).join('')}
-                    </div>
-                  </div>
-                `;
-              }
-              
-              return questionHtml;
-            }).join('')}
+          <div style="flex: 0 0 35%; border-left: 2px dotted #999; padding-left: 6px; font-size: 11px; font-weight: bold; color: #333; text-align: center;">
+            【解答】
           </div>
         </div>
         
-        <!-- 右カラム: 解答欄（35%、折り曲げ用） -->
-        <div style="flex: 0 0 35%; border-left: 2px dotted #999; padding-left: 6px; display: flex; flex-direction: column; overflow: visible;">
-          <div style="font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #333; text-align: center; flex: 0 0 auto;">
-            【解答】
-          </div>
-          <div style="flex: 1; font-size: 9px; line-height: 1.15; display: flex; flex-direction: column; justify-content: flex-start;">
-            ${pageQuestions.map((item, localIndex) => {
-              const globalIndex = startQuestionNumber + localIndex - 1;
-              const isLast = localIndex === pageQuestions.length - 1;
-              // 動的余白を適用（最後の問題は0）
-              const marginBottom = isLast ? '0' : `${dynamicGapPx}px`;
-              const correctAnswer = item.question.options[item.question.a];
-              return `
-                <div style="margin-bottom: ${marginBottom}; padding: 3px; background-color: #f5f5f5; border-radius: 2px; border: 1px solid #e0e0e0; flex-shrink: 0;">
-                  <div style="font-weight: bold; margin-bottom: 1px; font-size: 8px; color: #666;">問${globalIndex + 1}</div>
-                  <div style="color: #0066cc; font-weight: bold; font-size: 9px;">
-                    ${String.fromCharCode(65 + item.question.a)}. ${correctAnswer}
+        <!-- 問題リスト（各問題を1行として、問題文と解答を横並び） -->
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 0; justify-content: flex-start;">
+          ${pageQuestions.map((item, localIndex) => {
+            const globalIndex = startQuestionNumber + localIndex - 1;
+            const isLast = localIndex === pageQuestions.length - 1;
+            // 動的余白を適用（最後の問題は0）
+            const marginBottom = isLast ? '0' : `${dynamicGapPx}px`;
+            const correctAnswer = item.question.options[item.question.a];
+            
+            return `
+              <div style="display: flex; gap: 8px; margin-bottom: ${marginBottom}; align-items: flex-start; flex-shrink: 0;">
+                <!-- 左側: 問題文（65%） -->
+                <div style="flex: 0 0 65%; line-height: 1.15; font-size: 9px; overflow: visible;">
+                  <div style="margin-bottom: ${item.needsInline ? '3px' : '1px'};">
+                    <span style="font-weight: bold; color: #333;">（${globalIndex + 1}）</span> ${item.question.q}
+                  </div>
+                  ${item.needsInline ? `
+                    <div style="margin-left: 15px; font-size: 8px; line-height: 1.2;">
+                      <div style="display: flex; flex-wrap: wrap; gap: 4px 8px;">
+                        ${item.question.options.map((option, optIndex) => 
+                          `<span style="white-space: nowrap;">
+                            <span style="font-weight: bold;">${String.fromCharCode(65 + optIndex)}.</span> ${option}
+                          </span>`
+                        ).join('')}
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+                
+                <!-- 右側: 解答欄（35%、折り曲げ用） -->
+                <div style="flex: 0 0 35%; border-left: 2px dotted #999; padding-left: 6px; font-size: 9px; line-height: 1.15; display: flex; align-items: flex-start;">
+                  <div style="padding: 3px; background-color: #f5f5f5; border-radius: 2px; border: 1px solid #e0e0e0; width: 100%;">
+                    <div style="font-weight: bold; margin-bottom: 1px; font-size: 8px; color: #666;">問${globalIndex + 1}</div>
+                    <div style="color: #0066cc; font-weight: bold; font-size: 9px;">
+                      ${String.fromCharCode(65 + item.question.a)}. ${correctAnswer}
+                    </div>
                   </div>
                 </div>
-              `;
-            }).join('')}
-          </div>
+              </div>
+            `;
+          }).join('')}
         </div>
       </div>
       
