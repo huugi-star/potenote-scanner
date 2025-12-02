@@ -147,18 +147,15 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
       <div style="flex: 0 0 auto; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 3px solid #333;">
         <!-- メインタイトル -->
         <div style="font-size: 22px; font-weight: bold; margin-bottom: ${pageIndex === 0 ? '8px' : '0'}; color: #1a1a1a; text-align: center;">
-          ${categoryName}
+          QUEST ${categoryName}
         </div>
         ${pageIndex === 0 ? `
         <!-- スコア欄（1ページ目のみ） -->
         <div style="display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 14px; font-weight: bold;">
           <span style="color: #666;">SCORE:</span>
-          <span style="border: 2px solid #333; padding: 4px 20px; background-color: #f9f9f9; min-width: 80px; text-align: center;">
-            
-          </span>
           <span style="color: #333;">/ ${totalScore}</span>
-          <span style="font-size: 10px; color: #666; font-weight: normal; margin-left: 4px;">
-            (Reward: ${pointsPerQ} pts)
+          <span style="font-size: 12px; color: #666; font-weight: normal; margin-left: 8px;">
+            (1問${pointsPerQ}点)
           </span>
         </div>
         ` : ''}
