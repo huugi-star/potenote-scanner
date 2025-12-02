@@ -180,8 +180,8 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
     });
     
     // ステップ2: 残りのスペースを計算（ヘッダーとフッターを除いた高さ）
-    // 実際の利用可能高さを計算（パディング12mm × 2 = 24mmを考慮）
-    const availableHeight = MAIN_AREA_HEIGHT - 24; // パディング分を差し引く
+    // 実際の利用可能高さを計算（パディング12mm × 2 = 24mm + フッターとの間隔8px ≈ 3mmを考慮）
+    const availableHeight = MAIN_AREA_HEIGHT - 24 - 3; // パディング分とフッター間隔を差し引く
     const remainingSpace = availableHeight - totalTextHeight;
     
     // ステップ3: 問題間のギャップを算出
@@ -236,7 +236,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
       </div>
       
       <!-- メインコンテンツエリア（問題文と解答を並列配置、動的余白、平行配置） -->
-      <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 0; position: relative;">
+      <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 12px; position: relative;">
         <!-- 点線（ヘッダーからフッターまで連続） -->
         <div style="position: absolute; left: calc(65% + 4px); top: 0; bottom: 0; width: 0; border-left: 2px dotted #999; pointer-events: none; z-index: 1;"></div>
         
@@ -251,7 +251,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
         </div>
         
         <!-- 問題リスト（各問題を1行として、問題文と解答を横並び） -->
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 0; justify-content: flex-start; overflow: visible; margin-top: 0; position: relative; z-index: 2;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 0; justify-content: flex-start; overflow: visible; margin-top: 0; margin-bottom: 8px; position: relative; z-index: 2;">
           ${pageQuestions.map((item, localIndex) => {
             const globalIndex = startQuestionNumber + localIndex - 1;
             const isLast = localIndex === pageQuestions.length - 1;
