@@ -143,18 +143,21 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
     
     // コンテンツを作成
     let html = `
-      <!-- ヘッダーエリア（RPGクエスト風） -->
-      <div style="flex: 0 0 auto; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 3px solid #333;">
+      <!-- ヘッダーエリア（RPGクエスト風、コンパクト） -->
+      <div style="flex: 0 0 auto; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid #333;">
         <!-- メインタイトル -->
-        <div style="font-size: 22px; font-weight: bold; margin-bottom: ${pageIndex === 0 ? '8px' : '0'}; color: #1a1a1a; text-align: center;">
+        <div style="font-size: 18px; font-weight: bold; margin-bottom: ${pageIndex === 0 ? '6px' : '0'}; color: #1a1a1a; text-align: center;">
           QUEST ${categoryName}
         </div>
         ${pageIndex === 0 ? `
         <!-- スコア欄（1ページ目のみ） -->
-        <div style="display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 14px; font-weight: bold;">
+        <div style="display: flex; justify-content: center; align-items: center; gap: 12px; font-size: 13px; font-weight: bold;">
           <span style="color: #666;">SCORE:</span>
+          <span style="border-bottom: 2px solid #333; padding: 2px 30px; min-width: 60px; text-align: center;">
+            
+          </span>
           <span style="color: #333;">/ ${totalScore}</span>
-          <span style="font-size: 12px; color: #666; font-weight: normal; margin-left: 8px;">
+          <span style="font-size: 11px; color: #666; font-weight: normal; margin-left: 12px;">
             (1問${pointsPerQ}点)
           </span>
         </div>
