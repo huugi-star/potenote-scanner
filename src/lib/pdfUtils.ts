@@ -2,7 +2,7 @@
  * pdfUtils.ts
  * 
  * クイズをPDF化するユーティリティ
- * 学習プリント形式（1ページ10問固定、最適化レイアウト）
+ * 学習プリント形式（1ページ8問固定、RPGクエスト風デザイン）
  * html2canvasを使用して日本語フォントを正しく表示
  */
 
@@ -38,8 +38,37 @@ function needsInlineOptions(questionText: string): boolean {
 }
 
 /**
+ * スコア計算ロジック
+ * 問題数に応じて満点と配点を決定
+ */
+function calculateScore(qCount: number): { totalScore: number; pointsPerQ: number } {
+  // 100点満点で割り切れる場合
+  if (100 % qCount === 0) {
+    return {
+      totalScore: 100,
+      pointsPerQ: 100 / qCount,
+    };
+  }
+  
+  // 割り切れない場合
+  if (qCount >= 30) {
+    // 問題数が多すぎる場合: 5点固定
+    return {
+      totalScore: qCount * 5,
+      pointsPerQ: 5,
+    };
+  } else {
+    // それ以外: 10点固定
+    return {
+      totalScore: qCount * 10,
+      pointsPerQ: 10,
+    };
+  }
+}
+
+/**
  * 複数のクイズ履歴をPDF化
- * 1ページ10問固定のページネーション + 最適化レイアウト
+ * 1ページ8問固定のページネーション + RPGクエスト風デザイン
  */
 export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
   if (histories.length === 0) {
@@ -73,6 +102,13 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
     pages.push(allQuestions.slice(i, i + QUESTIONS_PER_PAGE));
   }
   
+  // 全体の問題数からスコアを計算
+  const totalQuestionCount = allQuestions.length;
+  const { totalScore, pointsPerQ } = calculateScore(totalQuestionCount);
+  
+  // カテゴリ名を取得（最初の履歴のsummaryから、またはキーワードから推測）
+  const categoryName = histories[0]?.quiz.summary || histories[0]?.quiz.keywords?.[0] || '学習クエスト';
+  
   const pdf = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -105,27 +141,24 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
     container.style.flexDirection = 'column';
     container.style.boxSizing = 'border-box';
     
-    // 現在の日付を取得
-    const today = new Date();
-    const dateString = today.toLocaleDateString('ja-JP', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-    
     // コンテンツを作成
     let html = `
-      <!-- ヘッダーエリア（固定高さ） -->
-      <div style="flex: 0 0 auto; text-align: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid #333;">
-        <div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">
-          学習プリント
+      <!-- ヘッダーエリア（RPGクエスト風） -->
+      <div style="flex: 0 0 auto; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 3px solid #333;">
+        <!-- メインタイトル -->
+        <div style="font-size: 22px; font-weight: bold; margin-bottom: 8px; color: #1a1a1a; text-align: center;">
+          ${categoryName}
         </div>
-        <div style="font-size: 10px; color: #666; margin-bottom: 6px;">
-          ${dateString}
-        </div>
-        <div style="font-size: 9px; color: #999; display: flex; justify-content: space-between; max-width: 280px; margin: 0 auto;">
-          <span>名前: _______________</span>
-          <span>学習日: _______________</span>
+        <!-- スコア欄 -->
+        <div style="display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 14px; font-weight: bold;">
+          <span style="color: #666;">SCORE:</span>
+          <span style="border: 2px solid #333; padding: 4px 20px; background-color: #f9f9f9; min-width: 80px; text-align: center;">
+            [       ]
+          </span>
+          <span style="color: #333;">/ ${totalScore}</span>
+          <span style="font-size: 10px; color: #666; font-weight: normal; margin-left: 4px;">
+            (Reward: ${pointsPerQ} pts)
+          </span>
         </div>
       </div>
       
@@ -187,12 +220,12 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
         </div>
       </div>
       
-      <!-- フッターエリア（固定高さ、固定グリッドシステム） -->
-      <div style="flex: 0 0 auto; margin-top: 8px; padding-top: 10px; border-top: 2px solid #333; min-height: 60mm;">
+      <!-- フッターエリア（固定高さ、固定グリッドシステム、選択肢の高さを拡大） -->
+      <div style="flex: 0 0 auto; margin-top: 8px; padding-top: 10px; border-top: 2px solid #333; min-height: 70mm;">
         <div style="font-size: 13px; font-weight: bold; margin-bottom: 6px; color: #333;">
           【選択肢】問${startQuestionNumber}〜問${endQuestionNumber}
         </div>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(4, 1fr); gap: 5px 10px; font-size: 8px; line-height: 1.3; height: 100%;">
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(4, 1fr); gap: 6px 10px; font-size: 8px; line-height: 1.4; height: 100%;">
           ${pageQuestions.map((item, localIndex) => {
             const globalIndex = startQuestionNumber + localIndex - 1;
             
@@ -203,11 +236,11 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
             
             // フッター表示の問題のみ選択肢を表示
             return `
-              <div style="padding: 5px; background-color: #f9f9f9; border-radius: 3px; border: 1px solid #ddd; overflow: hidden; display: flex; flex-direction: column;">
-                <div style="font-weight: bold; margin-bottom: 2px; color: #333; font-size: 8px; flex: 0 0 auto;">[問${globalIndex + 1}]</div>
-                <div style="flex: 1; display: flex; flex-direction: column; gap: 1px;">
+              <div style="padding: 6px 5px; background-color: #f9f9f9; border-radius: 3px; border: 1px solid #ddd; overflow: visible; display: flex; flex-direction: column; min-height: 0;">
+                <div style="font-weight: bold; margin-bottom: 3px; color: #333; font-size: 8px; flex: 0 0 auto;">[問${globalIndex + 1}]</div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 2px; overflow: visible;">
                   ${item.question.options.map((option, optIndex) => 
-                    `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 7.5px;">
+                    `<div style="white-space: normal; overflow: visible; font-size: 7.5px; line-height: 1.3;">
                       <span style="font-weight: bold;">${String.fromCharCode(65 + optIndex)}.</span> ${option}
                     </div>`
                   ).join('')}
