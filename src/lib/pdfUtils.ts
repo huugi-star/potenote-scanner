@@ -236,19 +236,22 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
       </div>
       
       <!-- メインコンテンツエリア（問題文と解答を並列配置、動的余白、平行配置） -->
-      <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 0;">
+      <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 0; position: relative;">
+        <!-- 点線（ヘッダーからフッターまで連続） -->
+        <div style="position: absolute; left: calc(65% + 4px); top: 0; bottom: 0; width: 0; border-left: 2px dotted #999; pointer-events: none; z-index: 1;"></div>
+        
         <!-- ヘッダー行 -->
-        <div style="display: flex; gap: 8px; margin-bottom: 8px; flex: 0 0 auto;">
+        <div style="display: flex; gap: 8px; margin-bottom: 8px; flex: 0 0 auto; position: relative; z-index: 2;">
           <div style="flex: 0 0 65%; font-size: 11px; font-weight: bold; color: #333;">
             【問題】問${startQuestionNumber}〜問${endQuestionNumber}
           </div>
-          <div style="flex: 0 0 35%; border-left: 2px dotted #999; padding-left: 6px; font-size: 11px; font-weight: bold; color: #333; text-align: center;">
+          <div style="flex: 0 0 35%; padding-left: 6px; font-size: 11px; font-weight: bold; color: #333; text-align: center;">
             【解答】
           </div>
         </div>
         
         <!-- 問題リスト（各問題を1行として、問題文と解答を横並び） -->
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 0; justify-content: flex-start; overflow: visible; margin-top: 0;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 0; justify-content: flex-start; overflow: visible; margin-top: 0; position: relative; z-index: 2;">
           ${pageQuestions.map((item, localIndex) => {
             const globalIndex = startQuestionNumber + localIndex - 1;
             const isLast = localIndex === pageQuestions.length - 1;
@@ -277,7 +280,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
                 </div>
                 
                 <!-- 右側: 解答欄（35%、折り曲げ用） -->
-                <div style="flex: 0 0 35%; border-left: 2px dotted #999; padding-left: 6px; font-size: 9px; line-height: 1.15; display: flex; align-items: center; min-height: fit-content;">
+                <div style="flex: 0 0 35%; padding-left: 6px; font-size: 9px; line-height: 1.15; display: flex; align-items: center; min-height: fit-content;">
                   <div style="padding: 4px 6px; background-color: #f5f5f5; border-radius: 2px; border: 1px solid #e0e0e0; width: 100%; box-sizing: border-box; min-height: fit-content; display: flex; flex-direction: column; align-items: flex-start; justify-content: center;">
                     <div style="font-weight: bold; margin-bottom: 2px; font-size: 7px; color: #666; line-height: 1.2; flex-shrink: 0;">問${globalIndex + 1}</div>
                     <div style="color: #0066cc; font-weight: bold; font-size: 9px; line-height: 1.3; word-break: break-word; flex-shrink: 0;">
