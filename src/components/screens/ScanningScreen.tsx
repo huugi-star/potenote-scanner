@@ -31,13 +31,13 @@ import { useToast } from '@/components/ui/Toast';
 import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/imageUtils';
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
 import { LIMITS } from '@/lib/constants';
-import type { QuizRaw, StructuredOCR, QuizResult } from '@/types';
+import type { QuizRaw, StructuredOCR, QuizResult, TranslationResult } from '@/types';
 
 // ===== Types =====
 
 interface ScanningScreenProps {
   onQuizReady: (quiz: QuizRaw, imageUrl: string, ocrText?: string, structuredOCR?: StructuredOCR) => void;
-  onTranslationReady?: (result: { originalText: string; translatedText: string; structureAnalysis?: any[]; sentenceStructure?: any; teacherComment?: string }, imageUrl: string) => void;
+  onTranslationReady?: (result: TranslationResult, imageUrl: string) => void;
   onBack?: () => void;
 }
 
@@ -182,8 +182,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
               {
                 originalText: translateResult.originalText,
                 translatedText: translateResult.translatedText,
-                structureAnalysis: translateResult.structureAnalysis,
-                sentenceStructure: translateResult.sentenceStructure,
+                chunks: translateResult.chunks,
                 teacherComment: translateResult.teacherComment,
               },
               compressed.dataUrl

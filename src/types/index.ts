@@ -46,25 +46,14 @@ export interface StructuredOCR {
 }
 
 /**
- * 構造解析データ（英語学習モード用 - ビジュアル英文解釈）
+ * チャンク（意味の塊）データ（英語学習モード用 - ビジュアル英文解釈）
  */
-export interface StructureAnalysis {
-  word: string;           // 単語または句
-  visualMarkup: string;   // 記号付き表示（例: "[I]", "<a> [man]"）
-  grammaticalRole: string; // 文法的役割（例: "S", "V", "O", "C", "修飾語"）
-  meaning: string;        // 意味
-  modifies?: string;      // 修飾先（被修飾語）
-  grammarNote?: string;   // ワンポイント解説
-}
-
-/**
- * 文の骨組み（S, V, O, C）
- */
-export interface SentenceStructure {
-  subject: string;        // 主語
-  verb: string;          // 動詞
-  object?: string;       // 目的語
-  complement?: string;   // 補語
+export interface Chunk {
+  text: string;           // 英語の塊
+  translation: string;    // その意味
+  type: 'S' | 'V' | 'O' | 'C' | 'M' | 'Connect'; // 文の要素
+  symbol: '[]' | '<>' | '()' | 'none'; // 囲む記号
+  explanation?: string;   // 解説
 }
 
 /**
@@ -73,8 +62,7 @@ export interface SentenceStructure {
 export interface TranslationResult {
   originalText: string;   // 原文
   translatedText: string; // 翻訳文
-  structureAnalysis?: StructureAnalysis[]; // 構造解析（英語学習モード用）
-  sentenceStructure?: SentenceStructure; // 文の骨組み（S, V, O, C）
+  chunks?: Chunk[];       // チャンク（意味の塊）ごとの構造解析（英語学習モード用）
   teacherComment?: string; // 先生からの総評（英語学習モード用）
 }
 

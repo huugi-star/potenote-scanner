@@ -17,6 +17,7 @@ import type { TranslationResult, TranslationHistory } from '@/types';
 interface TranslationResultScreenProps {
   result: TranslationResult;
   onBack: () => void;
+  onStartQuiz?: () => void; // クイズに挑戦するコールバック
   imageUrl?: string;
 }
 
@@ -25,8 +26,10 @@ interface TranslationResultScreenProps {
 export const TranslationResultScreen = ({
   result,
   onBack,
+  onStartQuiz,
   imageUrl,
 }: TranslationResultScreenProps) => {
+  const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [copiedOriginal, setCopiedOriginal] = useState(false);
   const [copiedTranslated, setCopiedTranslated] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -153,116 +156,119 @@ export const TranslationResultScreen = ({
           </div>
         </motion.div>
 
-        {/* 文の骨組みセクション（英語学習モード用） */}
-        {result.sentenceStructure && (
+        {/* チャンクベースの構造解析（英語学習モード用 - カード式UI） */}
+        {result.chunks !== undefined && result.chunks.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className="mb-6"
           >
-            <h2 className="text-lg font-bold text-purple-400 mb-3 flex items-center gap-2">
-              <span className="text-2xl">📐</span>
-              文の骨組み（S, V, O, C）
-            </h2>
-            <div className="bg-purple-900/20 rounded-xl p-4 border border-purple-700/50">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                {result.sentenceStructure.subject && (
-                  <div>
-                    <span className="text-purple-300 font-bold">S (主語):</span>
-                    <span className="ml-2 text-white font-mono">{result.sentenceStructure.subject}</span>
-                  </div>
-                )}
-                {result.sentenceStructure.verb && (
-                  <div>
-                    <span className="text-purple-300 font-bold">V (動詞):</span>
-                    <span className="ml-2 text-white font-mono">{result.sentenceStructure.verb}</span>
-                  </div>
-                )}
-                {result.sentenceStructure.object && (
-                  <div>
-                    <span className="text-purple-300 font-bold">O (目的語):</span>
-                    <span className="ml-2 text-white font-mono">{result.sentenceStructure.object}</span>
-                  </div>
-                )}
-                {result.sentenceStructure.complement && (
-                  <div>
-                    <span className="text-purple-300 font-bold">C (補語):</span>
-                    <span className="ml-2 text-white font-mono">{result.sentenceStructure.complement}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* 構造解析セクション（英語学習モード用 - ビジュアル英文解釈） */}
-        {result.structureAnalysis && result.structureAnalysis.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="mb-6"
-          >
-            <h2 className="text-lg font-bold text-blue-400 mb-3 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-blue-400 mb-4 flex items-center gap-2">
               <span className="text-2xl">🎓</span>
               構造解析（ビジュアル英文解釈）
             </h2>
             
-            {/* 記号付き全文表示 */}
-            <div className="mb-4 bg-blue-900/30 rounded-xl p-4 border border-blue-700/50">
-              <p className="text-blue-200 text-sm mb-2 font-semibold">記号付き全文:</p>
-              <p className="text-white font-mono text-base leading-relaxed">
-                {result.structureAnalysis.map((analysis, index) => (
-                  <span key={index} className="inline-block mr-2">
-                    <span className="text-blue-300">{analysis.visualMarkup}</span>
-                  </span>
-                ))}
-              </p>
-            </div>
-
-            {/* 単語ごとの詳細解析 */}
-            <div className="space-y-2">
-              {result.structureAnalysis.map((analysis, index) => (
+            {/* カード式UI */}
+            <div className="mb-4">
+              {/* 現在のチャンクカード */}
+              {result.chunks[currentChunkIndex] && (
                 <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: -20 }}
+                  key={currentChunkIndex}
+                  initial={{ opacity: 0, x: 50 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.3 + index * 0.05 }}
-                  className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50"
+                  exit={{ opacity: 0, x: -50 }}
+                  className="bg-gradient-to-br from-blue-900/40 to-blue-800/40 rounded-2xl p-6 border-2 border-blue-600/50 shadow-lg"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0">
-                      <span className="text-blue-300 font-mono text-base font-bold">
-                        {analysis.visualMarkup}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="px-2 py-0.5 bg-blue-600/30 text-blue-300 text-xs rounded font-semibold">
-                          {analysis.grammaticalRole}
-                        </span>
-                        {analysis.modifies && (
-                          <span className="text-gray-400 text-xs">
-                            → {analysis.modifies}を修飾
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-white text-sm mb-1">
-                        {analysis.meaning}
-                      </p>
-                      {analysis.grammarNote && (
-                        <p className="text-gray-400 text-xs italic">
-                          💡 {analysis.grammarNote}
-                        </p>
-                      )}
-                    </div>
+                  {/* チャンク番号 */}
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-blue-300 text-sm font-medium">
+                      {currentChunkIndex + 1} / {chunks.length}
+                    </span>
+                    {/* タイプバッジ */}
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      chunks[currentChunkIndex].type === 'S' ? 'bg-green-500/30 text-green-300' :
+                      chunks[currentChunkIndex].type === 'V' ? 'bg-red-500/30 text-red-300' :
+                      chunks[currentChunkIndex].type === 'O' ? 'bg-yellow-500/30 text-yellow-300' :
+                      chunks[currentChunkIndex].type === 'C' ? 'bg-purple-500/30 text-purple-300' :
+                      chunks[currentChunkIndex].type === 'M' ? 'bg-cyan-500/30 text-cyan-300' :
+                      'bg-gray-500/30 text-gray-300'
+                    }`}>
+                      {chunks[currentChunkIndex].type === 'S' ? '主語 (S)' :
+                       chunks[currentChunkIndex].type === 'V' ? '動詞 (V)' :
+                       chunks[currentChunkIndex].type === 'O' ? '目的語 (O)' :
+                       chunks[currentChunkIndex].type === 'C' ? '補語 (C)' :
+                       chunks[currentChunkIndex].type === 'M' ? '修飾語 (M)' :
+                       '接続詞'}
+                    </span>
                   </div>
+                  
+                  {/* 英語のチャンク（記号付き） */}
+                  <div className="mb-4">
+                    <p className="text-gray-400 text-xs mb-2">英語の塊</p>
+                    <p className="text-white font-mono text-xl font-bold leading-relaxed">
+                      {chunks[currentChunkIndex].symbol === '[]' && `[ ${chunks[currentChunkIndex].text} ]`}
+                      {chunks[currentChunkIndex].symbol === '<>' && `< ${chunks[currentChunkIndex].text} >`}
+                      {chunks[currentChunkIndex].symbol === '()' && `( ${chunks[currentChunkIndex].text} )`}
+                      {chunks[currentChunkIndex].symbol === 'none' && chunks[currentChunkIndex].text}
+                    </p>
+                  </div>
+                  
+                  {/* 日本語訳 */}
+                  <div className="mb-3">
+                    <p className="text-gray-400 text-xs mb-2">意味</p>
+                    <p className="text-emerald-300 text-lg font-medium">
+                      {chunks[currentChunkIndex].translation}
+                    </p>
+                  </div>
+                  
+                  {/* 解説 */}
+                  {chunks[currentChunkIndex].explanation && (
+                    <div className="mt-3 pt-3 border-t border-blue-700/50">
+                      <p className="text-gray-400 text-xs mb-1">💡 解説</p>
+                      <p className="text-gray-300 text-sm">
+                        {chunks[currentChunkIndex].explanation}
+                      </p>
+                    </div>
+                  )}
                 </motion.div>
-              ))}
+              )}
+              
+              {/* ナビゲーションボタン */}
+              <div className="flex items-center justify-between mt-4 gap-3">
+                <button
+                  onClick={() => {
+                    vibrateLight();
+                    setCurrentChunkIndex(Math.max(0, currentChunkIndex - 1));
+                  }}
+                  disabled={currentChunkIndex === 0}
+                  className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
+                    currentChunkIndex === 0
+                      ? 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-700 hover:bg-gray-600 text-white'
+                  }`}
+                >
+                  ← 前へ
+                </button>
+                <button
+                  onClick={() => {
+                    vibrateLight();
+                    setCurrentChunkIndex(Math.min(chunks.length - 1, currentChunkIndex + 1));
+                  }}
+                  disabled={currentChunkIndex === chunks.length - 1}
+                  className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
+                    currentChunkIndex === chunks.length - 1
+                      ? 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-700 hover:bg-gray-600 text-white'
+                  }`}
+                >
+                  次へ →
+                </button>
+              </div>
             </div>
           </motion.div>
-        )}
+          );
+        })()}
 
         {/* 先生からのコメント（英語学習モード用） */}
         {result.teacherComment && (
@@ -288,6 +294,27 @@ export const TranslationResultScreen = ({
 
         {/* フッター */}
         <div className="space-y-3">
+          {/* この内容でクイズに挑戦ボタン（英語学習モード用） */}
+          {result.chunks !== undefined && result.chunks.length > 0 && onStartQuiz !== undefined && (
+            <motion.button
+              onClick={() => {
+                vibrateLight();
+                if (onStartQuiz) {
+                  onStartQuiz();
+                }
+              }}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <span className="text-xl">📚</span>
+              この内容でクイズに挑戦
+            </motion.button>
+          )}
+          
           <motion.button
             onClick={() => {
               vibrateLight();

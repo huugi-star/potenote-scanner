@@ -1,36 +1,25 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-// Google Vision API (OCR用)
 const GOOGLE_VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
 
+// タイムアウト対策
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-// 翻訳結果の型定義（ビジュアル英文解釈用）
+// 翻訳結果の型定義（ビジュアル解説用）
 const TranslationSchema = z.object({
   originalText: z.string(),
-  translatedText: z.string(), // 自然な意訳
-  
-  // ★ビジュアル英文解釈：単語レベルの構造解析
-  structureAnalysis: z.array(z.object({
-    word: z.string(),           // 単語または句 (例: "I", "met", "a man")
-    visualMarkup: z.string(),   // 記号付き表示 (例: "[I]", "met", "<a> [man]")
-    grammaticalRole: z.string(), // 文法的役割 (例: "S", "V", "O", "C", "修飾語")
-    meaning: z.string(),        // 意味 (例: "私は", "会った", "ある男性を")
-    modifies: z.string().optional(), // 修飾先（被修飾語）(例: "man" を修飾する場合は "man")
-    grammarNote: z.string().optional(), // ワンポイント解説
+  translatedText: z.string(),
+  // チャンク（意味の塊）ごとのリスト
+  chunks: z.array(z.object({
+    text: z.string(),       // 英語の塊 (例: "An individual's somatic cells")
+    translation: z.string(),// その意味 (例: "個々の体細胞は")
+    type: z.enum(['S', 'V', 'O', 'C', 'M', 'Connect']), // 文の要素
+    symbol: z.enum(['[]', '<>', '()', 'none']), // 囲む記号 ([名詞], <形容詞>, (副詞))
+    explanation: z.string().optional(), // 解説 (例: "主語")
   })),
-  
-  // 文の骨組み（S, V, O, C）
-  sentenceStructure: z.object({
-    subject: z.string(),        // 主語 (例: "[I]")
-    verb: z.string(),          // 動詞 (例: "met")
-    object: z.string().optional(), // 目的語 (例: "<a> [man]")
-    complement: z.string().optional(), // 補語
-  }),
-  
-  teacherComment: z.string(), // 先生からの総評
+  teacherComment: z.string(),
 });
 
 export async function POST(req: Request) {
@@ -44,145 +33,88 @@ export async function POST(req: Request) {
 
     // 1. OCR処理 (Google Vision API)
     if (!extractedText) {
-      if (!image) {
-        return NextResponse.json({ error: "No image or text provided" }, { status: 400 });
-      }
-      const base64Content = image.replace(/^data:image\/\w+;base64,/, "");
+      if (!image) return NextResponse.json({ error: "No data" }, { status: 400 });
       
+      const base64Content = image.replace(/^data:image\/\w+;base64,/, "");
       const visionResponse = await fetch(`${GOOGLE_VISION_URL}?key=${process.env.GOOGLE_VISION_API_KEY}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          requests: [
-            {
-              image: { content: base64Content },
-              features: [{ type: "DOCUMENT_TEXT_DETECTION" }] 
-            }
-          ]
+          requests: [{
+            image: { content: base64Content },
+            features: [{ type: "DOCUMENT_TEXT_DETECTION" }]
+          }]
         })
       });
 
       if (!visionResponse.ok) {
         const errText = await visionResponse.text();
-        throw new Error(`Google Vision API Error: ${errText}`);
+        throw new Error(`Vision API Error: ${errText}`);
       }
-
+      
       const visionData = await visionResponse.json();
       extractedText = visionData.responses[0]?.fullTextAnnotation?.text;
 
-      if (!extractedText) {
-        return NextResponse.json({ error: "No text found" }, { status: 400 });
-      }
+      if (!extractedText) return NextResponse.json({ error: "No text found" }, { status: 400 });
     }
 
     console.log("Translation Start...");
+    console.log("Extracted text:", extractedText.substring(0, 200));
 
-    // 2. 翻訳 & 構造解析 (OpenAI) - ビジュアル英文解釈メソッド
-    const systemPrompt = `あなたは伊藤和夫氏の『ビジュアル英文解釈』のメソッドを再現するAIです。
-英文を単に翻訳するのではなく、**構造を理解するための解剖図**として可視化してください。
+    // 2. 構造解析 (OpenAI)
+    const systemPrompt = `あなたは伝説の英語講師です。
+ユーザーがスキャンした英文を、**伊藤和夫氏の『ビジュアル英文解釈』**のように、**「意味の塊（チャンク）」**ごとに大きく区切り、文の構造を視覚的に解説してください。
 
-## 記号ルール（必須）
-- **[ 名詞 ]**: 名詞を角カッコで囲む
-- **( 副詞 )**: 副詞を丸カッコで囲む
-- **< 形容詞 >**: 形容詞を山カッコで囲む
-- **S, V, O, C**: 文の骨組みを明確に分離
+## 絶対ルール：単語ごとにバラバラにするな！
 
-## 解析ルール
-1. **単語レベルで分解**: チャンクではなく、単語または最小の意味単位で分解すること。
-2. **記号で可視化**: 各単語に [名詞], (副詞), <形容詞> の記号を付けること。
-3. **S, V, O, C の明示**: 文の骨組み（主語・動詞・目的語・補語）を明確に分離すること。
-4. **修飾関係の明示**: 修飾語句については「どの単語にかかっているか（被修飾語）」を明示すること。
-5. **前方からの理解**: 日本語訳は「前から順に意味を取る訳」にすること。
+× [An] [individual's] [somatic] [cells] ... 
+○ [ An individual's somatic cells ] ... (これ全体で一つの主語Sとして扱う)
 
-## 出力フォーマット (JSON)
+## 解析記号のルール
+
+以下の記号を使って、文法的な役割を明確にせよ。
+
+1. **[ ... ] (角カッコ)**: **名詞の塊**。主語(S)、目的語(O)、補語(C)になるもの。
+
+2. **< ... > (山カッコ)**: **形容詞の塊**。名詞を後ろから詳しく説明するもの（関係詞節、分詞など）。
+
+3. **( ... ) (丸カッコ)**: **副詞の塊**。動詞を説明するもの、前置詞句(M)、挿入語など。
+
+4. **none**: 動詞(V)や接続詞は囲まない。
+
+## 出力構成
+
+英文を頭から順に「意味の切れ目」で区切り、以下のJSON形式で出力せよ。
+
+- text: 英語の塊
+- translation: その部分の直訳
+- type: S, V, O, C, M, Connect(接続詞) のいずれか
+- symbol: '[]', '<>', '()', 'none' のいずれか
+- explanation: 簡単な解説（例：「〜を修飾」）
+
+## 出力 (JSON)
+
 {
-  "originalText": "原文（OCR補正済み）",
-  "translatedText": "全体の自然な日本語訳（答え合わせ用）",
-  "structureAnalysis": [
-    {
-      "word": "I",
-      "visualMarkup": "[I]",
-      "grammaticalRole": "S",
-      "meaning": "私は",
-      "grammarNote": "主語"
-    },
-    {
-      "word": "met",
-      "visualMarkup": "met",
-      "grammaticalRole": "V",
-      "meaning": "会った",
-      "grammarNote": "動詞"
-    },
-    {
-      "word": "a",
-      "visualMarkup": "<a>",
-      "grammaticalRole": "修飾語",
-      "meaning": "ある",
-      "modifies": "man",
-      "grammarNote": "manを修飾"
-    },
-    {
-      "word": "man",
-      "visualMarkup": "[man]",
-      "grammaticalRole": "O",
-      "meaning": "男性を",
-      "grammarNote": "目的語"
-    },
-    {
-      "word": "who",
-      "visualMarkup": "[who]",
-      "grammaticalRole": "関係詞",
-      "meaning": "その人は",
-      "modifies": "man",
-      "grammarNote": "manを説明する関係詞"
-    },
-    {
-      "word": "wanted",
-      "visualMarkup": "wanted",
-      "grammaticalRole": "V",
-      "meaning": "欲しがっていた"
-    },
-    {
-      "word": "to buy",
-      "visualMarkup": "(to buy)",
-      "grammaticalRole": "修飾語",
-      "meaning": "買うことを",
-      "modifies": "wanted",
-      "grammarNote": "wantedを修飾"
-    },
-    {
-      "word": "the",
-      "visualMarkup": "<the>",
-      "grammaticalRole": "修飾語",
-      "meaning": "その",
-      "modifies": "car",
-      "grammarNote": "carを修飾"
-    },
-    {
-      "word": "car",
-      "visualMarkup": "[car]",
-      "grammaticalRole": "O",
-      "meaning": "車を",
-      "grammarNote": "buyの目的語"
-    }
+  "originalText": "原文",
+  "translatedText": "自然な全訳",
+  "chunks": [
+    { "text": "An individual's somatic cells", "translation": "個々の体細胞は", "type": "S", "symbol": "[]", "explanation": "長い主語" },
+    { "text": "have", "translation": "持っている", "type": "V", "symbol": "none", "explanation": "" },
+    { "text": "essentially", "translation": "本質的に", "type": "M", "symbol": "()", "explanation": "動詞を修飾" },
+    { "text": "the same genome", "translation": "同じゲノムを", "type": "O", "symbol": "[]", "explanation": "" }
   ],
-  "sentenceStructure": {
-    "subject": "[I]",
-    "verb": "met",
-    "object": "<a> [man] [who] wanted (to buy) <the> [car]"
-  },
-  "teacherComment": "学習者への励ましとアドバイス（60文字以内）"
+  "teacherComment": "アドバイス"
 }`;
 
     const openaiPayload = {
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `以下のテキストを構造解析してください:\n\n${extractedText}` }
+        { role: "user", content: `以下のテキストを構造解析せよ:\n\n${extractedText}` }
       ],
       response_format: { type: "json_object" },
-      temperature: 0.3, 
-      max_tokens: 3000
+      temperature: 0.2, // 構造解析はブレないように低温度
+      max_tokens: 4000 // 長文でも切れないように倍増
     };
 
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -195,8 +127,8 @@ export async function POST(req: Request) {
     });
 
     if (!openaiResponse.ok) {
-       const err = await openaiResponse.text();
-       throw new Error(`OpenAI Error: ${err}`);
+      const err = await openaiResponse.text();
+      throw new Error(`OpenAI Error: ${err}`);
     }
 
     const openaiData = await openaiResponse.json();
@@ -221,54 +153,25 @@ export async function POST(req: Request) {
     console.log("Parsed JSON:", JSON.stringify(json, null, 2));
 
     // データの正規化とクリーニング
-    if (json.structureAnalysis && Array.isArray(json.structureAnalysis)) {
-      json.structureAnalysis = json.structureAnalysis.map((item: any) => {
-        const cleaned: any = {
-          word: String(item.word || ""),
-          visualMarkup: String(item.visualMarkup || item.word || ""),
-          grammaticalRole: String(item.grammaticalRole || ""),
-          meaning: String(item.meaning || ""),
-        };
-        
-        // modifiesが有効な値の場合のみ追加
-        if (item.modifies && item.modifies !== "" && item.modifies !== null) {
-          cleaned.modifies = String(item.modifies);
-        }
-        
-        // grammarNoteが有効な値の場合のみ追加
-        if (item.grammarNote && item.grammarNote !== "" && item.grammarNote !== null) {
-          cleaned.grammarNote = String(item.grammarNote);
-        }
-        
-        return cleaned;
-      });
-    } else {
-      console.error("structureAnalysis is missing or not an array:", json.structureAnalysis);
-      throw new Error("structureAnalysis is required and must be an array");
+    if (!json.chunks || !Array.isArray(json.chunks)) {
+      console.error("chunks is missing or not an array:", json.chunks);
+      throw new Error("chunks is required and must be an array");
     }
 
-    // sentenceStructureのデフォルト値設定
-    if (!json.sentenceStructure) {
-      json.sentenceStructure = {
-        subject: "",
-        verb: "",
-      };
-    } else {
+    json.chunks = json.chunks.map((chunk: any) => {
       const cleaned: any = {
-        subject: String(json.sentenceStructure.subject || ""),
-        verb: String(json.sentenceStructure.verb || ""),
+        text: String(chunk.text || ""),
+        translation: String(chunk.translation || ""),
+        type: chunk.type || 'M',
+        symbol: chunk.symbol || 'none',
       };
       
-      if (json.sentenceStructure.object && json.sentenceStructure.object !== null) {
-        cleaned.object = String(json.sentenceStructure.object);
+      if (chunk.explanation && chunk.explanation !== "" && chunk.explanation !== null) {
+        cleaned.explanation = String(chunk.explanation);
       }
       
-      if (json.sentenceStructure.complement && json.sentenceStructure.complement !== null) {
-        cleaned.complement = String(json.sentenceStructure.complement);
-      }
-      
-      json.sentenceStructure = cleaned;
-    }
+      return cleaned;
+    });
 
     // teacherCommentのデフォルト値設定
     if (!json.teacherComment || json.teacherComment === null) {
@@ -310,4 +213,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

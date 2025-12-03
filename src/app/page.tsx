@@ -13,6 +13,7 @@ import { useGameStore } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import type { QuizRaw, StructuredOCR, TranslationResult } from '@/types';
 
 // Screens
 import { ScanningScreen } from '@/components/screens/ScanningScreen';
@@ -35,7 +36,6 @@ import { AuthButton } from '@/components/ui/AuthButton';
 import { OnboardingOverlay } from '@/components/ui/OnboardingOverlay';
 
 import { vibrateLight } from '@/lib/haptics';
-import type { QuizRaw, StructuredOCR } from '@/types';
 
 // ===== Types =====
 
@@ -68,7 +68,7 @@ interface QuizSession {
 /**
  * 翻訳結果画面ラッパー（ストアから結果を取得）
  */
-const TranslationResultScreenWrapper = ({ onBack }: { onBack: () => void }) => {
+const TranslationResultScreenWrapper = ({ onBack, onStartQuiz }: { onBack: () => void; onStartQuiz?: () => void }) => {
   const translationResult = useGameStore(state => state.translationResult);
   
   if (!translationResult) {
@@ -85,6 +85,7 @@ const TranslationResultScreenWrapper = ({ onBack }: { onBack: () => void }) => {
       <TranslationResultScreen
         result={translationResult}
         onBack={onBack}
+        onStartQuiz={onStartQuiz}
       />
     </motion.div>
   );
@@ -587,19 +588,46 @@ const AppContent = () => {
   }, []);
 
   // 翻訳準備完了
-  const handleTranslationReady = useCallback((result: { originalText: string; translatedText: string; structureAnalysis?: any[]; sentenceStructure?: any; teacherComment?: string }, imageUrl?: string) => {
+  const handleTranslationReady = useCallback((result: TranslationResult, imageUrl?: string) => {
     const store = useGameStore.getState();
-    store.setTranslationResult({
-      originalText: result.originalText,
-      translatedText: result.translatedText,
-      structureAnalysis: result.structureAnalysis,
-      sentenceStructure: result.sentenceStructure,
-      teacherComment: result.teacherComment,
-    });
+    store.setTranslationResult(result);
     // 翻訳履歴に保存（imageUrlも含む）
     store.saveTranslationHistory(result, imageUrl);
     setPhase('translation_result');
   }, []);
+
+  // 翻訳内容からクイズを生成
+  const handleStartQuizFromTranslation = useCallback(async () => {
+    const translationResult = useGameStore.getState().translationResult;
+    if (!translationResult) return;
+
+    vibrateLight();
+    setPhase('scanning');
+    
+    // 原文をOCRテキストとして使用してクイズを生成
+    try {
+      const quizResponse = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: translationResult.originalText,
+        }),
+      });
+
+      if (!quizResponse.ok) {
+        throw new Error(`Quiz generation failed: ${quizResponse.status}`);
+      }
+
+      const quizResult = await quizResponse.json();
+      
+      if (quizResult.quiz && quizResult.quiz.questions && quizResult.quiz.questions.length > 0) {
+        handleQuizReady(quizResult.quiz, '', quizResult.ocrText, quizResult.structuredOCR);
+      }
+    } catch (error) {
+      console.error('Failed to generate quiz from translation:', error);
+      alert('クイズの生成に失敗しました');
+    }
+  }, [handleQuizReady]);
 
   // フリークエスト開始
   const handleFreeQuestStart = useCallback((quiz: QuizRaw) => {
@@ -693,7 +721,10 @@ const AppContent = () => {
         )}
 
         {phase === 'translation_result' && (
-          <TranslationResultScreenWrapper onBack={handleBackToHome} />
+          <TranslationResultScreenWrapper 
+            onBack={handleBackToHome} 
+            onStartQuiz={handleStartQuizFromTranslation}
+          />
         )}
 
         {phase === 'mode_select' && (
