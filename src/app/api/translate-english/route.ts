@@ -7,18 +7,29 @@ const GOOGLE_VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-// 翻訳結果の型定義（ビジュアル解説用）
+// 翻訳結果の型定義（ビジュアル英文解釈用）
 const TranslationSchema = z.object({
   originalText: z.string(),
   translatedText: z.string(), // 自然な意訳
   
-  // ★ここがキモ：ビジュアル解説用の構造データ
+  // ★ビジュアル英文解釈：単語レベルの構造解析
   structureAnalysis: z.array(z.object({
-    chunk: z.string(),      // 英語の塊 (例: "I met a man")
-    meaning: z.string(),    // その意味 (例: "私は男性に会った")
-    role: z.string(),       // 役割 (例: "主節(S+V)", "関係詞節", "接続詞" など)
-    grammarNote: z.string().optional().or(z.literal("")), // ワンポイント解説 (例: "whoはmanを説明している")
+    word: z.string(),           // 単語または句 (例: "I", "met", "a man")
+    visualMarkup: z.string(),   // 記号付き表示 (例: "[I]", "met", "<a> [man]")
+    grammaticalRole: z.string(), // 文法的役割 (例: "S", "V", "O", "C", "修飾語")
+    meaning: z.string(),        // 意味 (例: "私は", "会った", "ある男性を")
+    modifies: z.string().optional(), // 修飾先（被修飾語）(例: "man" を修飾する場合は "man")
+    grammarNote: z.string().optional(), // ワンポイント解説
   })),
+  
+  // 文の骨組み（S, V, O, C）
+  sentenceStructure: z.object({
+    subject: z.string(),        // 主語 (例: "[I]")
+    verb: z.string(),          // 動詞 (例: "met")
+    object: z.string().optional(), // 目的語 (例: "<a> [man]")
+    complement: z.string().optional(), // 補語
+  }),
+  
   teacherComment: z.string(), // 先生からの総評
 });
 
@@ -66,16 +77,22 @@ export async function POST(req: Request) {
 
     console.log("Translation Start...");
 
-    // 2. 翻訳 & 構造解析 (OpenAI)
-    const systemPrompt = `あなたは「直読直解」を指導するプロの英語講師です。
-ユーザーがスキャンした英文を、**「英語の語順のまま理解できる」**ように、意味の塊（チャンク）ごとに分解して解説してください。
-かつての「ビジュアル英文解釈」のように、文の構造（S+V+Oや修飾関係）を明確に示してください。
+    // 2. 翻訳 & 構造解析 (OpenAI) - ビジュアル英文解釈メソッド
+    const systemPrompt = `あなたは伊藤和夫氏の『ビジュアル英文解釈』のメソッドを再現するAIです。
+英文を単に翻訳するのではなく、**構造を理解するための解剖図**として可視化してください。
 
-## 解説ルール
-1. **チャンク分割**: 意味の切れ目（関係詞の前、前置詞の前、接続詞の前など）で文を区切ること。
-2. **前方からの理解**: 日本語訳は「後ろから戻る訳」ではなく、「前から順に意味を取る訳」にすること。
-3. **役割の明示**: 各チャンクが「主語・動詞（メイン）」なのか、「修飾（説明）」なのかをラベル付けすること。
-4. **文法用語の抑制**: 難しい用語は避け、「〜という説明」「〜する時」といった直感的な言葉を使うこと。
+## 記号ルール（必須）
+- **[ 名詞 ]**: 名詞を角カッコで囲む
+- **( 副詞 )**: 副詞を丸カッコで囲む
+- **< 形容詞 >**: 形容詞を山カッコで囲む
+- **S, V, O, C**: 文の骨組みを明確に分離
+
+## 解析ルール
+1. **単語レベルで分解**: チャンクではなく、単語または最小の意味単位で分解すること。
+2. **記号で可視化**: 各単語に [名詞], (副詞), <形容詞> の記号を付けること。
+3. **S, V, O, C の明示**: 文の骨組み（主語・動詞・目的語・補語）を明確に分離すること。
+4. **修飾関係の明示**: 修飾語句については「どの単語にかかっているか（被修飾語）」を明示すること。
+5. **前方からの理解**: 日本語訳は「前から順に意味を取る訳」にすること。
 
 ## 出力フォーマット (JSON)
 {
@@ -83,24 +100,84 @@ export async function POST(req: Request) {
   "translatedText": "全体の自然な日本語訳（答え合わせ用）",
   "structureAnalysis": [
     {
-      "chunk": "I met a man",
-      "meaning": "私はある男性に会った",
-      "role": "メイン(S+V)",
-      "grammarNote": "まずは誰が何をしたか結論"
+      "word": "I",
+      "visualMarkup": "[I]",
+      "grammaticalRole": "S",
+      "meaning": "私は",
+      "modifies": null,
+      "grammarNote": "主語"
     },
     {
-      "chunk": "who wanted to buy",
-      "meaning": "その人は買いたがっていた",
-      "role": "説明(関係詞)",
-      "grammarNote": "whoはその人の説明が始まる合図"
+      "word": "met",
+      "visualMarkup": "met",
+      "grammaticalRole": "V",
+      "meaning": "会った",
+      "modifies": null,
+      "grammarNote": "動詞"
     },
     {
-      "chunk": "the car.",
-      "meaning": "その車をね。",
-      "role": "目的語(O)",
+      "word": "a",
+      "visualMarkup": "<a>",
+      "grammaticalRole": "修飾語",
+      "meaning": "ある",
+      "modifies": "man",
+      "grammarNote": "manを修飾"
+    },
+    {
+      "word": "man",
+      "visualMarkup": "[man]",
+      "grammaticalRole": "O",
+      "meaning": "男性を",
+      "modifies": null,
+      "grammarNote": "目的語"
+    },
+    {
+      "word": "who",
+      "visualMarkup": "[who]",
+      "grammaticalRole": "関係詞",
+      "meaning": "その人は",
+      "modifies": "man",
+      "grammarNote": "manを説明する関係詞"
+    },
+    {
+      "word": "wanted",
+      "visualMarkup": "wanted",
+      "grammaticalRole": "V",
+      "meaning": "欲しがっていた",
+      "modifies": null,
       "grammarNote": ""
+    },
+    {
+      "word": "to buy",
+      "visualMarkup": "(to buy)",
+      "grammaticalRole": "修飾語",
+      "meaning": "買うことを",
+      "modifies": "wanted",
+      "grammarNote": "wantedを修飾"
+    },
+    {
+      "word": "the",
+      "visualMarkup": "<the>",
+      "grammaticalRole": "修飾語",
+      "meaning": "その",
+      "modifies": "car",
+      "grammarNote": "carを修飾"
+    },
+    {
+      "word": "car",
+      "visualMarkup": "[car]",
+      "grammaticalRole": "O",
+      "meaning": "車を",
+      "modifies": null,
+      "grammarNote": "buyの目的語"
     }
   ],
+  "sentenceStructure": {
+    "subject": "[I]",
+    "verb": "met",
+    "object": "<a> [man] [who] wanted (to buy) <the> [car]",
+    "complement": null
+  },
   "teacherComment": "学習者への励ましとアドバイス（60文字以内）"
 }`;
 
@@ -150,11 +227,12 @@ export async function POST(req: Request) {
 
     console.log("Parsed JSON:", JSON.stringify(json, null, 2));
 
-    // grammarNoteが空文字列の場合はundefinedに変換
+    // grammarNoteとmodifiesが空文字列またはnullの場合はundefinedに変換
     if (json.structureAnalysis && Array.isArray(json.structureAnalysis)) {
       json.structureAnalysis = json.structureAnalysis.map((item: any) => ({
         ...item,
         grammarNote: item.grammarNote === "" || !item.grammarNote ? undefined : item.grammarNote,
+        modifies: item.modifies === "" || !item.modifies || item.modifies === null ? undefined : item.modifies,
       }));
     }
 

@@ -37,7 +37,7 @@ import type { QuizRaw, StructuredOCR, QuizResult } from '@/types';
 
 interface ScanningScreenProps {
   onQuizReady: (quiz: QuizRaw, imageUrl: string, ocrText?: string, structuredOCR?: StructuredOCR) => void;
-  onTranslationReady?: (result: { originalText: string; translatedText: string; structureAnalysis?: any[]; teacherComment?: string }, imageUrl: string) => void;
+  onTranslationReady?: (result: { originalText: string; translatedText: string; structureAnalysis?: any[]; sentenceStructure?: any; teacherComment?: string }, imageUrl: string) => void;
   onBack?: () => void;
 }
 
@@ -180,6 +180,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                 originalText: translateResult.originalText,
                 translatedText: translateResult.translatedText,
                 structureAnalysis: translateResult.structureAnalysis,
+                sentenceStructure: translateResult.sentenceStructure,
                 teacherComment: translateResult.teacherComment,
               },
               compressed.dataUrl

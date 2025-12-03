@@ -153,39 +153,100 @@ export const TranslationResultScreen = ({
           </div>
         </motion.div>
 
-        {/* 構造解析セクション（英語学習モード用） */}
-        {result.structureAnalysis && result.structureAnalysis.length > 0 && (
+        {/* 文の骨組みセクション（英語学習モード用） */}
+        {result.sentenceStructure && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className="mb-6"
           >
+            <h2 className="text-lg font-bold text-purple-400 mb-3 flex items-center gap-2">
+              <span className="text-2xl">📐</span>
+              文の骨組み（S, V, O, C）
+            </h2>
+            <div className="bg-purple-900/20 rounded-xl p-4 border border-purple-700/50">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                {result.sentenceStructure.subject && (
+                  <div>
+                    <span className="text-purple-300 font-bold">S (主語):</span>
+                    <span className="ml-2 text-white font-mono">{result.sentenceStructure.subject}</span>
+                  </div>
+                )}
+                {result.sentenceStructure.verb && (
+                  <div>
+                    <span className="text-purple-300 font-bold">V (動詞):</span>
+                    <span className="ml-2 text-white font-mono">{result.sentenceStructure.verb}</span>
+                  </div>
+                )}
+                {result.sentenceStructure.object && (
+                  <div>
+                    <span className="text-purple-300 font-bold">O (目的語):</span>
+                    <span className="ml-2 text-white font-mono">{result.sentenceStructure.object}</span>
+                  </div>
+                )}
+                {result.sentenceStructure.complement && (
+                  <div>
+                    <span className="text-purple-300 font-bold">C (補語):</span>
+                    <span className="ml-2 text-white font-mono">{result.sentenceStructure.complement}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* 構造解析セクション（英語学習モード用 - ビジュアル英文解釈） */}
+        {result.structureAnalysis && result.structureAnalysis.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mb-6"
+          >
             <h2 className="text-lg font-bold text-blue-400 mb-3 flex items-center gap-2">
               <span className="text-2xl">🎓</span>
-              構造解析（直読直解）
+              構造解析（ビジュアル英文解釈）
             </h2>
-            <div className="space-y-3">
+            
+            {/* 記号付き全文表示 */}
+            <div className="mb-4 bg-blue-900/30 rounded-xl p-4 border border-blue-700/50">
+              <p className="text-blue-200 text-sm mb-2 font-semibold">記号付き全文:</p>
+              <p className="text-white font-mono text-base leading-relaxed">
+                {result.structureAnalysis.map((analysis, index) => (
+                  <span key={index} className="inline-block mr-2">
+                    <span className="text-blue-300">{analysis.visualMarkup}</span>
+                  </span>
+                ))}
+              </p>
+            </div>
+
+            {/* 単語ごとの詳細解析 */}
+            <div className="space-y-2">
               {result.structureAnalysis.map((analysis, index) => (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.2 + index * 0.1 }}
-                  className="bg-blue-900/20 rounded-xl p-4 border border-blue-700/50"
+                  transition={{ delay: 0.3 + index * 0.05 }}
+                  className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600/30 flex items-center justify-center text-blue-300 font-bold text-sm">
-                      {index + 1}
+                    <div className="flex-shrink-0">
+                      <span className="text-blue-300 font-mono text-base font-bold">
+                        {analysis.visualMarkup}
+                      </span>
                     </div>
-                    <div className="flex-1">
-                      <div className="mb-2">
-                        <span className="text-blue-300 font-mono text-sm font-semibold">
-                          {analysis.chunk}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="px-2 py-0.5 bg-blue-600/30 text-blue-300 text-xs rounded font-semibold">
+                          {analysis.grammaticalRole}
                         </span>
-                        <span className="ml-2 px-2 py-0.5 bg-blue-600/30 text-blue-300 text-xs rounded">
-                          {analysis.role}
-                        </span>
+                        {analysis.modifies && (
+                          <span className="text-gray-400 text-xs">
+                            → {analysis.modifies}を修飾
+                          </span>
+                        )}
                       </div>
                       <p className="text-white text-sm mb-1">
                         {analysis.meaning}

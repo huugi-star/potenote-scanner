@@ -587,12 +587,13 @@ const AppContent = () => {
   }, []);
 
   // 翻訳準備完了
-  const handleTranslationReady = useCallback((result: { originalText: string; translatedText: string; structureAnalysis?: any[]; teacherComment?: string }, imageUrl?: string) => {
+  const handleTranslationReady = useCallback((result: { originalText: string; translatedText: string; structureAnalysis?: any[]; sentenceStructure?: any; teacherComment?: string }, imageUrl?: string) => {
     const store = useGameStore.getState();
     store.setTranslationResult({
       originalText: result.originalText,
       translatedText: result.translatedText,
       structureAnalysis: result.structureAnalysis,
+      sentenceStructure: result.sentenceStructure,
       teacherComment: result.teacherComment,
     });
     // 翻訳履歴に保存（imageUrlも含む）
