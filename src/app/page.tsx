@@ -43,6 +43,7 @@ type GamePhase =
   | 'home'
   | 'scanning'
   | 'mode_select'
+  | 'translation_mode_select' // 翻訳モード選択画面
   | 'quiz'
   | 'result'
   | 'gacha'
@@ -223,7 +224,7 @@ const HomeScreen = ({
           スキャンして学ぶ（クイズ）
         </motion.button>
 
-        {/* スキャン翻訳ボタン */}
+        {/* スキャン翻訳ボタン（小さめ） */}
         <motion.button
           onClick={() => {
             vibrateLight();
@@ -233,15 +234,14 @@ const HomeScreen = ({
               alert(checkLimit.error || '翻訳回数の上限に達しました');
               return;
             }
-            useGameStore.getState().setScanType('translation');
-            onNavigate('scanning');
+            onNavigate('translation_mode_select');
           }}
-          className="w-full mt-3 py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25"
-          whileHover={{ scale: 1.02 }}
+          className="w-full mt-3 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600/80 to-emerald-500/80 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20"
+          whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.98 }}
         >
-          <Languages className="w-5 h-5" />
-          スキャン翻訳
+          <Languages className="w-4 h-4" />
+          スキャンして翻訳
         </motion.button>
 
         {/* フリークエスト */}
@@ -323,6 +323,104 @@ const HomeScreen = ({
         onPurchase={handleVIPPurchase}
         isVIP={isVIP}
       /> */}
+    </div>
+  );
+};
+
+/**
+ * 翻訳モード選択画面
+ */
+const TranslationModeSelectScreen = ({
+  onSelectMode,
+  onBack,
+}: {
+  onSelectMode: (mode: 'english_learning' | 'multilang') => void;
+  onBack: () => void;
+}) => {
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4 pb-24">
+      <div className="max-w-md mx-auto pt-6">
+        <h2 className="text-2xl font-bold text-white mb-2 text-center">翻訳モードを選択</h2>
+        <p className="text-gray-400 text-sm text-center mb-8">目的に合わせてモードを選んでください</p>
+
+        <div className="space-y-4">
+          {/* 英語学習モード */}
+          <motion.button
+            onClick={() => {
+              vibrateLight();
+              useGameStore.getState().setTranslationMode('english_learning');
+              useGameStore.getState().setScanType('translation');
+              onSelectMode('english_learning');
+            }}
+            className="w-full p-6 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 text-white text-left shadow-lg shadow-blue-500/25"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <div className="flex items-start gap-4">
+              <div className="text-4xl">🎓</div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold mb-2">英語学習・構造解析モード</h3>
+                <p className="text-sm text-blue-100 leading-relaxed">
+                  英語を英語の語順のまま理解する『直読直解』スキルを身につけます。
+                  <br />
+                  文の構造（S+V+O）や修飾関係を可視化し、文法も詳しく解説します。
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">受験生向け</span>
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">TOEIC学習</span>
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">文法解説</span>
+                </div>
+              </div>
+            </div>
+          </motion.button>
+
+          {/* 多言語・翻訳モード */}
+          <motion.button
+            onClick={() => {
+              vibrateLight();
+              useGameStore.getState().setTranslationMode('multilang');
+              useGameStore.getState().setScanType('translation');
+              onSelectMode('multilang');
+            }}
+            className="w-full p-6 rounded-2xl bg-gradient-to-r from-green-600 to-green-500 text-white text-left shadow-lg shadow-green-500/25"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <div className="flex items-start gap-4">
+              <div className="text-4xl">🌏</div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold mb-2">多言語・翻訳モード</h3>
+                <p className="text-sm text-green-100 leading-relaxed">
+                  全世界の言語に対応。文脈を読み取り、自然で分かりやすい日本語に意訳します。
+                  <br />
+                  論文の要約や、第二外国語の勉強、海外製品の説明書などに。
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">多言語対応</span>
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">自然な日本語</span>
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">文脈理解</span>
+                </div>
+              </div>
+            </div>
+          </motion.button>
+        </div>
+
+        <button
+          onClick={() => {
+            vibrateLight();
+            onBack();
+          }}
+          className="mt-8 w-full py-3 text-gray-400 hover:text-white transition-colors"
+        >
+          戻る
+        </button>
+      </div>
     </div>
   );
 };
@@ -557,6 +655,22 @@ const AppContent = () => {
             exit={{ opacity: 0 }}
           >
             <HomeScreen onNavigate={handleNavigate} />
+          </motion.div>
+        )}
+
+        {phase === 'translation_mode_select' && (
+          <motion.div
+            key="translation_mode_select"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <TranslationModeSelectScreen
+              onSelectMode={() => {
+                handleNavigate('scanning');
+              }}
+              onBack={() => handleNavigate('home')}
+            />
           </motion.div>
         )}
 
