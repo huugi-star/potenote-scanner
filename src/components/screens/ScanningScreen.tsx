@@ -37,7 +37,7 @@ import type { QuizRaw, StructuredOCR, QuizResult } from '@/types';
 
 interface ScanningScreenProps {
   onQuizReady: (quiz: QuizRaw, imageUrl: string, ocrText?: string, structuredOCR?: StructuredOCR) => void;
-  onTranslationReady?: (result: { originalText: string; translatedText: string }, imageUrl: string) => void;
+  onTranslationReady?: (result: { originalText: string; translatedText: string; structureAnalysis?: any[]; teacherComment?: string }, imageUrl: string) => void;
   onBack?: () => void;
 }
 
@@ -65,6 +65,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   // Store
   const isVIP = useGameStore(state => state.isVIP);
   const scanType = useGameStore(state => state.scanType);
+  const translationMode = useGameStore(state => state.translationMode);
   const remainingScans = useGameStore(selectRemainingScanCount);
   const checkScanLimit = useGameStore(state => state.checkScanLimit);
   const checkTranslationLimit = useGameStore(state => state.checkTranslationLimit);
@@ -147,7 +148,12 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
 
       if (scanType === 'translation') {
         // 翻訳モード
-        const translateResponse = await fetch('/api/translate', {
+        // 英語学習モードの場合は専用APIを使用
+        const apiEndpoint = translationMode === 'english_learning' 
+          ? '/api/translate-english' 
+          : '/api/translate';
+
+        const translateResponse = await fetch(apiEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -173,6 +179,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
               {
                 originalText: translateResult.originalText,
                 translatedText: translateResult.translatedText,
+                structureAnalysis: translateResult.structureAnalysis,
+                teacherComment: translateResult.teacherComment,
               },
               compressed.dataUrl
             );

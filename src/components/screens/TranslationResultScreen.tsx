@@ -153,6 +153,78 @@ export const TranslationResultScreen = ({
           </div>
         </motion.div>
 
+        {/* 構造解析セクション（英語学習モード用） */}
+        {result.structureAnalysis && result.structureAnalysis.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="mb-6"
+          >
+            <h2 className="text-lg font-bold text-blue-400 mb-3 flex items-center gap-2">
+              <span className="text-2xl">🎓</span>
+              構造解析（直読直解）
+            </h2>
+            <div className="space-y-3">
+              {result.structureAnalysis.map((analysis, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 + index * 0.1 }}
+                  className="bg-blue-900/20 rounded-xl p-4 border border-blue-700/50"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600/30 flex items-center justify-center text-blue-300 font-bold text-sm">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className="mb-2">
+                        <span className="text-blue-300 font-mono text-sm font-semibold">
+                          {analysis.chunk}
+                        </span>
+                        <span className="ml-2 px-2 py-0.5 bg-blue-600/30 text-blue-300 text-xs rounded">
+                          {analysis.role}
+                        </span>
+                      </div>
+                      <p className="text-white text-sm mb-1">
+                        {analysis.meaning}
+                      </p>
+                      {analysis.grammarNote && (
+                        <p className="text-gray-400 text-xs italic">
+                          💡 {analysis.grammarNote}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* 先生からのコメント（英語学習モード用） */}
+        {result.teacherComment && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mb-6"
+          >
+            <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-xl p-4 border border-purple-700/50">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">👨‍🏫</span>
+                <div>
+                  <h3 className="text-purple-300 font-bold mb-2">先生からのアドバイス</h3>
+                  <p className="text-white text-sm leading-relaxed">
+                    {result.teacherComment}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* フッター */}
         <div className="space-y-3">
           <motion.button

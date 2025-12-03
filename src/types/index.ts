@@ -46,11 +46,23 @@ export interface StructuredOCR {
 }
 
 /**
+ * 構造解析データ（英語学習モード用）
+ */
+export interface StructureAnalysis {
+  chunk: string;          // 英語の塊
+  meaning: string;        // その意味
+  role: string;           // 役割（例: "メイン(S+V)", "説明(関係詞)"）
+  grammarNote?: string;   // ワンポイント解説
+}
+
+/**
  * 翻訳結果
  */
 export interface TranslationResult {
   originalText: string;   // 原文
-  translatedText: string;  // 翻訳文
+  translatedText: string; // 翻訳文
+  structureAnalysis?: StructureAnalysis[]; // 構造解析（英語学習モード用）
+  teacherComment?: string; // 先生からの総評（英語学習モード用）
 }
 
 /**
