@@ -157,7 +157,9 @@ export const TranslationResultScreen = ({
         </motion.div>
 
         {/* チャンクベースの構造解析（英語学習モード用 - カード式UI） */}
-        {result.chunks !== undefined && result.chunks.length > 0 && (
+        {result.chunks !== undefined && result.chunks.length > 0 && (() => {
+          const chunks = result.chunks!;
+          return (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -172,7 +174,7 @@ export const TranslationResultScreen = ({
             {/* カード式UI */}
             <div className="mb-4">
               {/* 現在のチャンクカード */}
-              {result.chunks[currentChunkIndex] && (
+              {chunks[currentChunkIndex] && (
                 <motion.div
                   key={currentChunkIndex}
                   initial={{ opacity: 0, x: 50 }}
