@@ -17,16 +17,19 @@ const TranslationSchema = z.object({
     chunk: z.string(),      // 英語の塊 (例: "I met a man")
     meaning: z.string(),    // その意味 (例: "私は男性に会った")
     role: z.string(),       // 役割 (例: "主節(S+V)", "関係詞節", "接続詞" など)
-    grammarNote: z.string().optional(), // ワンポイント解説 (例: "whoはmanを説明している")
+    grammarNote: z.string().optional().or(z.literal("")), // ワンポイント解説 (例: "whoはmanを説明している")
   })),
   teacherComment: z.string(), // 先生からの総評
 });
 
 export async function POST(req: Request) {
   try {
+    console.log("translate-english API called");
     const body = await req.json();
     const { image, text } = body;
     let extractedText = text;
+    
+    console.log("Request body:", { hasImage: !!image, hasText: !!text, textLength: text?.length });
 
     // 1. OCR処理 (Google Vision API)
     if (!extractedText) {
@@ -129,16 +132,52 @@ export async function POST(req: Request) {
     const openaiData = await openaiResponse.json();
     const content = openaiData.choices[0]?.message?.content;
 
-    if (!content) throw new Error("No content");
+    if (!content) {
+      console.error("OpenAI response has no content:", JSON.stringify(openaiData, null, 2));
+      throw new Error("No content from OpenAI");
+    }
 
-    const json = JSON.parse(content);
-    const validatedData = TranslationSchema.parse(json);
+    console.log("OpenAI content received:", content.substring(0, 200));
+
+    let json;
+    try {
+      json = JSON.parse(content);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      console.error("Content that failed to parse:", content);
+      throw new Error(`Failed to parse JSON: ${String(parseError)}`);
+    }
+
+    console.log("Parsed JSON:", JSON.stringify(json, null, 2));
+
+    // grammarNoteが空文字列の場合はundefinedに変換
+    if (json.structureAnalysis && Array.isArray(json.structureAnalysis)) {
+      json.structureAnalysis = json.structureAnalysis.map((item: any) => ({
+        ...item,
+        grammarNote: item.grammarNote === "" || !item.grammarNote ? undefined : item.grammarNote,
+      }));
+    }
+
+    let validatedData;
+    try {
+      validatedData = TranslationSchema.parse(json);
+    } catch (validationError) {
+      console.error("Zod validation error:", validationError);
+      console.error("Data that failed validation:", JSON.stringify(json, null, 2));
+      if (validationError instanceof z.ZodError) {
+        console.error("Validation errors:", validationError.issues);
+      }
+      throw new Error(`Validation failed: ${String(validationError)}`);
+    }
 
     return NextResponse.json(validatedData);
   } catch (error) {
     console.error("Translation API Error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error("Error stack:", errorStack);
     return NextResponse.json(
-      { error: "Failed to translate", details: String(error) },
+      { error: "Failed to translate", details: errorMessage },
       { status: 500 }
     );
   }
