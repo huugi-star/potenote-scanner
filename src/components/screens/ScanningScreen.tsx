@@ -165,7 +165,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         clearTimeout(timeoutId);
 
         if (!translateResponse.ok) {
-          throw new Error(`Translation error: ${translateResponse.status}`);
+          const errorData = await translateResponse.json().catch(() => ({}));
+          const errorMessage = errorData.details || errorData.error || `Translation error: ${translateResponse.status}`;
+          console.error("Translation API error:", errorMessage);
+          throw new Error(errorMessage);
         }
 
         const translateResult = await translateResponse.json();

@@ -104,7 +104,6 @@ export async function POST(req: Request) {
       "visualMarkup": "[I]",
       "grammaticalRole": "S",
       "meaning": "私は",
-      "modifies": null,
       "grammarNote": "主語"
     },
     {
@@ -112,7 +111,6 @@ export async function POST(req: Request) {
       "visualMarkup": "met",
       "grammaticalRole": "V",
       "meaning": "会った",
-      "modifies": null,
       "grammarNote": "動詞"
     },
     {
@@ -128,7 +126,6 @@ export async function POST(req: Request) {
       "visualMarkup": "[man]",
       "grammaticalRole": "O",
       "meaning": "男性を",
-      "modifies": null,
       "grammarNote": "目的語"
     },
     {
@@ -143,9 +140,7 @@ export async function POST(req: Request) {
       "word": "wanted",
       "visualMarkup": "wanted",
       "grammaticalRole": "V",
-      "meaning": "欲しがっていた",
-      "modifies": null,
-      "grammarNote": ""
+      "meaning": "欲しがっていた"
     },
     {
       "word": "to buy",
@@ -168,15 +163,13 @@ export async function POST(req: Request) {
       "visualMarkup": "[car]",
       "grammaticalRole": "O",
       "meaning": "車を",
-      "modifies": null,
       "grammarNote": "buyの目的語"
     }
   ],
   "sentenceStructure": {
     "subject": "[I]",
     "verb": "met",
-    "object": "<a> [man] [who] wanted (to buy) <the> [car]",
-    "complement": null
+    "object": "<a> [man] [who] wanted (to buy) <the> [car]"
   },
   "teacherComment": "学習者への励ましとアドバイス（60文字以内）"
 }`;
@@ -189,7 +182,7 @@ export async function POST(req: Request) {
       ],
       response_format: { type: "json_object" },
       temperature: 0.3, 
-      max_tokens: 2000
+      max_tokens: 3000
     };
 
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -227,23 +220,80 @@ export async function POST(req: Request) {
 
     console.log("Parsed JSON:", JSON.stringify(json, null, 2));
 
-    // grammarNoteとmodifiesが空文字列またはnullの場合はundefinedに変換
+    // データの正規化とクリーニング
     if (json.structureAnalysis && Array.isArray(json.structureAnalysis)) {
-      json.structureAnalysis = json.structureAnalysis.map((item: any) => ({
-        ...item,
-        grammarNote: item.grammarNote === "" || !item.grammarNote ? undefined : item.grammarNote,
-        modifies: item.modifies === "" || !item.modifies || item.modifies === null ? undefined : item.modifies,
-      }));
+      json.structureAnalysis = json.structureAnalysis.map((item: any) => {
+        const cleaned: any = {
+          word: String(item.word || ""),
+          visualMarkup: String(item.visualMarkup || item.word || ""),
+          grammaticalRole: String(item.grammaticalRole || ""),
+          meaning: String(item.meaning || ""),
+        };
+        
+        // modifiesが有効な値の場合のみ追加
+        if (item.modifies && item.modifies !== "" && item.modifies !== null) {
+          cleaned.modifies = String(item.modifies);
+        }
+        
+        // grammarNoteが有効な値の場合のみ追加
+        if (item.grammarNote && item.grammarNote !== "" && item.grammarNote !== null) {
+          cleaned.grammarNote = String(item.grammarNote);
+        }
+        
+        return cleaned;
+      });
+    } else {
+      console.error("structureAnalysis is missing or not an array:", json.structureAnalysis);
+      throw new Error("structureAnalysis is required and must be an array");
+    }
+
+    // sentenceStructureのデフォルト値設定
+    if (!json.sentenceStructure) {
+      json.sentenceStructure = {
+        subject: "",
+        verb: "",
+      };
+    } else {
+      const cleaned: any = {
+        subject: String(json.sentenceStructure.subject || ""),
+        verb: String(json.sentenceStructure.verb || ""),
+      };
+      
+      if (json.sentenceStructure.object && json.sentenceStructure.object !== null) {
+        cleaned.object = String(json.sentenceStructure.object);
+      }
+      
+      if (json.sentenceStructure.complement && json.sentenceStructure.complement !== null) {
+        cleaned.complement = String(json.sentenceStructure.complement);
+      }
+      
+      json.sentenceStructure = cleaned;
+    }
+
+    // teacherCommentのデフォルト値設定
+    if (!json.teacherComment || json.teacherComment === null) {
+      json.teacherComment = "よくできました！";
+    } else {
+      json.teacherComment = String(json.teacherComment);
+    }
+    
+    // originalTextとtranslatedTextの確認
+    if (!json.originalText) {
+      json.originalText = extractedText;
+    }
+    if (!json.translatedText) {
+      throw new Error("translatedText is required");
     }
 
     let validatedData;
     try {
       validatedData = TranslationSchema.parse(json);
+      console.log("Validation successful!");
     } catch (validationError) {
       console.error("Zod validation error:", validationError);
       console.error("Data that failed validation:", JSON.stringify(json, null, 2));
       if (validationError instanceof z.ZodError) {
-        console.error("Validation errors:", validationError.issues);
+        console.error("Validation errors:", JSON.stringify(validationError.issues, null, 2));
       }
       throw new Error(`Validation failed: ${String(validationError)}`);
     }
