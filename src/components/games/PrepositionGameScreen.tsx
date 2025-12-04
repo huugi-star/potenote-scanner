@@ -5,7 +5,7 @@
  * スキャン中の待機時間を利用したミニゲーム
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle, Sparkles } from 'lucide-react';
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
