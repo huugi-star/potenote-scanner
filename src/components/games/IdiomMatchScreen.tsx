@@ -4,7 +4,7 @@
  * アイコン合わせ（熟語イメージゲーム）
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
