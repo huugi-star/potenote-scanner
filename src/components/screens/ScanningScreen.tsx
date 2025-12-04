@@ -226,8 +226,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
       setSelectedImage(compressed.dataUrl);
       setScanState('processing');
       
-      // 翻訳モードの場合、前置詞ゲームを開始
-      if (scanType === 'translation') {
+      // 翻訳モード（英語学習モードのみ）の場合、前置詞ゲームを開始
+      if (scanType === 'translation' && translationMode === 'english_learning') {
         setShowPrepositionGame(true);
       }
 
