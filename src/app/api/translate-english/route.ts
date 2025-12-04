@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { streamObject } from "ai";
+import { generateObject } from "ai";
 import { openai } from "@ai-sdk/openai";
 
 const GOOGLE_VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
@@ -74,6 +74,10 @@ export async function POST(req: Request) {
     // 2. 構造解析 (OpenAI) - プロンプトを最適化
     const systemPrompt = `英文をビジュアル英文解釈形式で構造解析してください。
 
+【CRITICAL INSTRUCTION: You MUST parse and translate the **ENTIRE** text provided. Do not truncate the output. Do not summarize. Process every single sentence until the end of the input.】
+
+提供されたテキストは必ず【すべて】解析・翻訳すること。途中で止めたり要約したりしないこと。
+
 【記号ルール】
 - [ ]: 名詞の塊（S/O/C）
 - ( ): 形容詞の塊（名詞修飾）
@@ -93,63 +97,81 @@ export async function POST(req: Request) {
   "teacherComment": "短いコメント"
 }`;
 
-    // テキストが長すぎる場合は切り詰める（1500文字まで）
-    const maxTextLength = 1500;
+    // テキストが長すぎる場合は切り詰める（2000文字まで）
+    const maxTextLength = 2000;
     const truncatedText = extractedText.length > maxTextLength 
       ? extractedText.substring(0, maxTextLength) + "..."
       : extractedText;
 
-    // ストリーミングAPIを使用
-    const result = streamObject({
+    // generateObjectを使用（ストリーミング廃止）
+    console.log("Translation Start...");
+    const result = await generateObject({
       model: openai("gpt-4o-mini"),
       schema: TranslationSchema,
       prompt: `${systemPrompt}\n\n以下のテキストを構造解析せよ:\n\n${truncatedText}`,
       temperature: 0.2,
-      maxTokens: 5000, // 長文でも切れないように5000を維持
+      maxTokens: 8192, // 長文でも切れないように8192に設定
     });
 
-    // ストリーミングレスポンスを手動で作成
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          console.log("Stream started");
-          
-          // partialObjectStreamを反復処理
-          for await (const partialObject of result.partialObjectStream) {
-            console.log("Received partial object:", JSON.stringify(partialObject).substring(0, 200));
-            
-            // 部分的なオブジェクトをJSON文字列化
-            const data = JSON.stringify(partialObject);
-            
-            // SSE形式で送信
-            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
-          }
-          
-          console.log("Stream completed");
-          
-          // 最終的なオブジェクトも送信（完全なデータ）
-          const finalObject = await result.object;
-          console.log("Final object:", JSON.stringify(finalObject).substring(0, 200));
-          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(finalObject)}\n\n`));
-          
-          controller.close();
-        } catch (error) {
-          console.error("Stream error:", error);
-          const errorData = JSON.stringify({ error: error instanceof Error ? error.message : String(error) });
-          controller.enqueue(new TextEncoder().encode(`data: ${errorData}\n\n`));
-          controller.close();
+    console.log("Translation completed");
+    console.log("Result:", JSON.stringify(result.object, null, 2).substring(0, 500));
+
+    // データの正規化とクリーニング
+    const json = result.object;
+
+    // chunksの後方互換性処理
+    if (json.chunks && Array.isArray(json.chunks)) {
+      json.chunks = json.chunks.map((chunk: any) => {
+        const cleaned: any = {
+          // 新しいフィールド（必須）
+          chunk_text: String(chunk.chunk_text || chunk.text || ""),
+          chunk_translation: String(chunk.chunk_translation || chunk.translation || ""),
+          role: chunk.role || chunk.type || 'M',
+          symbol: chunk.symbol || 'none',
+          // 後方互換用の既存フィールド
+          text: chunk.chunk_text || chunk.text || "",
+          translation: chunk.chunk_translation || chunk.translation || "",
+          type: chunk.role || chunk.type || 'M',
+        };
+        
+        if (chunk.explanation && chunk.explanation !== "" && chunk.explanation !== null) {
+          cleaned.explanation = String(chunk.explanation);
         }
-      },
-    });
+        
+        return cleaned;
+      });
+    }
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no', // Nginx用のバッファリング無効化
-      },
-    });
+    // teacherCommentのデフォルト値設定
+    if (!json.teacherComment || json.teacherComment === null) {
+      json.teacherComment = "よくできました！";
+    } else {
+      json.teacherComment = String(json.teacherComment);
+    }
+    
+    // 後方互換用のoriginalTextとtranslatedTextの設定
+    if (!json.originalText) {
+      json.originalText = extractedText;
+    }
+    if (!json.translatedText) {
+      json.translatedText = json.japanese_translation || '';
+    }
+
+    // バリデーション
+    let validatedData;
+    try {
+      validatedData = TranslationSchema.parse(json);
+      console.log("Validation successful!");
+    } catch (validationError) {
+      console.error("Zod validation error:", validationError);
+      console.error("Data that failed validation:", JSON.stringify(json, null, 2));
+      if (validationError instanceof z.ZodError) {
+        console.error("Validation errors:", JSON.stringify(validationError.issues, null, 2));
+      }
+      throw new Error(`Validation failed: ${String(validationError)}`);
+    }
+
+    return NextResponse.json(validatedData);
   } catch (error) {
     console.error("Translation API Error:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);

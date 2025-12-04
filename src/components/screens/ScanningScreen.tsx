@@ -153,102 +153,57 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           ? '/api/translate-english' 
           : '/api/translate';
 
-        // 英語学習モードの場合はストリーミングAPIを使用
-        if (translationMode === 'english_learning') {
-          const translateResponse = await fetch(apiEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              image: enhancedImage,
-            }),
-            signal: controller.signal,
-          });
+        // 通常のAPI呼び出し（ストリーミング廃止）
+        const translateResponse = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image: enhancedImage,
+          }),
+          signal: controller.signal,
+        });
 
-          clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-          if (!translateResponse.ok) {
-            const errorData = await translateResponse.json().catch(() => ({}));
-            const errorMessage = errorData.details || errorData.error || `Translation error: ${translateResponse.status}`;
-            console.error("Translation API error:", errorMessage);
-            throw new Error(errorMessage);
-          }
+        if (!translateResponse.ok) {
+          const errorData = await translateResponse.json().catch(() => ({}));
+          const errorMessage = errorData.details || errorData.error || `Translation error: ${translateResponse.status}`;
+          console.error("Translation API error:", errorMessage);
+          throw new Error(errorMessage);
+        }
 
-          // ストリーミングレスポンスを処理
-          let translateResult: Partial<TranslationResult> = {
-            chunks: [],
-          };
+        const translateResult = await translateResponse.json();
 
-          console.log("Starting stream read");
-
-          // ストリームを読み取る
-          const reader = translateResponse.body?.getReader();
-          const decoder = new TextDecoder();
-          let buffer = '';
-
-          if (!reader) {
-            throw new Error('ストリームを読み取れません');
-          }
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              console.log("Stream done");
-              break;
-            }
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (line.trim() === '') continue;
-              
-              if (line.startsWith('data: ')) {
-                try {
-                  const jsonStr = line.slice(6);
-                  console.log("Received data line:", jsonStr.substring(0, 100));
-                  const data = JSON.parse(jsonStr);
-                  console.log("Parsed data:", Object.keys(data));
-                  
-                  // オブジェクトの更新を受信（部分的な更新をマージ）
-                  translateResult = { ...translateResult, ...data };
-                  
-                  // 常に最新の状態を表示（ストリーミング中も更新）
-                  if (onTranslationReady) {
-                    onTranslationReady(
-                      {
-                        originalText: translateResult.originalText || '',
-                        translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
-                        marked_text: translateResult.marked_text || '',
-                        japanese_translation: translateResult.japanese_translation || '',
-                        chunks: translateResult.chunks || [],
-                        teacherComment: translateResult.teacherComment,
-                      },
-                      compressed.dataUrl
-                    );
-                  }
-                } catch (e) {
-                  // JSON解析エラーは無視（不完全なデータの可能性）
-                  console.warn('ストリームデータの解析エラー:', e, line.substring(0, 100));
-                }
-              } else {
-                console.log("Non-data line:", line.substring(0, 50));
-              }
-            }
+        // 新しい形式（marked_text, japanese_translation）または旧形式（originalText, translatedText）に対応
+        const hasNewFormat = translateResult.marked_text && translateResult.japanese_translation;
+        const hasOldFormat = translateResult.originalText && translateResult.translatedText;
+        
+        if (hasNewFormat || hasOldFormat) {
+          // ★成功時のみ翻訳回数を消費
+          incrementTranslationCount();
+          
+          if (onTranslationReady) {
+            onTranslationReady(
+              {
+                originalText: translateResult.originalText || '',
+                translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
+                marked_text: translateResult.marked_text,
+                japanese_translation: translateResult.japanese_translation,
+                chunks: translateResult.chunks,
+                teacherComment: translateResult.teacherComment,
+              },
+              compressed.dataUrl
+            );
           }
           
-          console.log("Final result:", translateResult);
-
-          // 最終的な結果を確認
-          if (translateResult.marked_text && translateResult.japanese_translation) {
-            // ★成功時のみ翻訳回数を消費
-            incrementTranslationCount();
-            vibrateSuccess();
-            addToast('success', '翻訳が完了しました！');
-          } else {
-            throw new Error('翻訳に失敗しました');
-          }
+          vibrateSuccess();
+          addToast('success', '翻訳が完了しました！');
+        } else if (translateResult.error) {
+          throw new Error(translateResult.error);
         } else {
+          throw new Error('翻訳に失敗しました');
+        }
+      } else {
           // 通常の翻訳モード（非ストリーミング）
           const translateResponse = await fetch(apiEndpoint, {
             method: 'POST',
