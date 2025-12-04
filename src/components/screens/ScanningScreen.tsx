@@ -32,6 +32,7 @@ import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/i
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
 import { LIMITS } from '@/lib/constants';
 import type { QuizRaw, StructuredOCR, QuizResult, TranslationResult } from '@/types';
+import { readDataStream } from 'ai';
 
 // ===== Types =====
 
@@ -153,54 +154,129 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           ? '/api/translate-english' 
           : '/api/translate';
 
-        const translateResponse = await fetch(apiEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            image: enhancedImage,
-          }),
-          signal: controller.signal,
-        });
+        // 英語学習モードの場合はストリーミングAPIを使用
+        if (translationMode === 'english_learning') {
+          const translateResponse = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              image: enhancedImage,
+            }),
+            signal: controller.signal,
+          });
 
-        clearTimeout(timeoutId);
+          clearTimeout(timeoutId);
 
-        if (!translateResponse.ok) {
-          const errorData = await translateResponse.json().catch(() => ({}));
-          const errorMessage = errorData.details || errorData.error || `Translation error: ${translateResponse.status}`;
-          console.error("Translation API error:", errorMessage);
-          throw new Error(errorMessage);
-        }
-
-        const translateResult = await translateResponse.json();
-
-        // 新しい形式（marked_text, japanese_translation）または旧形式（originalText, translatedText）に対応
-        const hasNewFormat = translateResult.marked_text && translateResult.japanese_translation;
-        const hasOldFormat = translateResult.originalText && translateResult.translatedText;
-        
-        if (hasNewFormat || hasOldFormat) {
-          // ★成功時のみ翻訳回数を消費
-          incrementTranslationCount();
-          
-          if (onTranslationReady) {
-            onTranslationReady(
-              {
-                originalText: translateResult.originalText || '',
-                translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
-                marked_text: translateResult.marked_text,
-                japanese_translation: translateResult.japanese_translation,
-                chunks: translateResult.chunks,
-                teacherComment: translateResult.teacherComment,
-              },
-              compressed.dataUrl
-            );
+          if (!translateResponse.ok) {
+            const errorData = await translateResponse.json().catch(() => ({}));
+            const errorMessage = errorData.details || errorData.error || `Translation error: ${translateResponse.status}`;
+            console.error("Translation API error:", errorMessage);
+            throw new Error(errorMessage);
           }
-          
-          vibrateSuccess();
-          addToast('success', '翻訳が完了しました！');
-        } else if (translateResult.error) {
-          throw new Error(translateResult.error);
+
+          // ストリーミングレスポンスを処理
+          let translateResult: Partial<TranslationResult> = {
+            chunks: [],
+          };
+
+          // ストリーミングデータを読み取る
+          for await (const chunk of readDataStream(translateResponse.body!)) {
+            if (chunk.type === 'object') {
+              // オブジェクトの更新を受信
+              translateResult = { ...translateResult, ...chunk.value };
+              
+              // marked_textとjapanese_translationが揃ったら即座に表示
+              if (translateResult.marked_text && translateResult.japanese_translation && onTranslationReady) {
+                onTranslationReady(
+                  {
+                    originalText: translateResult.originalText || '',
+                    translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
+                    marked_text: translateResult.marked_text,
+                    japanese_translation: translateResult.japanese_translation,
+                    chunks: translateResult.chunks || [],
+                    teacherComment: translateResult.teacherComment,
+                  },
+                  compressed.dataUrl
+                );
+              }
+              
+              // chunksが更新されたら即座に反映
+              if (translateResult.chunks && translateResult.chunks.length > 0 && onTranslationReady) {
+                onTranslationReady(
+                  {
+                    originalText: translateResult.originalText || '',
+                    translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
+                    marked_text: translateResult.marked_text || '',
+                    japanese_translation: translateResult.japanese_translation || '',
+                    chunks: translateResult.chunks,
+                    teacherComment: translateResult.teacherComment,
+                  },
+                  compressed.dataUrl
+                );
+              }
+            }
+          }
+
+          // 最終的な結果を確認
+          if (translateResult.marked_text && translateResult.japanese_translation) {
+            // ★成功時のみ翻訳回数を消費
+            incrementTranslationCount();
+            vibrateSuccess();
+            addToast('success', '翻訳が完了しました！');
+          } else {
+            throw new Error('翻訳に失敗しました');
+          }
         } else {
-          throw new Error('翻訳に失敗しました');
+          // 通常の翻訳モード（非ストリーミング）
+          const translateResponse = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              image: enhancedImage,
+            }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!translateResponse.ok) {
+            const errorData = await translateResponse.json().catch(() => ({}));
+            const errorMessage = errorData.details || errorData.error || `Translation error: ${translateResponse.status}`;
+            console.error("Translation API error:", errorMessage);
+            throw new Error(errorMessage);
+          }
+
+          const translateResult = await translateResponse.json();
+
+          // 新しい形式（marked_text, japanese_translation）または旧形式（originalText, translatedText）に対応
+          const hasNewFormat = translateResult.marked_text && translateResult.japanese_translation;
+          const hasOldFormat = translateResult.originalText && translateResult.translatedText;
+          
+          if (hasNewFormat || hasOldFormat) {
+            // ★成功時のみ翻訳回数を消費
+            incrementTranslationCount();
+            
+            if (onTranslationReady) {
+              onTranslationReady(
+                {
+                  originalText: translateResult.originalText || '',
+                  translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
+                  marked_text: translateResult.marked_text,
+                  japanese_translation: translateResult.japanese_translation,
+                  chunks: translateResult.chunks,
+                  teacherComment: translateResult.teacherComment,
+                },
+                compressed.dataUrl
+              );
+            }
+            
+            vibrateSuccess();
+            addToast('success', '翻訳が完了しました！');
+          } else if (translateResult.error) {
+            throw new Error(translateResult.error);
+          } else {
+            throw new Error('翻訳に失敗しました');
+          }
         }
       } else {
         // クイズモード
