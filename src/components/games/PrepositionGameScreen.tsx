@@ -64,9 +64,6 @@ export const PrepositionGameScreen = ({ onComplete: _onComplete }: PrepositionGa
     setShowExplanation(false);
   }, [currentQuizIndex, shuffledQuizzes.length]);
 
-  // 問題文を穴埋め形式で表示
-  const displaySentence = currentQuiz.sentence.replace('___', '___');
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-900 via-indigo-900 to-purple-900 p-4 flex flex-col items-center justify-center relative overflow-hidden">
       {/* 背景エフェクト */}
