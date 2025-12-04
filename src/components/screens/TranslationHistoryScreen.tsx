@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Check, Trash2, ChevronLeft, ChevronDown } from 'lucide-react';
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
 import { useGameStore } from '@/store/useGameStore';
-import type { TranslationHistory, SentenceResult, Chunk } from '@/types';
+import type { TranslationHistory, SentenceResult } from '@/types';
 import { GRAMMAR_TYPES, ELEMENT_TYPES } from '@/consts/grammarDefinitions';
 
 // ===== Types =====
@@ -570,11 +570,6 @@ export const TranslationHistoryScreen = ({
 }: TranslationHistoryScreenProps) => {
   const translationHistory = useGameStore(state => state.translationHistory);
   const deleteTranslationHistory = useGameStore(state => state.deleteTranslationHistory);
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4 pb-24">

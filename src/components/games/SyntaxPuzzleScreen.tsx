@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle, RotateCcw } from 'lucide-react';
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
-import { SYNTAX_PUZZLES, type SyntaxPuzzle } from '@/consts/syntaxPuzzleData';
+import { SYNTAX_PUZZLES } from '@/consts/syntaxPuzzleData';
 
 interface SyntaxPuzzleScreenProps {
   onComplete?: () => void;

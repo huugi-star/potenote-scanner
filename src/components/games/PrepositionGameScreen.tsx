@@ -116,7 +116,7 @@ export const PrepositionGameScreen = ({ onComplete: _onComplete }: PrepositionGa
               exit={{ opacity: 0, y: -20 }}
               className="grid grid-cols-3 gap-4 mb-8"
             >
-              {currentQuiz.options.map((option, index) => {
+              {currentQuiz.options.map((option) => {
                 const isSelected = selectedAnswer === option;
                 const isCorrectOption = option === currentQuiz.correct;
                 const showCorrect = selectedAnswer !== null && isCorrectOption;

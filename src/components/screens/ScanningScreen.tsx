@@ -78,7 +78,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const incrementTranslationCount = useGameStore(state => state.incrementTranslationCount);
   const recoverScanCount = useGameStore(state => state.recoverScanCount);
   const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
-  const translationHistory = useGameStore(state => state.translationHistory);
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
   // Toast

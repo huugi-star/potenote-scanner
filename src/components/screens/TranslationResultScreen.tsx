@@ -31,7 +31,6 @@ export const TranslationResultScreen = ({
   onStartQuiz,
   imageUrl,
 }: TranslationResultScreenProps) => {
-  const [copiedOriginal, setCopiedOriginal] = useState(false);
   const [copiedTranslated, setCopiedTranslated] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedChunkIndex, setSelectedChunkIndex] = useState<number | null>(null); // ポップアップ表示用
@@ -89,17 +88,6 @@ export const TranslationResultScreen = ({
       hasSavedRef.current = true;
     }
   }, [result, imageUrl, saveTranslationHistory, translationHistory]);
-
-  const handleCopyOriginal = async () => {
-    try {
-      await navigator.clipboard.writeText(result.originalText);
-      setCopiedOriginal(true);
-      vibrateSuccess();
-      setTimeout(() => setCopiedOriginal(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
 
   const handleCopyTranslated = async () => {
     try {
