@@ -112,13 +112,32 @@ export async function POST(req: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          console.log("Stream started");
+          
+          // partialObjectStreamを反復処理
           for await (const partialObject of result.partialObjectStream) {
+            console.log("Received partial object:", JSON.stringify(partialObject).substring(0, 200));
+            
+            // 部分的なオブジェクトをJSON文字列化
             const data = JSON.stringify(partialObject);
+            
+            // SSE形式で送信
             controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
           }
+          
+          console.log("Stream completed");
+          
+          // 最終的なオブジェクトも送信（完全なデータ）
+          const finalObject = await result.object;
+          console.log("Final object:", JSON.stringify(finalObject).substring(0, 200));
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(finalObject)}\n\n`));
+          
           controller.close();
         } catch (error) {
-          controller.error(error);
+          console.error("Stream error:", error);
+          const errorData = JSON.stringify({ error: error instanceof Error ? error.message : String(error) });
+          controller.enqueue(new TextEncoder().encode(`data: ${errorData}\n\n`));
+          controller.close();
         }
       },
     });
@@ -128,6 +147,7 @@ export async function POST(req: Request) {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Nginx用のバッファリング無効化
       },
     });
   } catch (error) {
