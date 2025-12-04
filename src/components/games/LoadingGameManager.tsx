@@ -20,7 +20,7 @@ type GameType = 'PrepositionShoot' | 'SyntaxPuzzle' | 'NuanceSwipe';
 
 const GAMES: GameType[] = ['PrepositionShoot', 'SyntaxPuzzle', 'NuanceSwipe'];
 
-export const LoadingGameManager = ({ onComplete, progress = 0 }: LoadingGameManagerProps) => {
+export const LoadingGameManager = ({ onComplete: _onComplete, progress = 0 }: LoadingGameManagerProps) => {
   const [selectedGame, setSelectedGame] = useState<GameType | null>(null);
 
   useEffect(() => {
