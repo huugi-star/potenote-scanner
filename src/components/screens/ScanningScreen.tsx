@@ -651,7 +651,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                 <div className="w-full max-w-xs mx-auto mb-6">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-gray-400 text-sm">処理中...</span>
-                    <span className="text-cyan-400 font-bold text-sm">{loadProgress}%</span>
+                    <span className="text-cyan-400 font-bold text-sm">{Math.round(loadProgress)}%</span>
                   </div>
                   <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
                     <motion.div
