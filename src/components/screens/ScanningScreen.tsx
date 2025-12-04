@@ -204,58 +204,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           throw new Error('翻訳に失敗しました');
         }
       } else {
-          // 通常の翻訳モード（非ストリーミング）
-          const translateResponse = await fetch(apiEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              image: enhancedImage,
-            }),
-            signal: controller.signal,
-          });
-
-          clearTimeout(timeoutId);
-
-          if (!translateResponse.ok) {
-            const errorData = await translateResponse.json().catch(() => ({}));
-            const errorMessage = errorData.details || errorData.error || `Translation error: ${translateResponse.status}`;
-            console.error("Translation API error:", errorMessage);
-            throw new Error(errorMessage);
-          }
-
-          const translateResult = await translateResponse.json();
-
-          // 新しい形式（marked_text, japanese_translation）または旧形式（originalText, translatedText）に対応
-          const hasNewFormat = translateResult.marked_text && translateResult.japanese_translation;
-          const hasOldFormat = translateResult.originalText && translateResult.translatedText;
-          
-          if (hasNewFormat || hasOldFormat) {
-            // ★成功時のみ翻訳回数を消費
-            incrementTranslationCount();
-            
-            if (onTranslationReady) {
-              onTranslationReady(
-                {
-                  originalText: translateResult.originalText || '',
-                  translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
-                  marked_text: translateResult.marked_text,
-                  japanese_translation: translateResult.japanese_translation,
-                  chunks: translateResult.chunks,
-                  teacherComment: translateResult.teacherComment,
-                },
-                compressed.dataUrl
-              );
-            }
-            
-            vibrateSuccess();
-            addToast('success', '翻訳が完了しました！');
-          } else if (translateResult.error) {
-            throw new Error(translateResult.error);
-          } else {
-            throw new Error('翻訳に失敗しました');
-          }
-        }
-      } else {
         // クイズモード
         const quizResponse = await fetch('/api/generate-quiz', {
           method: 'POST',
