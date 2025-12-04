@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
-import { IDIOM_MATCHES, type IdiomMatch } from '@/consts/idiomMatchData';
+import { IDIOM_MATCHES } from '@/consts/idiomMatchData';
 
 interface IdiomMatchScreenProps {
   onComplete?: () => void;
