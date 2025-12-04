@@ -14,7 +14,7 @@ interface IdiomMatchScreenProps {
   onComplete?: () => void;
 }
 
-export const IdiomMatchScreen = ({ onComplete }: IdiomMatchScreenProps) => {
+export const IdiomMatchScreen = ({ onComplete: _onComplete }: IdiomMatchScreenProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
