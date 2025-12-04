@@ -41,17 +41,6 @@ export const IdiomMatchScreen = ({ onComplete: _onComplete }: IdiomMatchScreenPr
 
   const current = shuffled[currentIndex];
 
-  // 選択肢をシャッフル
-  const [options] = useState(() => {
-    const allIcons = [current.correctIcon, ...current.wrongIcons];
-    const shuffled = [...allIcons];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  });
-
   const handleSelect = useCallback((icon: string) => {
     if (selectedIcon !== null) return;
     
@@ -69,18 +58,7 @@ export const IdiomMatchScreen = ({ onComplete: _onComplete }: IdiomMatchScreenPr
     }
   }, [selectedIcon, current]);
 
-  // 自動進行はしない（次へボタンで進む）
-
-  // 新しい問題で選択肢をシャッフル
-  useEffect(() => {
-    const allIcons = [shuffled[currentIndex].correctIcon, ...shuffled[currentIndex].wrongIcons];
-    const shuffledIcons = [...allIcons];
-    for (let i = shuffledIcons.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledIcons[i], shuffledIcons[j]] = [shuffledIcons[j], shuffledIcons[i]];
-    }
-  }, [currentIndex, shuffled]);
-
+  // 選択肢をシャッフル
   const currentOptions = [current.correctIcon, ...current.wrongIcons].sort(() => Math.random() - 0.5);
 
   return (
