@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle, ArrowRight, ArrowLeft } from 'lucide-react';
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
-import { NUANCE_SWIPES, type NuanceSwipe } from '@/consts/nuanceSwipeData';
+import { NUANCE_SWIPES } from '@/consts/nuanceSwipeData';
 
 interface NuanceSwipeScreenProps {
   onComplete?: () => void;
