@@ -144,7 +144,9 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
       const enhancedImage = await preprocessImageForOCR(file);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000);
+      // 英語学習モードは処理に時間がかかるため、タイムアウトを120秒に延長
+      const timeoutDuration = scanType === 'translation' && translationMode === 'english_learning' ? 120000 : 60000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
 
       if (scanType === 'translation') {
         // 翻訳モード

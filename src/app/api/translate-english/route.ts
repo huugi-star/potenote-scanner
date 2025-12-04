@@ -5,8 +5,8 @@ import { openai } from "@ai-sdk/openai";
 
 const GOOGLE_VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
 
-// タイムアウト対策
-export const maxDuration = 60;
+// タイムアウト対策（英語学習モードは処理に時間がかかるため120秒に設定）
+export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
 // 翻訳結果の型定義（ビジュアル解説用）
@@ -105,6 +105,8 @@ export async function POST(req: Request) {
 
     // generateObjectを使用（ストリーミング廃止）
     console.log("Translation Start...");
+    console.log("Text length:", truncatedText.length);
+    
     const result = await generateObject({
       model: openai("gpt-4o-mini"),
       schema: TranslationSchema,
