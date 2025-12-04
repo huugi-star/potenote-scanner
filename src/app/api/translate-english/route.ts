@@ -9,17 +9,25 @@ export const dynamic = 'force-dynamic';
 
 // 翻訳結果の型定義（ビジュアル解説用）
 const TranslationSchema = z.object({
-  originalText: z.string(),
-  translatedText: z.string(),
+  originalText: z.string().optional(), // 後方互換用
+  translatedText: z.string().optional(), // 後方互換用
+  // 新しいフィールド（AI出力形式）
+  marked_text: z.string(), // 記号付きの全文
+  japanese_translation: z.string(), // 全文の自然な日本語訳
   // チャンク（意味の塊）ごとのリスト
   chunks: z.array(z.object({
-    text: z.string(),       // 英語の塊 (例: "An individual's somatic cells")
-    translation: z.string(),// その意味 (例: "個々の体細胞は")
-    type: z.enum(['S', 'V', 'O', 'C', 'M', 'Connect']), // 文の要素
+    // 後方互換用の既存フィールド
+    text: z.string().optional(),
+    translation: z.string().optional(),
+    type: z.enum(['S', 'V', 'O', 'C', 'M', 'Connect']).optional(),
+    // 新しいフィールド（AI出力形式）
+    chunk_text: z.string(), // チャンクのテキスト（記号付き）
+    chunk_translation: z.string(), // その部分だけの直訳
+    role: z.enum(['S', 'V', 'O', 'C', 'M', 'Connect']), // 文の要素（役割）
     symbol: z.enum(['[]', '<>', '()', 'none']), // 囲む記号 ([名詞], <形容詞>, (副詞))
     explanation: z.string().optional(), // 解説 (例: "主語")
   })),
-  teacherComment: z.string(),
+  teacherComment: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -76,9 +84,9 @@ export async function POST(req: Request) {
 
 1. **[ ... ] (角カッコ)**: **名詞の塊**。主語(S)、目的語(O)、補語(C)になるもの。
 
-2. **< ... > (山カッコ)**: **形容詞の塊**。名詞を後ろから詳しく説明するもの（関係詞節、分詞など）。
+2. **( ... ) (丸カッコ)**: **形容詞の塊**。名詞を後ろから詳しく説明するもの（関係詞節、分詞など）。
 
-3. **( ... ) (丸カッコ)**: **副詞の塊**。動詞を説明するもの、前置詞句(M)、挿入語など。
+3. **< ... > (山カッコ)**: **副詞の塊**。動詞を説明するもの、前置詞句(M)、挿入語など。
 
 4. **none**: 動詞(V)や接続詞は囲まない。
 
@@ -86,22 +94,29 @@ export async function POST(req: Request) {
 
 英文を頭から順に「意味の切れ目」で区切り、以下のJSON形式で出力せよ。
 
-- text: 英語の塊
-- translation: その部分の直訳
-- type: S, V, O, C, M, Connect(接続詞) のいずれか
+【重要：ビジュアル化出力】 解析結果のJSONには、以下の3要素を必ず含めること。
+
+- marked_text: 記号付きの全文（例: "[ The news ] ( that he died ) was false."）
+- japanese_translation: 全文の自然な日本語訳
+- chunks: 分割されたチャンク情報
+
+各チャンクには以下を含める：
+- chunk_text: チャンクのテキスト（記号なしの生テキスト）
+- chunk_translation: その部分だけの直訳
+- role: S, V, O, C, M, Connect(接続詞) のいずれか（型と役割のIDだけ）
 - symbol: '[]', '<>', '()', 'none' のいずれか
 - explanation: 簡単な解説（例：「〜を修飾」）
 
 ## 出力 (JSON)
 
 {
-  "originalText": "原文",
-  "translatedText": "自然な全訳",
+  "marked_text": "[ The news ] ( that he died ) was false.",
+  "japanese_translation": "彼が亡くなったという知らせは、誤りだった。",
   "chunks": [
-    { "text": "An individual's somatic cells", "translation": "個々の体細胞は", "type": "S", "symbol": "[]", "explanation": "長い主語" },
-    { "text": "have", "translation": "持っている", "type": "V", "symbol": "none", "explanation": "" },
-    { "text": "essentially", "translation": "本質的に", "type": "M", "symbol": "()", "explanation": "動詞を修飾" },
-    { "text": "the same genome", "translation": "同じゲノムを", "type": "O", "symbol": "[]", "explanation": "" }
+    { "chunk_text": "The news", "chunk_translation": "その知らせは", "role": "S", "symbol": "[]", "explanation": "主語" },
+    { "chunk_text": "that he died", "chunk_translation": "彼が亡くなったという", "role": "M", "symbol": "()", "explanation": "名詞を修飾" },
+    { "chunk_text": "was", "chunk_translation": "だった", "role": "V", "symbol": "none", "explanation": "動詞" },
+    { "chunk_text": "false", "chunk_translation": "誤り", "role": "C", "symbol": "none", "explanation": "補語" }
   ],
   "teacherComment": "アドバイス"
 }`;
@@ -160,10 +175,15 @@ export async function POST(req: Request) {
 
     json.chunks = json.chunks.map((chunk: any) => {
       const cleaned: any = {
-        text: String(chunk.text || ""),
-        translation: String(chunk.translation || ""),
-        type: chunk.type || 'M',
+        // 新しいフィールド（必須）
+        chunk_text: String(chunk.chunk_text || chunk.text || ""),
+        chunk_translation: String(chunk.chunk_translation || chunk.translation || ""),
+        role: chunk.role || chunk.type || 'M',
         symbol: chunk.symbol || 'none',
+        // 後方互換用の既存フィールド
+        text: chunk.chunk_text || chunk.text || "",
+        translation: chunk.chunk_translation || chunk.translation || "",
+        type: chunk.role || chunk.type || 'M',
       };
       
       if (chunk.explanation && chunk.explanation !== "" && chunk.explanation !== null) {
@@ -180,12 +200,33 @@ export async function POST(req: Request) {
       json.teacherComment = String(json.teacherComment);
     }
     
-    // originalTextとtranslatedTextの確認
+    // marked_textとjapanese_translationの確認（必須）
+    if (!json.marked_text) {
+      // 後方互換：chunksから生成
+      json.marked_text = json.chunks.map((chunk: any) => {
+        const text = chunk.chunk_text || chunk.text || "";
+        if (chunk.symbol === '[]') return `[ ${text} ]`;
+        if (chunk.symbol === '<>') return `< ${text} >`;
+        if (chunk.symbol === '()') return `( ${text} )`;
+        return text;
+      }).join(' ');
+    }
+    
+    if (!json.japanese_translation) {
+      // 後方互換：translatedTextを使用
+      if (json.translatedText) {
+        json.japanese_translation = json.translatedText;
+      } else {
+        throw new Error("japanese_translation is required");
+      }
+    }
+    
+    // 後方互換用のoriginalTextとtranslatedTextの設定
     if (!json.originalText) {
       json.originalText = extractedText;
     }
     if (!json.translatedText) {
-      throw new Error("translatedText is required");
+      json.translatedText = json.japanese_translation;
     }
 
     let validatedData;
