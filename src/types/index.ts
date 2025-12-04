@@ -49,9 +49,15 @@ export interface StructuredOCR {
  * チャンク（意味の塊）データ（英語学習モード用 - ビジュアル英文解釈）
  */
 export interface Chunk {
-  text: string;           // 英語の塊
-  translation: string;    // その意味
-  type: 'S' | 'V' | 'O' | 'C' | 'M' | 'Connect'; // 文の要素
+  // 後方互換性のための既存フィールド
+  text?: string;           // 英語の塊（後方互換用）
+  translation?: string;    // その意味（後方互換用）
+  type?: 'S' | 'V' | 'O' | 'C' | 'M' | 'Connect'; // 文の要素（後方互換用）
+  
+  // 新しいフィールド（AI出力形式）
+  chunk_text: string;      // チャンクのテキスト（記号付き）
+  chunk_translation: string; // その部分だけの直訳
+  role: 'S' | 'V' | 'O' | 'C' | 'M' | 'Connect'; // 文の要素（役割）
   symbol: '[]' | '<>' | '()' | 'none'; // 囲む記号
   explanation?: string;   // 解説
 }
@@ -60,8 +66,13 @@ export interface Chunk {
  * 翻訳結果
  */
 export interface TranslationResult {
-  originalText: string;   // 原文
-  translatedText: string; // 翻訳文
+  originalText: string;   // 原文（後方互換用）
+  translatedText: string; // 翻訳文（後方互換用）
+  
+  // 新しいフィールド（AI出力形式）
+  marked_text?: string;        // 記号付きの全文（例: "[ The news ] ( that he died ) was false."）
+  japanese_translation?: string; // 全文の自然な日本語訳
+  
   chunks?: Chunk[];       // チャンク（意味の塊）ごとの構造解析（英語学習モード用）
   teacherComment?: string; // 先生からの総評（英語学習モード用）
 }

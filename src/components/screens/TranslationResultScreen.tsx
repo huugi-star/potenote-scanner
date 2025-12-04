@@ -6,11 +6,12 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { Home, Copy, Check, History, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Home, Copy, Check, History, Trash2, X } from 'lucide-react';
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
 import { useGameStore } from '@/store/useGameStore';
 import type { TranslationResult, TranslationHistory } from '@/types';
+import { GRAMMAR_TYPES, ELEMENT_TYPES } from '@/consts/grammarDefinitions';
 
 // ===== Types =====
 
@@ -29,10 +30,10 @@ export const TranslationResultScreen = ({
   onStartQuiz,
   imageUrl,
 }: TranslationResultScreenProps) => {
-  const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [copiedOriginal, setCopiedOriginal] = useState(false);
   const [copiedTranslated, setCopiedTranslated] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [selectedChunkIndex, setSelectedChunkIndex] = useState<number | null>(null); // ポップアップ表示用
   
   const saveTranslationHistory = useGameStore(state => state.saveTranslationHistory);
   const translationHistory = useGameStore(state => state.translationHistory);
@@ -91,70 +92,160 @@ export const TranslationResultScreen = ({
           </h1>
         </div>
 
-        {/* 原文セクション */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-300">原文</h2>
-            <button
-              onClick={handleCopyOriginal}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors"
-            >
-              {copiedOriginal ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  コピーしました
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  コピー
-                </>
-              )}
-            </button>
-          </div>
-          <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 max-h-64 overflow-y-auto">
-            <p className="text-gray-200 whitespace-pre-wrap leading-relaxed">
-              {result.originalText}
-            </p>
-          </div>
-        </motion.div>
+        {/* 記号付き原文エリア（英語学習モード用） */}
+        {result.marked_text && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-blue-400">記号付き原文</h2>
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(result.marked_text || '');
+                    setCopiedOriginal(true);
+                    vibrateSuccess();
+                    setTimeout(() => setCopiedOriginal(false), 2000);
+                  } catch (err) {
+                    console.error('Failed to copy:', err);
+                  }
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors"
+              >
+                {copiedOriginal ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    コピーしました
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    コピー
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="bg-blue-900/20 rounded-xl p-4 border border-blue-700/50 max-h-64 overflow-y-auto">
+              <p className="text-white font-mono text-lg leading-relaxed">
+                {result.marked_text}
+              </p>
+            </div>
+          </motion.div>
+        )}
 
-        {/* 翻訳文セクション */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-6"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-emerald-400">翻訳文（日本語）</h2>
-            <button
-              onClick={handleCopyTranslated}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition-colors"
-            >
-              {copiedTranslated ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  コピーしました
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  コピー
-                </>
-              )}
-            </button>
-          </div>
-          <div className="bg-emerald-900/20 rounded-xl p-4 border border-emerald-700/50 max-h-96 overflow-y-auto">
-            <p className="text-white whitespace-pre-wrap leading-relaxed text-base">
-              {result.translatedText}
-            </p>
-          </div>
-        </motion.div>
+        {/* 日本語訳エリア（英語学習モード用） */}
+        {result.japanese_translation && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="mb-6"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-emerald-400">日本語訳</h2>
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(result.japanese_translation || '');
+                    setCopiedTranslated(true);
+                    vibrateSuccess();
+                    setTimeout(() => setCopiedTranslated(false), 2000);
+                  } catch (err) {
+                    console.error('Failed to copy:', err);
+                  }
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition-colors"
+              >
+                {copiedTranslated ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    コピーしました
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    コピー
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="bg-emerald-900/20 rounded-xl p-4 border border-emerald-700/50 max-h-96 overflow-y-auto">
+              <p className="text-white whitespace-pre-wrap leading-relaxed text-base">
+                {result.japanese_translation}
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* 後方互換性のための原文・翻訳文セクション（marked_text/japanese_translationがない場合） */}
+        {!result.marked_text && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-gray-300">原文</h2>
+              <button
+                onClick={handleCopyOriginal}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors"
+              >
+                {copiedOriginal ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    コピーしました
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    コピー
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 max-h-64 overflow-y-auto">
+              <p className="text-gray-200 whitespace-pre-wrap leading-relaxed">
+                {result.originalText}
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {!result.japanese_translation && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="mb-6"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-bold text-emerald-400">翻訳文（日本語）</h2>
+              <button
+                onClick={handleCopyTranslated}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition-colors"
+              >
+                {copiedTranslated ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    コピーしました
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    コピー
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="bg-emerald-900/20 rounded-xl p-4 border border-emerald-700/50 max-h-96 overflow-y-auto">
+              <p className="text-white whitespace-pre-wrap leading-relaxed text-base">
+                {result.translatedText}
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         {/* チャンクベースの構造解析（英語学習モード用 - カード式UI） */}
         {result.chunks !== undefined && result.chunks.length > 0 && (() => {
@@ -173,99 +264,73 @@ export const TranslationResultScreen = ({
             
             {/* カード式UI */}
             <div className="mb-4">
-              {/* 現在のチャンクカード */}
-              {chunks[currentChunkIndex] && (
-                <motion.div
-                  key={currentChunkIndex}
-                  initial={{ opacity: 0, x: 50 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -50 }}
-                  className="bg-gradient-to-br from-blue-900/40 to-blue-800/40 rounded-2xl p-6 border-2 border-blue-600/50 shadow-lg"
-                >
-                  {/* チャンク番号 */}
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-blue-300 text-sm font-medium">
-                      {currentChunkIndex + 1} / {chunks.length}
-                    </span>
-                    {/* タイプバッジ */}
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      chunks[currentChunkIndex].type === 'S' ? 'bg-green-500/30 text-green-300' :
-                      chunks[currentChunkIndex].type === 'V' ? 'bg-red-500/30 text-red-300' :
-                      chunks[currentChunkIndex].type === 'O' ? 'bg-yellow-500/30 text-yellow-300' :
-                      chunks[currentChunkIndex].type === 'C' ? 'bg-purple-500/30 text-purple-300' :
-                      chunks[currentChunkIndex].type === 'M' ? 'bg-cyan-500/30 text-cyan-300' :
-                      'bg-gray-500/30 text-gray-300'
-                    }`}>
-                      {chunks[currentChunkIndex].type === 'S' ? '主語 (S)' :
-                       chunks[currentChunkIndex].type === 'V' ? '動詞 (V)' :
-                       chunks[currentChunkIndex].type === 'O' ? '目的語 (O)' :
-                       chunks[currentChunkIndex].type === 'C' ? '補語 (C)' :
-                       chunks[currentChunkIndex].type === 'M' ? '修飾語 (M)' :
-                       '接続詞'}
-                    </span>
-                  </div>
+              {/* チャンクカード一覧 */}
+              <div className="grid grid-cols-1 gap-3 mb-4">
+                {chunks.map((chunk, index) => {
+                  const role = chunk.role || chunk.type || 'M';
+                  const chunkText = chunk.chunk_text || chunk.text || '';
+                  const chunkTranslation = chunk.chunk_translation || chunk.translation || '';
+                  const elementInfo = ELEMENT_TYPES[role as keyof typeof ELEMENT_TYPES];
                   
-                  {/* 英語のチャンク（記号付き） */}
-                  <div className="mb-4">
-                    <p className="text-gray-400 text-xs mb-2">英語の塊</p>
-                    <p className="text-white font-mono text-xl font-bold leading-relaxed">
-                      {chunks[currentChunkIndex].symbol === '[]' && `[ ${chunks[currentChunkIndex].text} ]`}
-                      {chunks[currentChunkIndex].symbol === '<>' && `< ${chunks[currentChunkIndex].text} >`}
-                      {chunks[currentChunkIndex].symbol === '()' && `( ${chunks[currentChunkIndex].text} )`}
-                      {chunks[currentChunkIndex].symbol === 'none' && chunks[currentChunkIndex].text}
-                    </p>
-                  </div>
+                  // 記号の表示
+                  const getSymbolDisplay = () => {
+                    if (chunk.symbol === '[]') return `[ ${chunkText} ]`;
+                    if (chunk.symbol === '<>') return `< ${chunkText} >`;
+                    if (chunk.symbol === '()') return `( ${chunkText} )`;
+                    return chunkText;
+                  };
                   
-                  {/* 日本語訳 */}
-                  <div className="mb-3">
-                    <p className="text-gray-400 text-xs mb-2">意味</p>
-                    <p className="text-emerald-300 text-lg font-medium">
-                      {chunks[currentChunkIndex].translation}
-                    </p>
-                  </div>
-                  
-                  {/* 解説 */}
-                  {chunks[currentChunkIndex].explanation && (
-                    <div className="mt-3 pt-3 border-t border-blue-700/50">
-                      <p className="text-gray-400 text-xs mb-1">💡 解説</p>
-                      <p className="text-gray-300 text-sm">
-                        {chunks[currentChunkIndex].explanation}
-                      </p>
-                    </div>
-                  )}
-                </motion.div>
-              )}
-              
-              {/* ナビゲーションボタン */}
-              <div className="flex items-center justify-between mt-4 gap-3">
-                <button
-                  onClick={() => {
-                    vibrateLight();
-                    setCurrentChunkIndex(Math.max(0, currentChunkIndex - 1));
-                  }}
-                  disabled={currentChunkIndex === 0}
-                  className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
-                    currentChunkIndex === 0
-                      ? 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-700 hover:bg-gray-600 text-white'
-                  }`}
-                >
-                  ← 前へ
-                </button>
-                <button
-                  onClick={() => {
-                    vibrateLight();
-                    setCurrentChunkIndex(Math.min(chunks.length - 1, currentChunkIndex + 1));
-                  }}
-                  disabled={currentChunkIndex === chunks.length - 1}
-                  className={`flex-1 py-3 rounded-xl font-medium transition-colors ${
-                    currentChunkIndex === chunks.length - 1
-                      ? 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-700 hover:bg-gray-600 text-white'
-                  }`}
-                >
-                  次へ →
-                </button>
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      onClick={() => {
+                        vibrateLight();
+                        setSelectedChunkIndex(index);
+                      }}
+                      className="bg-gradient-to-br from-blue-900/40 to-blue-800/40 rounded-xl p-4 border-2 border-blue-600/50 shadow-lg cursor-pointer hover:border-blue-500 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <span className="text-blue-300 text-xs font-medium">
+                          {index + 1} / {chunks.length}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          role === 'S' ? 'bg-green-500/30 text-green-300' :
+                          role === 'V' ? 'bg-red-500/30 text-red-300' :
+                          role === 'O' ? 'bg-yellow-500/30 text-yellow-300' :
+                          role === 'C' ? 'bg-purple-500/30 text-purple-300' :
+                          role === 'M' ? 'bg-cyan-500/30 text-cyan-300' :
+                          'bg-gray-500/30 text-gray-300'
+                        }`}>
+                          {elementInfo ? elementInfo.title : role}
+                        </span>
+                      </div>
+                      
+                      {/* 英語のチャンク（記号付き） */}
+                      <div className="mb-3">
+                        <p className="text-gray-400 text-xs mb-1">英語の塊</p>
+                        <p className="text-white font-mono text-lg font-bold leading-relaxed">
+                          {getSymbolDisplay()}
+                        </p>
+                      </div>
+                      
+                      {/* 日本語訳（直訳） */}
+                      <div>
+                        <p className="text-gray-400 text-xs mb-1">意味</p>
+                        <p className="text-emerald-300 text-base font-medium">
+                          {chunkTranslation}
+                        </p>
+                      </div>
+                      
+                      {/* タップして詳細を見るヒント */}
+                      <div className="mt-3 pt-3 border-t border-blue-700/50">
+                        <p className="text-gray-500 text-xs">タップして詳細解説を見る</p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
             </div>
           </motion.div>
@@ -293,6 +358,109 @@ export const TranslationResultScreen = ({
             </div>
           </motion.div>
         )}
+
+        {/* チャンク詳細解説ポップアップ */}
+        <AnimatePresence>
+          {selectedChunkIndex !== null && result.chunks && result.chunks[selectedChunkIndex] && (() => {
+            const chunk = result.chunks![selectedChunkIndex!];
+            const role = chunk.role || chunk.type || 'M';
+            const chunkText = chunk.chunk_text || chunk.text || '';
+            const chunkTranslation = chunk.chunk_translation || chunk.translation || '';
+            const elementInfo = ELEMENT_TYPES[role as keyof typeof ELEMENT_TYPES];
+            
+            // 記号タイプの判定
+            let grammarType: keyof typeof GRAMMAR_TYPES | null = null;
+            if (chunk.symbol === '[]') grammarType = 'noun_clause';
+            else if (chunk.symbol === '()') grammarType = 'adj_clause';
+            else if (chunk.symbol === '<>') grammarType = 'adv_clause';
+            else if (role === 'V') grammarType = 'verb_phrase';
+            
+            const grammarInfo = grammarType ? GRAMMAR_TYPES[grammarType] : null;
+            
+            return (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+                onClick={() => {
+                  vibrateLight();
+                  setSelectedChunkIndex(null);
+                }}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-gray-800 rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto border-2 border-blue-600/50"
+                >
+                  {/* ヘッダー */}
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-white">詳細解説</h3>
+                    <button
+                      onClick={() => {
+                        vibrateLight();
+                        setSelectedChunkIndex(null);
+                      }}
+                      className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  {/* チャンク情報 */}
+                  <div className="mb-6">
+                    <div className="mb-4">
+                      <p className="text-gray-400 text-xs mb-2">英語の塊</p>
+                      <p className="text-white font-mono text-xl font-bold">
+                        {chunk.symbol === '[]' && `[ ${chunkText} ]`}
+                        {chunk.symbol === '<>' && `< ${chunkText} >`}
+                        {chunk.symbol === '()' && `( ${chunkText} )`}
+                        {chunk.symbol === 'none' && chunkText}
+                      </p>
+                    </div>
+                    <div className="mb-4">
+                      <p className="text-gray-400 text-xs mb-2">意味</p>
+                      <p className="text-emerald-300 text-lg font-medium">
+                        {chunkTranslation}
+                      </p>
+                    </div>
+                    {chunk.explanation && (
+                      <div className="mb-4">
+                        <p className="text-gray-400 text-xs mb-2">💡 解説</p>
+                        <p className="text-gray-300 text-sm">
+                          {chunk.explanation}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 文の要素（S, V, O, C）の説明 */}
+                  {elementInfo && (
+                    <div className="mb-6 p-4 bg-blue-900/20 rounded-xl border border-blue-700/50">
+                      <h4 className="text-blue-300 font-bold mb-2">{elementInfo.title}</h4>
+                      <p className="text-white text-sm font-medium mb-1">{elementInfo.meaning}</p>
+                      <p className="text-gray-300 text-sm">{elementInfo.desc}</p>
+                    </div>
+                  )}
+                  
+                  {/* 括弧タイプ（名詞のカタマリ、形容詞のカタマリなど）の説明 */}
+                  {grammarInfo && (
+                    <div className={`p-4 rounded-xl border ${grammarInfo.color}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-2xl font-bold">{grammarInfo.symbol}</span>
+                        <h4 className="font-bold text-lg">{grammarInfo.title}</h4>
+                      </div>
+                      <p className="text-sm font-medium mb-2">{grammarInfo.definition}</p>
+                      <p className="text-sm">{grammarInfo.description}</p>
+                    </div>
+                  )}
+                </motion.div>
+              </motion.div>
+            );
+          })()}
+        </AnimatePresence>
 
         {/* フッター */}
         <div className="space-y-3">
