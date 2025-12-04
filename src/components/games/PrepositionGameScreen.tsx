@@ -9,7 +9,7 @@ import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle, Sparkles } from 'lucide-react';
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
-import { PREPOSITION_QUIZZES, type PrepositionQuiz } from '@/consts/prepositionQuizData';
+import { PREPOSITION_QUIZZES } from '@/consts/prepositionQuizData';
 
 interface PrepositionGameScreenProps {
   onComplete?: () => void;
