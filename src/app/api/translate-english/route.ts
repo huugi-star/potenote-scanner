@@ -109,7 +109,9 @@ export async function POST(req: Request) {
     });
 
     // ストリーミングレスポンスを返す
-    return result.toAIStreamResponse();
+    // Vercel AI SDK v4では toDataStreamResponse() を使用
+    // 型エラーが出る場合は、型アサーションを使用
+    return (result as any).toDataStreamResponse() as Response;
   } catch (error) {
     console.error("Translation API Error:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
