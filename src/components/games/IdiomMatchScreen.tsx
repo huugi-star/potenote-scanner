@@ -21,15 +21,6 @@ export const IdiomMatchScreen = ({ onComplete: _onComplete }: IdiomMatchScreenPr
   const [isCorrect, setIsCorrect] = useState(false);
   const [score, setScore] = useState(0);
 
-  // 次へボタンの処理
-  const handleNext = useCallback(() => {
-    vibrateLight();
-    const nextIndex = (currentIndex + 1) % shuffled.length;
-    setCurrentIndex(nextIndex);
-    setSelectedIcon(null);
-    setShowResult(false);
-  }, [currentIndex, shuffled.length]);
-
   const [shuffled] = useState(() => {
     const shuffled = [...IDIOM_MATCHES];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -38,6 +29,15 @@ export const IdiomMatchScreen = ({ onComplete: _onComplete }: IdiomMatchScreenPr
     }
     return shuffled;
   });
+
+  // 次へボタンの処理
+  const handleNext = useCallback(() => {
+    vibrateLight();
+    const nextIndex = (currentIndex + 1) % shuffled.length;
+    setCurrentIndex(nextIndex);
+    setSelectedIcon(null);
+    setShowResult(false);
+  }, [currentIndex, shuffled.length]);
 
   const current = shuffled[currentIndex];
 
