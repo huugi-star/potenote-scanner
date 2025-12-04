@@ -63,18 +63,58 @@ export interface Chunk {
 }
 
 /**
+ * 構造要素（Interlinear Display用）
+ */
+export interface StructureElement {
+  text: string;                    // テキスト（単語、句読点、スペースなど）
+  symbol: '[]' | '<>' | '()' | 'V' | null; // 記号の種類
+  type: 'noun_clause' | 'adj_clause' | 'adv_clause' | 'verb_phrase' | 'adv_phrase' | 'noun_phrase' | null; // GRAMMAR_TYPESのキー
+  role: 'S' | 'V' | 'O' | 'C' | 'M' | 'Connect' | null; // ELEMENT_TYPESのキー
+  label: string | null;            // 画面下段に表示する短いラベル（例: "名詞節(O)", "動詞(V)", "副詞(M)"）
+}
+
+/**
+ * 一文の翻訳結果（一文完結型）
+ */
+export interface SentenceResult {
+  marked_text: string;        // 構造化された原文（Big Chunkルール適用）
+  translation: string;       // その文の和訳
+  sub_structures?: Array<{    // 複雑な部分の分解リスト（ズームイン解析）
+    target_chunk: string;     // 分解対象の文字列（例: "that the world could..."）
+    analyzed_text: string;    // 分解後のタグ付きテキスト（例: "[the world]<{S'}> could..."）
+  }>;
+  vocab_list?: Array<{        // 重要単語・熟語リスト
+    word: string;             // 例: "keep up with"
+    meaning: string;          // 例: "～に遅れずについていく"
+  }>;
+  grammar_note?: string;      // ワンポイント文法解説
+}
+
+/**
  * 翻訳結果
  */
 export interface TranslationResult {
   originalText: string;   // 原文（後方互換用）
   translatedText: string; // 翻訳文（後方互換用）
   
-  // 新しいフィールド（AI出力形式）
-  marked_text?: string;        // 記号付きの全文（例: "[ The news ] ( that he died ) was false."）
-  japanese_translation?: string; // 全文の自然な日本語訳
+  // 一文完結型のリスト形式（新形式・英語学習モード用）
+  sentences?: SentenceResult[];
   
-  chunks?: Chunk[];       // チャンク（意味の塊）ごとの構造解析（英語学習モード用）
+  // 後方互換用（オプション）
+  marked_text?: string;        // 全文の記号付きテキスト（後方互換用）
+  japanese_translation?: string; // 全文の自然な日本語訳（後方互換用）
+  structure?: StructureElement[]; // 構造要素配列（非推奨）
+  chunks?: Chunk[];       // チャンク（意味の塊）ごとの構造解析（後方互換用）
   teacherComment?: string; // 先生からの総評（英語学習モード用）
+  
+  // 多言語翻訳モード用（オプション）
+  summary?: string;       // 3行まとめ（要旨）
+  textType?: 'academic' | 'email' | 'manual' | 'general'; // 判定されたテキストタイプ
+  tone?: string;          // 使用された口調の説明
+  technicalTerms?: Array<{ // 専門用語とその補足説明
+    term: string;
+    explanation: string;
+  }>;
 }
 
 /**
@@ -86,6 +126,11 @@ export interface TranslationHistory {
   translatedText: string;
   createdAt: string;   // ISO日付文字列
   imageUrl?: string;   // スキャン元画像のURL（オプション）
+  // 英文解釈モードのデータ（オプション）
+  sentences?: SentenceResult[];
+  marked_text?: string;
+  japanese_translation?: string;
+  chunks?: Chunk[];   // 構造解析カード用のデータ
 }
 
 /**

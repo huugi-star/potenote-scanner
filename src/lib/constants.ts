@@ -91,6 +91,11 @@ export const LIMITS = {
   INVENTORY: {
     MAX_STACK: 99,           // 1アイテムの最大スタック数
   },
+  
+  // 翻訳履歴
+  TRANSLATION_HISTORY: {
+    MAX_ITEMS: 50,           // 最大保存数（localStorage容量対策）
+  },
 } as const;
 
 // ===== Gacha (ガチャ) =====

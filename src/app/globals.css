@@ -89,6 +89,61 @@ body {
   background-clip: text;
 }
 
+/* 印刷用スタイル */
+@media print {
+  /* ページ設定 */
+  @page {
+    size: A4;
+    margin: 1.5cm;
+  }
+
+  /* 印刷時に非表示にする要素 */
+  .no-print,
+  button,
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* 背景色とテキスト色を印刷用に調整 */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* 翻訳結果画面の印刷用スタイル */
+  .print-container {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* カードの背景を白に */
+  .print-container [class*="bg-"] {
+    background: white !important;
+    border: 1px solid #e5e7eb !important;
+  }
+
+  /* テキスト色を黒に */
+  .print-container [class*="text-"] {
+    color: black !important;
+  }
+
+  /* 記号付き原文のスタイル */
+  .print-container [class*="text-blue"] {
+    color: #1e40af !important;
+  }
+
+  /* チャンクカードの印刷用スタイル */
+  .chunk-card {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* ページ区切りを避ける */
+  .print-container section {
+    page-break-inside: avoid;
+  }
+}
+
 /* カード光沢エフェクト */
 .card-shine {
   position: relative;

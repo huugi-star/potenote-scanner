@@ -621,15 +621,26 @@ export const useGameStore = create<GameStore>()(
           return;
         }
         
+        // sentences配列がある場合（英文解釈モード）は、それも保存
         const newHistory: TranslationHistory = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           originalText: result.originalText,
           translatedText: result.translatedText,
           createdAt: new Date().toISOString(),
-          imageUrl,
+          imageUrl, // 画像URLは容量を消費するため、必要に応じて削除を検討
+          // 英文解釈モードのデータも保存
+          sentences: result.sentences,
+          marked_text: result.marked_text,
+          japanese_translation: result.japanese_translation,
+          chunks: result.chunks, // 構造解析カード用のデータも保存
         };
+        
+        // 新しい履歴を追加し、最大保存数を超える場合は古い履歴を削除
+        const updatedHistory = [newHistory, ...state.translationHistory];
+        const limitedHistory = updatedHistory.slice(0, LIMITS.TRANSLATION_HISTORY.MAX_ITEMS);
+        
         set({
-          translationHistory: [newHistory, ...state.translationHistory],
+          translationHistory: limitedHistory,
         });
 
         // クラウドにも保存（テキストのみなので軽量）
@@ -1212,6 +1223,13 @@ export const useGameStore = create<GameStore>()(
     {
       name: 'potenote-scanner-v2',
       storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        // ストレージから復元する際に翻訳履歴をクリーンアップ
+        if (state && state.translationHistory && state.translationHistory.length > LIMITS.TRANSLATION_HISTORY.MAX_ITEMS) {
+          console.log(`Cleaning up translation history: ${state.translationHistory.length} -> ${LIMITS.TRANSLATION_HISTORY.MAX_ITEMS}`);
+          state.translationHistory = state.translationHistory.slice(0, LIMITS.TRANSLATION_HISTORY.MAX_ITEMS);
+        }
+      },
       partialize: (state) => ({
         coins: state.coins,
         tickets: state.tickets,

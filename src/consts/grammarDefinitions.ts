@@ -34,6 +34,20 @@ export const GRAMMAR_TYPES = {
     definition: "文の結論となる「動き」",
     description: "英語の心臓部です。ここが決まらないと文の意味が決まりません。",
     color: "bg-red-50 border-red-200 text-red-900"
+  },
+  adv_phrase: {
+    symbol: "< >",
+    title: "副詞句",
+    definition: "文脈を広げる「背景情報」",
+    description: "「いつ・どこで・なぜ」といった状況を説明します。あってもなくてもよい内容ですが、表現力を豊かにします。",
+    color: "bg-gray-50 border-gray-200 text-gray-900"
+  },
+  noun_phrase: {
+    symbol: "[ ]",
+    title: "名詞句",
+    definition: "文を成立させる「骨格」",
+    description: "主語（S）や目的語（O）など、文の中心となる役割です。このブロックがないと意味が通じなくなります。",
+    color: "bg-blue-50 border-blue-200 text-blue-900"
   }
 } as const;
 
@@ -63,6 +77,11 @@ export const ELEMENT_TYPES = {
     title: "M (Modifier)",
     meaning: "詳しい「修飾語」",
     desc: "他の言葉を詳しく説明している部分です。"
+  },
+  Connect: {
+    title: "等位接続詞",
+    meaning: "並列要素をつなぐ「接続詞」",
+    desc: "and, but, or などで、同じ役割の要素を並列につなぎます。"
   }
 } as const;
 

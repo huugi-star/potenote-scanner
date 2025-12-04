@@ -32,6 +32,7 @@ import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/i
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
 import { LIMITS } from '@/lib/constants';
 import type { QuizRaw, StructuredOCR, QuizResult, TranslationResult } from '@/types';
+import { LoadingGameManager } from '@/components/games/LoadingGameManager';
 
 // ===== Types =====
 
@@ -53,6 +54,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const [showAdsModal, setShowAdsModal] = useState(false);
   const [showASPSalesModal, setShowASPSalesModal] = useState(false);
   const [aspAdRecommendation, setAspAdRecommendation] = useState<{ ad_id: string; reason: string } | null>(null);
+  const [currentVocab, setCurrentVocab] = useState<{ word: string; meaning: string; options: string[]; correctIndex: number } | null>(null);
+  const [selectedVocabAnswer, setSelectedVocabAnswer] = useState<number | null>(null);
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [showPrepositionGame, setShowPrepositionGame] = useState(false);
   // const [showShopModal, setShowShopModal] = useState(false); // 一時的に非表示
   // ストアから生成されたクイズを取得
   const generatedQuiz = useGameStore(state => state.generatedQuiz);
@@ -73,6 +78,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const incrementTranslationCount = useGameStore(state => state.incrementTranslationCount);
   const recoverScanCount = useGameStore(state => state.recoverScanCount);
   const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
+  const translationHistory = useGameStore(state => state.translationHistory);
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
   // Toast
@@ -98,6 +104,86 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
       setSelectedImage(scanImageUrl);
     }
   }, [generatedQuiz, scanImageUrl, scanState]);
+
+  // ロードメーターの進行度を一定のペースでアニメーション
+  useEffect(() => {
+    if (scanState !== 'processing') {
+      setLoadProgress(0);
+      return;
+    }
+
+    // 一定のペースで進行度を増加（約50秒で100%に到達）
+    const duration = 50000; // 50秒
+    const interval = 100; // 100msごとに更新
+    const increment = (100 / duration) * interval; // 1回あたりの増加量
+
+    let currentProgress = 0;
+    const progressInterval = setInterval(() => {
+      currentProgress = Math.min(currentProgress + increment, 95); // 95%まで自動進行
+      setLoadProgress(currentProgress);
+    }, interval);
+
+    return () => clearInterval(progressInterval);
+  }, [scanState]);
+
+  // スキャン中に過去の重要語句をランダム表示（二択問題形式、多言語モードでは表示しない）
+  useEffect(() => {
+    if (scanState !== 'processing' || scanType !== 'translation' || translationMode !== 'english_learning') {
+      setCurrentVocab(null);
+      setSelectedVocabAnswer(null);
+      return;
+    }
+
+    // 一般的な重要語句と選択肢を生成
+    const generateVocabQuestion = () => {
+      const vocabList = [
+        { word: 'keep up with', meaning: '～に追いつく' },
+        { word: 'take advantage of', meaning: '～を利用する' },
+        { word: 'come up with', meaning: '～を思いつく' },
+        { word: 'look forward to', meaning: '～を楽しみにする' },
+        { word: 'get along with', meaning: '～と仲良くする' },
+        { word: 'deal with', meaning: '～に対処する' },
+        { word: 'put up with', meaning: '～を我慢する' },
+        { word: 'run out of', meaning: '～を使い果たす' },
+        { word: 'give up', meaning: '～を諦める' },
+        { word: 'look after', meaning: '～の世話をする' },
+      ];
+
+      const wrongMeanings = [
+        '～を避ける', '～を破壊する', '～を無視する', '～を拒否する',
+        '～を開始する', '～を終了する', '～を延期する', '～を加速する',
+        '～を減らす', '～を増やす', '～を変更する', '～を維持する',
+      ];
+
+      const randomVocab = vocabList[Math.floor(Math.random() * vocabList.length)];
+      const wrongMeaning = wrongMeanings[Math.floor(Math.random() * wrongMeanings.length)];
+      
+      // 正解の位置をランダムに（0または1）
+      const correctIndex = Math.floor(Math.random() * 2);
+      const options = correctIndex === 0 
+        ? [randomVocab.meaning, wrongMeaning]
+        : [wrongMeaning, randomVocab.meaning];
+
+      return {
+        word: randomVocab.word,
+        meaning: randomVocab.meaning,
+        options,
+        correctIndex,
+      };
+    };
+    
+    // 最初の問題を設定
+    setCurrentVocab(generateVocabQuestion());
+    setSelectedVocabAnswer(null);
+
+    // 5秒ごとに問題を変更
+    const interval = setInterval(() => {
+      setCurrentVocab(generateVocabQuestion());
+      setSelectedVocabAnswer(null);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [scanState, scanType]);
 
   // ファイル選択
   const handleFileSelect = useCallback(async (file: File) => {
@@ -133,12 +219,18 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
 
     setScanState('uploading');
     setErrorMessage('');
+    setLoadProgress(0);
 
     try {
       // 1. 画像を圧縮（プレビュー用）
       const compressed = await compressForAI(file);
       setSelectedImage(compressed.dataUrl);
       setScanState('processing');
+      
+      // 翻訳モードの場合、前置詞ゲームを開始
+      if (scanType === 'translation') {
+        setShowPrepositionGame(true);
+      }
 
       // 2. OCR用に画像補正（コントラスト・シャープネス強化）
       const enhancedImage = await preprocessImageForOCR(file);
@@ -155,7 +247,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           ? '/api/translate-english' 
           : '/api/translate';
 
-        // 通常のAPI呼び出し（ストリーミング廃止）
+        // 通常のAPI呼び出し（ストリーミングなし）
         const translateResponse = await fetch(apiEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -176,11 +268,18 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
 
         const translateResult = await translateResponse.json();
 
-        // 新しい形式（marked_text, japanese_translation）または旧形式（originalText, translatedText）に対応
+        // 新しい形式（sentences配列）または旧形式に対応
+        const hasSentencesFormat = translateResult.sentences && Array.isArray(translateResult.sentences) && translateResult.sentences.length > 0;
         const hasNewFormat = translateResult.marked_text && translateResult.japanese_translation;
         const hasOldFormat = translateResult.originalText && translateResult.translatedText;
         
-        if (hasNewFormat || hasOldFormat) {
+        if (hasSentencesFormat || hasNewFormat || hasOldFormat) {
+          // 進行度を100%にして翻訳結果を表示
+          setLoadProgress(100);
+          
+          // 少し待ってから翻訳結果を表示（100%表示を確認できるように）
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
           // ★成功時のみ翻訳回数を消費
           incrementTranslationCount();
           
@@ -191,6 +290,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                 translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
                 marked_text: translateResult.marked_text,
                 japanese_translation: translateResult.japanese_translation,
+                sentences: translateResult.sentences, // 新形式
                 chunks: translateResult.chunks,
                 teacherComment: translateResult.teacherComment,
               },
@@ -201,9 +301,11 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           vibrateSuccess();
           addToast('success', '翻訳が完了しました！');
         } else if (translateResult.error) {
-          throw new Error(translateResult.error);
+          const errorMsg = translateResult.details || translateResult.error || '翻訳に失敗しました';
+          throw new Error(errorMsg);
         } else {
-          throw new Error('翻訳に失敗しました');
+          console.error('翻訳レスポンス形式が不正:', translateResult);
+          throw new Error('翻訳に失敗しました（レスポンス形式が不正です）');
         }
       } else {
         // クイズモード
@@ -267,6 +369,9 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
       }
     } catch (error) {
       console.error('Scan error:', error);
+      
+      // エラー時は進行度をリセット
+      setLoadProgress(0);
       
       // エラーの種類を判定
       let message = 'エラーが発生しました';
@@ -515,8 +620,16 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
             </motion.div>
           )}
 
+          {/* ローディングゲーム表示（翻訳モードで処理中の場合、ただし多言語モードでは表示しない） */}
+          {showPrepositionGame && scanState === 'processing' && scanType === 'translation' && translationMode === 'english_learning' && (
+            <LoadingGameManager
+              onComplete={() => setShowPrepositionGame(false)}
+              progress={loadProgress}
+            />
+          )}
+
           {/* アップロード/処理中 */}
-          {(scanState === 'uploading' || scanState === 'processing') && (
+          {(scanState === 'uploading' || scanState === 'processing') && !showPrepositionGame && (
             <motion.div
               key="processing"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -534,19 +647,109 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                 </div>
               )}
               
+              {/* ロードメーター（翻訳モードのみ表示） */}
+              {scanType === 'translation' && (
+                <div className="w-full max-w-xs mx-auto mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-400 text-sm">処理中...</span>
+                    <span className="text-cyan-400 font-bold text-sm">{loadProgress}%</span>
+                  </div>
+                  <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <motion.div
+                      className="h-full bg-gradient-to-r from-cyan-500 to-blue-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${loadProgress}%` }}
+                      transition={{
+                        duration: 0.3,
+                        ease: "easeOut"
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              
               <Loader2 className="w-12 h-12 text-cyan-400 mx-auto mb-4 animate-spin" />
-              <p className="text-white font-medium">
+              <p className="text-white font-medium text-lg mb-2">
                 {scanState === 'uploading' 
                   ? '画像を処理中...' 
                   : scanType === 'translation'
-                    ? '日本語訳に変換中...'
+                    ? (translationMode === 'multilang' ? '要約中...' : '英文解釈中...')
                     : 'OCR & クイズ生成中...'}
               </p>
-              <p className="text-gray-400 text-sm mt-2">
+              <p className="text-gray-400 text-sm mb-6">
                 {scanType === 'translation' 
                   ? 'Google Vision + GPT-4o-mini' 
                   : 'Google Vision + GPT-4o-mini'}
               </p>
+
+              {/* 過去の重要語句をランダム表示（二択問題形式、多言語モードでは表示しない） */}
+              {scanState === 'processing' && scanType === 'translation' && translationMode === 'english_learning' && currentVocab && (
+                <motion.div
+                  key={currentVocab.word}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="mt-6 p-4 bg-gray-800/50 rounded-xl border border-gray-700 max-w-md mx-auto"
+                >
+                  <p className="text-gray-400 text-xs mb-3 text-center">過去に学んだ重要語句</p>
+                  <p className="text-white font-bold text-lg mb-4 text-center">{currentVocab.word}</p>
+                  
+                  <div className="space-y-2">
+                    {currentVocab.options.map((option, index) => {
+                      const isSelected = selectedVocabAnswer === index;
+                      const isCorrect = index === currentVocab.correctIndex;
+                      const showResult = selectedVocabAnswer !== null;
+                      
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => {
+                            if (selectedVocabAnswer === null) {
+                              setSelectedVocabAnswer(index);
+                              vibrateLight();
+                              if (isCorrect) {
+                                vibrateSuccess();
+                              } else {
+                                vibrateError();
+                              }
+                            }
+                          }}
+                          disabled={showResult}
+                          className={`w-full p-3 rounded-lg text-left transition-all ${
+                            showResult
+                              ? isCorrect
+                                ? 'bg-green-500/20 border-2 border-green-500'
+                                : isSelected
+                                  ? 'bg-red-500/20 border-2 border-red-500'
+                                  : 'bg-gray-700/50 border-2 border-gray-600'
+                              : isSelected
+                                ? 'bg-cyan-500/20 border-2 border-cyan-500'
+                                : 'bg-gray-700/50 border-2 border-gray-600 hover:border-cyan-400'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className={`font-medium ${
+                              showResult && isCorrect
+                                ? 'text-green-400'
+                                : showResult && isSelected && !isCorrect
+                                  ? 'text-red-400'
+                                  : 'text-white'
+                            }`}>
+                              {option}
+                            </span>
+                            {showResult && isCorrect && (
+                              <span className="text-green-400 text-xl">✓</span>
+                            )}
+                            {showResult && isSelected && !isCorrect && (
+                              <span className="text-red-400 text-xl">✗</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
             </motion.div>
           )}
 

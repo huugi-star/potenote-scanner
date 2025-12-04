@@ -370,9 +370,9 @@ const TranslationModeSelectScreen = ({
                   文の構造（S+V+O）や修飾関係を可視化し、文法も詳しく解説します。
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="px-2 py-1 bg-white/20 rounded text-xs">受験生向け</span>
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">初学者</span>
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">受験生</span>
                   <span className="px-2 py-1 bg-white/20 rounded text-xs">TOEIC学習</span>
-                  <span className="px-2 py-1 bg-white/20 rounded text-xs">文法解説</span>
                 </div>
               </div>
             </div>
