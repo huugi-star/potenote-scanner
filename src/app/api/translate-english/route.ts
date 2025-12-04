@@ -69,103 +69,95 @@ export async function POST(req: Request) {
     console.log("Translation Start...");
     console.log("Extracted text:", extractedText.substring(0, 200));
 
-    // 2. 構造解析 (OpenAI)
-    const systemPrompt = `あなたは伝説の英語講師です。
-ユーザーがスキャンした英文を、**伊藤和夫氏の『ビジュアル英文解釈』**のように、**「意味の塊（チャンク）」**ごとに大きく区切り、文の構造を視覚的に解説してください。
+    // 2. 構造解析 (OpenAI) - プロンプトを最適化
+    const systemPrompt = `英文をビジュアル英文解釈形式で構造解析してください。
 
-## 絶対ルール：単語ごとにバラバラにするな！
+【記号ルール】
+- [ ]: 名詞の塊（S/O/C）
+- ( ): 形容詞の塊（名詞修飾）
+- < >: 副詞の塊（動詞修飾）
+- none: 動詞(V)や接続詞
 
-× [An] [individual's] [somatic] [cells] ... 
-○ [ An individual's somatic cells ] ... (これ全体で一つの主語Sとして扱う)
-
-## 解析記号のルール
-
-以下の記号を使って、文法的な役割を明確にせよ。
-
-1. **[ ... ] (角カッコ)**: **名詞の塊**。主語(S)、目的語(O)、補語(C)になるもの。
-
-2. **( ... ) (丸カッコ)**: **形容詞の塊**。名詞を後ろから詳しく説明するもの（関係詞節、分詞など）。
-
-3. **< ... > (山カッコ)**: **副詞の塊**。動詞を説明するもの、前置詞句(M)、挿入語など。
-
-4. **none**: 動詞(V)や接続詞は囲まない。
-
-## 出力構成
-
-英文を頭から順に「意味の切れ目」で区切り、以下のJSON形式で出力せよ。
-
-【重要：ビジュアル化出力】 解析結果のJSONには、以下の3要素を必ず含めること。
-
-- marked_text: 記号付きの全文（例: "[ The news ] ( that he died ) was false."）
-- japanese_translation: 全文の自然な日本語訳
-- chunks: 分割されたチャンク情報
-
-各チャンクには以下を含める：
-- chunk_text: チャンクのテキスト（記号なしの生テキスト）
-- chunk_translation: その部分だけの直訳
-- role: S, V, O, C, M, Connect(接続詞) のいずれか（型と役割のIDだけ）
-- symbol: '[]', '<>', '()', 'none' のいずれか
-- explanation: 簡単な解説（例：「〜を修飾」）
-
-## 出力 (JSON)
-
+【出力形式】JSONのみ出力：
 {
   "marked_text": "[ The news ] ( that he died ) was false.",
   "japanese_translation": "彼が亡くなったという知らせは、誤りだった。",
   "chunks": [
     { "chunk_text": "The news", "chunk_translation": "その知らせは", "role": "S", "symbol": "[]", "explanation": "主語" },
-    { "chunk_text": "that he died", "chunk_translation": "彼が亡くなったという", "role": "M", "symbol": "()", "explanation": "名詞を修飾" },
-    { "chunk_text": "was", "chunk_translation": "だった", "role": "V", "symbol": "none", "explanation": "動詞" },
-    { "chunk_text": "false", "chunk_translation": "誤り", "role": "C", "symbol": "none", "explanation": "補語" }
+    { "chunk_text": "that he died", "chunk_translation": "彼が亡くなったという", "role": "M", "symbol": "()", "explanation": "名詞修飾" },
+    { "chunk_text": "was", "chunk_translation": "だった", "role": "V", "symbol": "none", "explanation": "" },
+    { "chunk_text": "false", "chunk_translation": "誤り", "role": "C", "symbol": "none", "explanation": "" }
   ],
-  "teacherComment": "アドバイス"
+  "teacherComment": "短いコメント"
 }`;
+
+    // テキストが長すぎる場合は切り詰める（5000文字まで）
+    const maxTextLength = 5000;
+    const truncatedText = extractedText.length > maxTextLength 
+      ? extractedText.substring(0, maxTextLength) + "..."
+      : extractedText;
 
     const openaiPayload = {
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `以下のテキストを構造解析せよ:\n\n${extractedText}` }
+        { role: "user", content: `以下のテキストを構造解析せよ:\n\n${truncatedText}` }
       ],
       response_format: { type: "json_object" },
       temperature: 0.2, // 構造解析はブレないように低温度
-      max_tokens: 4000 // 長文でも切れないように倍増
+      max_tokens: 3000 // トークン数を適切に設定
     };
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify(openaiPayload)
-    });
+    // OpenAI APIへのリクエストにタイムアウトを設定（45秒）
+    const openaiController = new AbortController();
+    const openaiTimeoutId = setTimeout(() => openaiController.abort(), 45000);
 
-    if (!openaiResponse.ok) {
-      const err = await openaiResponse.text();
-      throw new Error(`OpenAI Error: ${err}`);
-    }
-
-    const openaiData = await openaiResponse.json();
-    const content = openaiData.choices[0]?.message?.content;
-
-    if (!content) {
-      console.error("OpenAI response has no content:", JSON.stringify(openaiData, null, 2));
-      throw new Error("No content from OpenAI");
-    }
-
-    console.log("OpenAI content received:", content.substring(0, 200));
-
-    let json;
+    let json: any;
     try {
-      json = JSON.parse(content);
-    } catch (parseError) {
-      console.error("JSON parse error:", parseError);
-      console.error("Content that failed to parse:", content);
-      throw new Error(`Failed to parse JSON: ${String(parseError)}`);
-    }
+      const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify(openaiPayload),
+        signal: openaiController.signal
+      });
 
-    console.log("Parsed JSON:", JSON.stringify(json, null, 2));
+      clearTimeout(openaiTimeoutId);
+
+      if (!openaiResponse.ok) {
+        const err = await openaiResponse.text();
+        throw new Error(`OpenAI Error: ${err}`);
+      }
+
+      const openaiData = await openaiResponse.json();
+      const content = openaiData.choices[0]?.message?.content;
+
+      if (!content) {
+        console.error("OpenAI response has no content:", JSON.stringify(openaiData, null, 2));
+        throw new Error("No content from OpenAI");
+      }
+
+      console.log("OpenAI content received:", content.substring(0, 200));
+
+      try {
+        json = JSON.parse(content);
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError);
+        console.error("Content that failed to parse:", content);
+        throw new Error(`Failed to parse JSON: ${String(parseError)}`);
+      }
+
+      console.log("Parsed JSON:", JSON.stringify(json, null, 2));
+
+    } catch (fetchError: any) {
+      clearTimeout(openaiTimeoutId);
+      if (fetchError.name === 'AbortError') {
+        throw new Error("OpenAI API request timeout (45秒)");
+      }
+      throw fetchError;
+    }
 
     // データの正規化とクリーニング
     if (!json.chunks || !Array.isArray(json.chunks)) {
