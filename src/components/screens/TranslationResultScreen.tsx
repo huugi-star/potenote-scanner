@@ -92,7 +92,7 @@ export const TranslationResultScreen = ({
           </h1>
         </div>
 
-        {/* 記号付き原文エリア（英語学習モード用） */}
+        {/* 1. 記号付き原文エリア (Visualized Text Area) */}
         {result.marked_text && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -127,15 +127,13 @@ export const TranslationResultScreen = ({
                 )}
               </button>
             </div>
-            <div className="bg-blue-900/20 rounded-xl p-4 border border-blue-700/50 max-h-64 overflow-y-auto">
-              <p className="text-white font-mono text-lg leading-relaxed">
-                {result.marked_text}
-              </p>
+            <div className="bg-blue-900/20 rounded-xl p-6 border border-blue-700/50 overflow-x-auto">
+              <VisualizedText text={result.marked_text} />
             </div>
           </motion.div>
         )}
 
-        {/* 日本語訳エリア（英語学習モード用） */}
+        {/* 2. 全文和訳エリア (Translation Area) */}
         {result.japanese_translation && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -144,7 +142,7 @@ export const TranslationResultScreen = ({
             className="mb-6"
           >
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-bold text-emerald-400">日本語訳</h2>
+              <h2 className="text-lg font-bold text-emerald-400">全文和訳</h2>
               <button
                 onClick={async () => {
                   try {
@@ -171,8 +169,8 @@ export const TranslationResultScreen = ({
                 )}
               </button>
             </div>
-            <div className="bg-emerald-900/20 rounded-xl p-4 border border-emerald-700/50 max-h-96 overflow-y-auto">
-              <p className="text-white whitespace-pre-wrap leading-relaxed text-base">
+            <div className="bg-emerald-900/20 rounded-xl p-5 border border-emerald-700/50">
+              <p className="text-white whitespace-pre-wrap leading-relaxed text-lg">
                 {result.japanese_translation}
               </p>
             </div>
@@ -247,7 +245,7 @@ export const TranslationResultScreen = ({
           </motion.div>
         )}
 
-        {/* チャンクベースの構造解析（英語学習モード用 - カード式UI） */}
+        {/* 3. 構造解析カードエリア (Chunk Cards) */}
         {result.chunks !== undefined && result.chunks.length > 0 && (() => {
           const chunks = result.chunks!;
           return (
@@ -262,17 +260,25 @@ export const TranslationResultScreen = ({
               構造解析（ビジュアル英文解釈）
             </h2>
             
-            {/* カード式UI */}
-            <div className="mb-4">
-              {/* チャンクカード一覧 */}
-              <div className="grid grid-cols-1 gap-3 mb-4">
+            {/* 横スクロールカード */}
+            <div className="overflow-x-auto pb-4 -mx-4 px-4">
+              <div className="flex gap-4 min-w-max">
                 {chunks.map((chunk, index) => {
                   const role = chunk.role || chunk.type || 'M';
                   const chunkText = chunk.chunk_text || chunk.text || '';
                   const chunkTranslation = chunk.chunk_translation || chunk.translation || '';
                   const elementInfo = ELEMENT_TYPES[role as keyof typeof ELEMENT_TYPES];
                   
-                  // 記号の表示
+                  // 記号タイプの判定とGRAMMAR_TYPESの取得
+                  let grammarType: keyof typeof GRAMMAR_TYPES | null = null;
+                  if (chunk.symbol === '[]') grammarType = 'noun_clause';
+                  else if (chunk.symbol === '()') grammarType = 'adj_clause';
+                  else if (chunk.symbol === '<>') grammarType = 'adv_clause';
+                  else if (role === 'V') grammarType = 'verb_phrase';
+                  
+                  const grammarInfo = grammarType ? GRAMMAR_TYPES[grammarType] : null;
+                  
+                  // 記号付きテキストの生成
                   const getSymbolDisplay = () => {
                     if (chunk.symbol === '[]') return `[ ${chunkText} ]`;
                     if (chunk.symbol === '<>') return `< ${chunkText} >`;
@@ -283,50 +289,68 @@ export const TranslationResultScreen = ({
                   return (
                     <motion.div
                       key={index}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.05 }}
                       onClick={() => {
                         vibrateLight();
                         setSelectedChunkIndex(index);
                       }}
-                      className="bg-gradient-to-br from-blue-900/40 to-blue-800/40 rounded-xl p-4 border-2 border-blue-600/50 shadow-lg cursor-pointer hover:border-blue-500 transition-colors"
+                      className={`flex-shrink-0 w-80 rounded-xl shadow-lg cursor-pointer hover:scale-105 transition-transform ${
+                        grammarInfo ? grammarInfo.color : 'bg-gray-50 border-gray-200'
+                      } border-2 overflow-hidden`}
                     >
-                      <div className="flex items-start justify-between mb-3">
-                        <span className="text-blue-300 text-xs font-medium">
-                          {index + 1} / {chunks.length}
-                        </span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          role === 'S' ? 'bg-green-500/30 text-green-300' :
-                          role === 'V' ? 'bg-red-500/30 text-red-300' :
-                          role === 'O' ? 'bg-yellow-500/30 text-yellow-300' :
-                          role === 'C' ? 'bg-purple-500/30 text-purple-300' :
-                          role === 'M' ? 'bg-cyan-500/30 text-cyan-300' :
-                          'bg-gray-500/30 text-gray-300'
-                        }`}>
-                          {elementInfo ? elementInfo.title : role}
-                        </span>
-                      </div>
+                      {/* ヘッダー: GRAMMAR_TYPESのsymbolとtitle */}
+                      {grammarInfo && (
+                        <div className={`px-4 py-3 border-b-2 ${grammarInfo.color.split(' ')[2] || 'border-gray-200'}`}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl font-bold">{grammarInfo.symbol}</span>
+                            <span className="font-bold text-sm">{grammarInfo.title}</span>
+                          </div>
+                        </div>
+                      )}
                       
-                      {/* 英語のチャンク（記号付き） */}
-                      <div className="mb-3">
-                        <p className="text-gray-400 text-xs mb-1">英語の塊</p>
-                        <p className="text-white font-mono text-lg font-bold leading-relaxed">
-                          {getSymbolDisplay()}
-                        </p>
-                      </div>
-                      
-                      {/* 日本語訳（直訳） */}
-                      <div>
-                        <p className="text-gray-400 text-xs mb-1">意味</p>
-                        <p className="text-emerald-300 text-base font-medium">
-                          {chunkTranslation}
-                        </p>
-                      </div>
-                      
-                      {/* タップして詳細を見るヒント */}
-                      <div className="mt-3 pt-3 border-t border-blue-700/50">
-                        <p className="text-gray-500 text-xs">タップして詳細解説を見る</p>
+                      <div className="p-4">
+                        {/* チャンク番号 */}
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-medium text-gray-500">
+                            {index + 1} / {chunks.length}
+                          </span>
+                          {/* 役割バッジ */}
+                          {elementInfo && (
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                              role === 'S' ? 'bg-green-100 text-green-800' :
+                              role === 'V' ? 'bg-red-100 text-red-800' :
+                              role === 'O' ? 'bg-yellow-100 text-yellow-800' :
+                              role === 'C' ? 'bg-purple-100 text-purple-800' :
+                              role === 'M' ? 'bg-cyan-100 text-cyan-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {elementInfo.title}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* メインテキスト: チャンクのテキスト（記号付き） */}
+                        <div className="mb-3">
+                          <p className="text-gray-600 text-xs mb-1 font-medium">英語の塊</p>
+                          <p className="text-gray-900 font-mono text-base font-bold leading-relaxed">
+                            {getSymbolDisplay()}
+                          </p>
+                        </div>
+                        
+                        {/* 直訳 */}
+                        <div className="mb-3">
+                          <p className="text-gray-600 text-xs mb-1 font-medium">意味</p>
+                          <p className="text-emerald-700 text-base font-medium">
+                            {chunkTranslation}
+                          </p>
+                        </div>
+                        
+                        {/* 詳細を見るボタン */}
+                        <button className="w-full mt-3 py-2 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors">
+                          詳細を見る →
+                        </button>
                       </div>
                     </motion.div>
                   );
@@ -632,6 +656,82 @@ const TranslationHistoryItem = ({ history, onDelete }: TranslationHistoryItemPro
         )}
       </div>
     </div>
+  );
+};
+
+// ===== Helper Components =====
+
+/**
+ * 記号付きテキストを視覚的に強調表示するコンポーネント
+ */
+const VisualizedText = ({ text }: { text: string }) => {
+  // 記号を強調するために、テキストをパースして色付け
+  const parts: Array<{ text: string; type: 'bracket' | 'paren' | 'angle' | 'normal' }> = [];
+  let currentIndex = 0;
+  
+  // 正規表現で記号を検出
+  const bracketRegex = /\[([^\]]+)\]/g;
+  const parenRegex = /\(([^)]+)\)/g;
+  const angleRegex = /<([^>]+)>/g;
+  
+  const matches: Array<{ start: number; end: number; type: 'bracket' | 'paren' | 'angle'; content: string }> = [];
+  
+  let match;
+  while ((match = bracketRegex.exec(text)) !== null) {
+    matches.push({ start: match.index, end: match.index + match[0].length, type: 'bracket', content: match[0] });
+  }
+  while ((match = parenRegex.exec(text)) !== null) {
+    matches.push({ start: match.index, end: match.index + match[0].length, type: 'paren', content: match[0] });
+  }
+  while ((match = angleRegex.exec(text)) !== null) {
+    matches.push({ start: match.index, end: match.index + match[0].length, type: 'angle', content: match[0] });
+  }
+  
+  // マッチを開始位置でソート
+  matches.sort((a, b) => a.start - b.start);
+  
+  // テキストを分割
+  for (const m of matches) {
+    if (currentIndex < m.start) {
+      parts.push({ text: text.substring(currentIndex, m.start), type: 'normal' });
+    }
+    parts.push({ text: m.content, type: m.type });
+    currentIndex = m.end;
+  }
+  if (currentIndex < text.length) {
+    parts.push({ text: text.substring(currentIndex), type: 'normal' });
+  }
+  
+  if (parts.length === 0) {
+    parts.push({ text, type: 'normal' });
+  }
+  
+  return (
+    <p className="text-white font-mono text-xl leading-relaxed whitespace-pre-wrap">
+      {parts.map((part, idx) => {
+        if (part.type === 'bracket') {
+          return (
+            <span key={idx} className="text-blue-400 font-bold">
+              {part.text}
+            </span>
+          );
+        } else if (part.type === 'paren') {
+          return (
+            <span key={idx} className="text-green-400 font-bold">
+              {part.text}
+            </span>
+          );
+        } else if (part.type === 'angle') {
+          return (
+            <span key={idx} className="text-gray-400 font-bold">
+              {part.text}
+            </span>
+          );
+        } else {
+          return <span key={idx}>{part.text}</span>;
+        }
+      })}
+    </p>
   );
 };
 
