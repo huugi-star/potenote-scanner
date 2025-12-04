@@ -109,7 +109,7 @@ export async function POST(req: Request) {
     });
 
     // ストリーミングレスポンスを返す
-    return result.toDataStreamResponse();
+    return result.toAIStreamResponse();
   } catch (error) {
     console.error("Translation API Error:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);

@@ -32,7 +32,6 @@ import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/i
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
 import { LIMITS } from '@/lib/constants';
 import type { QuizRaw, StructuredOCR, QuizResult, TranslationResult } from '@/types';
-import { readDataStream } from 'ai';
 
 // ===== Types =====
 
@@ -179,40 +178,65 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
             chunks: [],
           };
 
-          // ストリーミングデータを読み取る
-          for await (const chunk of readDataStream(translateResponse.body!)) {
-            if (chunk.type === 'object') {
-              // オブジェクトの更新を受信
-              translateResult = { ...translateResult, ...chunk.value };
-              
-              // marked_textとjapanese_translationが揃ったら即座に表示
-              if (translateResult.marked_text && translateResult.japanese_translation && onTranslationReady) {
-                onTranslationReady(
-                  {
-                    originalText: translateResult.originalText || '',
-                    translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
-                    marked_text: translateResult.marked_text,
-                    japanese_translation: translateResult.japanese_translation,
-                    chunks: translateResult.chunks || [],
-                    teacherComment: translateResult.teacherComment,
-                  },
-                  compressed.dataUrl
-                );
-              }
-              
-              // chunksが更新されたら即座に反映
-              if (translateResult.chunks && translateResult.chunks.length > 0 && onTranslationReady) {
-                onTranslationReady(
-                  {
-                    originalText: translateResult.originalText || '',
-                    translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
-                    marked_text: translateResult.marked_text || '',
-                    japanese_translation: translateResult.japanese_translation || '',
-                    chunks: translateResult.chunks,
-                    teacherComment: translateResult.teacherComment,
-                  },
-                  compressed.dataUrl
-                );
+          // ストリームを読み取る
+          const reader = translateResponse.body?.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          if (!reader) {
+            throw new Error('ストリームを読み取れません');
+          }
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('0:')) {
+                try {
+                  const data = JSON.parse(line.slice(2));
+                  if (data.type === 'object') {
+                    // オブジェクトの更新を受信
+                    translateResult = { ...translateResult, ...data.value };
+                    
+                    // marked_textとjapanese_translationが揃ったら即座に表示
+                    if (translateResult.marked_text && translateResult.japanese_translation && onTranslationReady) {
+                      onTranslationReady(
+                        {
+                          originalText: translateResult.originalText || '',
+                          translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
+                          marked_text: translateResult.marked_text,
+                          japanese_translation: translateResult.japanese_translation,
+                          chunks: translateResult.chunks || [],
+                          teacherComment: translateResult.teacherComment,
+                        },
+                        compressed.dataUrl
+                      );
+                    }
+                    
+                    // chunksが更新されたら即座に反映
+                    if (translateResult.chunks && translateResult.chunks.length > 0 && onTranslationReady) {
+                      onTranslationReady(
+                        {
+                          originalText: translateResult.originalText || '',
+                          translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
+                          marked_text: translateResult.marked_text || '',
+                          japanese_translation: translateResult.japanese_translation || '',
+                          chunks: translateResult.chunks,
+                          teacherComment: translateResult.teacherComment,
+                        },
+                        compressed.dataUrl
+                      );
+                    }
+                  }
+                } catch (e) {
+                  // JSON解析エラーは無視（不完全なデータの可能性）
+                  console.warn('ストリームデータの解析エラー:', e);
+                }
               }
             }
           }
