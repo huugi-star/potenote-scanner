@@ -15,7 +15,7 @@ interface PrepositionGameScreenProps {
   onComplete?: () => void;
 }
 
-export const PrepositionGameScreen = ({ onComplete }: PrepositionGameScreenProps) => {
+export const PrepositionGameScreen = ({ onComplete: _onComplete }: PrepositionGameScreenProps) => {
   const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
