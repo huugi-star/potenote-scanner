@@ -14,7 +14,7 @@ interface NuanceSwipeScreenProps {
   onComplete?: () => void;
 }
 
-export const NuanceSwipeScreen = ({ onComplete }: NuanceSwipeScreenProps) => {
+export const NuanceSwipeScreen = ({ onComplete: _onComplete }: NuanceSwipeScreenProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<'natural' | 'unnatural' | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
