@@ -14,21 +14,21 @@ const TranslationSchema = z.object({
   originalText: z.string().optional(), // 後方互換用
   translatedText: z.string().optional(), // 後方互換用
   // 新しいフィールド（AI出力形式）
-  marked_text: z.string(), // 記号付きの全文
-  japanese_translation: z.string(), // 全文の自然な日本語訳
+  marked_text: z.string().min(1), // 記号付きの全文（必須）
+  japanese_translation: z.string().min(1), // 全文の自然な日本語訳（必須）
   // チャンク（意味の塊）ごとのリスト
   chunks: z.array(z.object({
     // 新しいフィールド（AI出力形式）
-    chunk_text: z.string(), // チャンクのテキスト（記号なしの生テキスト）
-    chunk_translation: z.string(), // その部分だけの直訳
-    role: z.enum(['S', 'V', 'O', 'C', 'M', 'Connect']), // 文の要素（役割）
-    symbol: z.enum(['[]', '<>', '()', 'none']), // 囲む記号 ([名詞], <形容詞>, (副詞))
+    chunk_text: z.string().min(1), // チャンクのテキスト（記号なしの生テキスト、必須）
+    chunk_translation: z.string().min(1), // その部分だけの直訳（必須）
+    role: z.enum(['S', 'V', 'O', 'C', 'M', 'Connect']), // 文の要素（役割、必須）
+    symbol: z.enum(['[]', '<>', '()', 'none']), // 囲む記号 ([名詞], <形容詞>, (副詞)、必須)
     explanation: z.string().optional(), // 解説 (例: "主語")
     // 後方互換用の既存フィールド
     text: z.string().optional(),
     translation: z.string().optional(),
     type: z.enum(['S', 'V', 'O', 'C', 'M', 'Connect']).optional(),
-  })),
+  })).min(1), // chunksは少なくとも1つ必要
   teacherComment: z.string().optional(),
 });
 
@@ -72,19 +72,17 @@ export async function POST(req: Request) {
     console.log("Extracted text:", extractedText.substring(0, 200));
 
     // 2. 構造解析 (OpenAI) - プロンプトを最適化
-    const systemPrompt = `英文をビジュアル英文解釈形式で構造解析してください。
+    const systemPrompt = `You are an expert English teacher. Parse and translate the ENTIRE English text provided into Japanese with visual structure analysis.
 
-【CRITICAL INSTRUCTION: You MUST parse and translate the **ENTIRE** text provided. Do not truncate the output. Do not summarize. Process every single sentence until the end of the input.】
+CRITICAL: You MUST parse and translate EVERY sentence. Do NOT truncate, summarize, or skip any part.
 
-提供されたテキストは必ず【すべて】解析・翻訳すること。途中で止めたり要約したりしないこと。
+【Symbol Rules】
+- [ ]: Noun chunks (S/O/C)
+- ( ): Adjective chunks (modifying nouns)
+- < >: Adverb chunks (modifying verbs)
+- none: Verbs (V) or conjunctions
 
-【記号ルール】
-- [ ]: 名詞の塊（S/O/C）
-- ( ): 形容詞の塊（名詞修飾）
-- < >: 副詞の塊（動詞修飾）
-- none: 動詞(V)や接続詞
-
-【出力形式】JSONのみ出力：
+【Output Format】Output ONLY valid JSON matching this exact structure:
 {
   "marked_text": "[ The news ] ( that he died ) was false.",
   "japanese_translation": "彼が亡くなったという知らせは、誤りだった。",
@@ -95,7 +93,15 @@ export async function POST(req: Request) {
     { "chunk_text": "false", "chunk_translation": "誤り", "role": "C", "symbol": "none", "explanation": "" }
   ],
   "teacherComment": "短いコメント"
-}`;
+}
+
+IMPORTANT: 
+- "marked_text" must contain the FULL text with symbols
+- "japanese_translation" must be the COMPLETE translation
+- "chunks" must be an array with ALL parts of the sentence
+- Each chunk MUST have: chunk_text, chunk_translation, role, symbol
+- role must be one of: S, V, O, C, M, Connect
+- symbol must be one of: [], <>, (), none`;
 
     // テキストが長すぎる場合は切り詰める（2000文字まで）
     const maxTextLength = 2000;
@@ -107,16 +113,43 @@ export async function POST(req: Request) {
     console.log("Translation Start...");
     console.log("Text length:", truncatedText.length);
     
-    const result = await generateObject({
-      model: openai("gpt-4o-mini"),
-      schema: TranslationSchema,
-      prompt: `${systemPrompt}\n\n以下のテキストを構造解析せよ:\n\n${truncatedText}`,
-      temperature: 0.2,
-      maxTokens: 8192, // 長文でも切れないように8192に設定
-    });
+    let result;
+    try {
+      result = await generateObject({
+        model: openai("gpt-4o-mini"),
+        schema: TranslationSchema,
+        prompt: `${systemPrompt}\n\nParse and translate this text:\n\n${truncatedText}`,
+        temperature: 0.2,
+        maxTokens: 8192, // 長文でも切れないように8192に設定
+      });
 
-    console.log("Translation completed");
-    console.log("Result:", JSON.stringify(result.object, null, 2).substring(0, 500));
+      console.log("Translation completed");
+      console.log("Result keys:", Object.keys(result.object));
+      console.log("Has marked_text:", !!result.object.marked_text);
+      console.log("Has japanese_translation:", !!result.object.japanese_translation);
+      console.log("Chunks count:", result.object.chunks?.length || 0);
+      console.log("Result preview:", JSON.stringify(result.object, null, 2).substring(0, 1000));
+    } catch (generateError: any) {
+      console.error("GenerateObject error:", generateError);
+      console.error("Error name:", generateError.name);
+      console.error("Error message:", generateError.message);
+      console.error("Error stack:", generateError.stack);
+      
+      // スキーマエラーの場合、詳細をログに出力
+      if (generateError.message?.includes('schema') || 
+          generateError.message?.includes('match') ||
+          generateError.message?.includes('No object generated') ||
+          generateError.cause) {
+        console.error("Schema validation failed. This usually means the AI output didn't match the expected format.");
+        console.error("The text might be too long or the AI couldn't generate valid JSON.");
+        console.error("Full error:", JSON.stringify(generateError, Object.getOwnPropertyNames(generateError), 2));
+        
+        // より詳細なエラーメッセージを返す
+        const errorDetails = generateError.cause?.message || generateError.message || 'Unknown error';
+        throw new Error(`AI出力がスキーマに一致しませんでした。テキストが長すぎるか、形式が正しくない可能性があります。詳細: ${errorDetails}`);
+      }
+      throw generateError;
+    }
 
     // データの正規化とクリーニング
     const json = result.object;
