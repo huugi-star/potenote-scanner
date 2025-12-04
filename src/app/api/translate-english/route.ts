@@ -100,7 +100,7 @@ export async function POST(req: Request) {
       : extractedText;
 
     // ストリーミングAPIを使用
-    const result = await streamObject({
+    const result = streamObject({
       model: openai("gpt-4o-mini"),
       schema: TranslationSchema,
       prompt: `${systemPrompt}\n\n以下のテキストを構造解析せよ:\n\n${truncatedText}`,
@@ -108,10 +108,28 @@ export async function POST(req: Request) {
       maxTokens: 5000, // 長文でも切れないように5000を維持
     });
 
-    // ストリーミングレスポンスを返す
-    // Vercel AI SDK v4では toDataStreamResponse() を使用
-    // 型エラーが出る場合は、型アサーションを使用
-    return (result as any).toDataStreamResponse() as Response;
+    // ストリーミングレスポンスを手動で作成
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const partialObject of result.partialObjectStream) {
+            const data = JSON.stringify(partialObject);
+            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+          }
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   } catch (error) {
     console.error("Translation API Error:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);

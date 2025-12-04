@@ -196,46 +196,44 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
             buffer = lines.pop() || '';
 
             for (const line of lines) {
-              if (line.startsWith('0:')) {
+              if (line.startsWith('data: ')) {
                 try {
-                  const data = JSON.parse(line.slice(2));
-                  if (data.type === 'object') {
-                    // オブジェクトの更新を受信
-                    translateResult = { ...translateResult, ...data.value };
-                    
-                    // marked_textとjapanese_translationが揃ったら即座に表示
-                    if (translateResult.marked_text && translateResult.japanese_translation && onTranslationReady) {
-                      onTranslationReady(
-                        {
-                          originalText: translateResult.originalText || '',
-                          translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
-                          marked_text: translateResult.marked_text,
-                          japanese_translation: translateResult.japanese_translation,
-                          chunks: translateResult.chunks || [],
-                          teacherComment: translateResult.teacherComment,
-                        },
-                        compressed.dataUrl
-                      );
-                    }
-                    
-                    // chunksが更新されたら即座に反映
-                    if (translateResult.chunks && translateResult.chunks.length > 0 && onTranslationReady) {
-                      onTranslationReady(
-                        {
-                          originalText: translateResult.originalText || '',
-                          translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
-                          marked_text: translateResult.marked_text || '',
-                          japanese_translation: translateResult.japanese_translation || '',
-                          chunks: translateResult.chunks,
-                          teacherComment: translateResult.teacherComment,
-                        },
-                        compressed.dataUrl
-                      );
-                    }
+                  const data = JSON.parse(line.slice(6));
+                  // オブジェクトの更新を受信
+                  translateResult = { ...translateResult, ...data };
+                  
+                  // marked_textとjapanese_translationが揃ったら即座に表示
+                  if (translateResult.marked_text && translateResult.japanese_translation && onTranslationReady) {
+                    onTranslationReady(
+                      {
+                        originalText: translateResult.originalText || '',
+                        translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
+                        marked_text: translateResult.marked_text,
+                        japanese_translation: translateResult.japanese_translation,
+                        chunks: translateResult.chunks || [],
+                        teacherComment: translateResult.teacherComment,
+                      },
+                      compressed.dataUrl
+                    );
+                  }
+                  
+                  // chunksが更新されたら即座に反映
+                  if (translateResult.chunks && translateResult.chunks.length > 0 && onTranslationReady) {
+                    onTranslationReady(
+                      {
+                        originalText: translateResult.originalText || '',
+                        translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
+                        marked_text: translateResult.marked_text || '',
+                        japanese_translation: translateResult.japanese_translation || '',
+                        chunks: translateResult.chunks,
+                        teacherComment: translateResult.teacherComment,
+                      },
+                      compressed.dataUrl
+                    );
                   }
                 } catch (e) {
                   // JSON解析エラーは無視（不完全なデータの可能性）
-                  console.warn('ストリームデータの解析エラー:', e);
+                  console.warn('ストリームデータの解析エラー:', e, line);
                 }
               }
             }
