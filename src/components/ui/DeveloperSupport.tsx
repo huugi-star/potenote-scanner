@@ -10,7 +10,7 @@ import React from 'react';
 // リンク先（後で定数ファイルに移動してもOK）
 // TODO: 実際のnote記事URLとAmazonほしい物リストURLに差し替えてください
 const NOTE_URL = "https://note.com/aoi_potenote/n/n4b5b56006637; // ここにnote記事のURLを入れる
-const AMAZON_URL = "https://www.amazon.jp/hz/wishlist/ls/YOUR_LIST_ID"; // ここにほしい物リストのURLを入れる
+const AMAZON_URL = "https://www.amazon.jp/hz/wishlist/ls/216AXTCIGKTMN?ref_=wl_share"; // ここにほしい物リストのURLを入れる
 
 export const DeveloperSupport = () => {
   return (
