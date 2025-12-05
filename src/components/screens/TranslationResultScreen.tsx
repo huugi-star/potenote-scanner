@@ -983,16 +983,59 @@ const SentenceCard = memo(({
         <div className="mb-3">
           <h3 className="text-sm font-bold text-yellow-400 mb-2">重要語句</h3>
           <div className="bg-gray-50/10 rounded-lg p-3 space-y-2">
-            {sentence.vocab_list.map((vocab: any, vocabIndex: number) => (
-              <div key={`vocab-${vocabIndex}-${vocab.word || vocabIndex}`} className="flex items-start gap-2">
-                <span className="text-yellow-300 font-bold text-sm min-w-[120px]">
-                  {vocab.word || ''}
-                </span>
-                <span className="text-gray-300 text-sm">
-                  {vocab.meaning || ''}
-                </span>
-              </div>
-            ))}
+            {sentence.vocab_list.map((vocab: any, vocabIndex: number) => {
+              // イディオムデータベース（説明のみ）
+              const idiomDatabase: Record<string, string> = {
+                'break the ice': '緊張した雰囲気を和らげることを意味します。',
+                'hit the nail on the head': '物事の核心を正確に捉えることを表します。',
+                'once in a blue moon': '非常に稀な出来事を表します。',
+                'the ball is in your court': '次の行動は相手次第という意味です。',
+                'bite the bullet': '困難に耐えることを意味します。',
+                'piece of cake': 'とても簡単なことを表します。',
+                'under the weather': '体調が悪いことを意味します。',
+                'spill the beans': '秘密を漏らすことを意味します。',
+                'cost an arm and a leg': '非常に高価であることを表します。',
+                'break a leg': '頑張って（幸運を祈る）という意味です。',
+                'let the cat out of the bag': '秘密を漏らすことを意味します。',
+                'kill two birds with one stone': '一つの行動で二つの目的を達成することを表します。',
+                'the last straw': '我慢の限界を表します。',
+                'when pigs fly': '絶対に起こらないことを表します。',
+                'raining cats and dogs': '土砂降りを意味します。',
+                'keep up with': '同じペースで進む、遅れを取らないという意味。',
+                'take advantage of': '機会や状況を上手く利用することを表します。',
+                'come up with': 'アイデアや解決策を考え出すことを意味します。',
+                'look forward to': '将来の出来事を楽しみに待つことを表します。',
+                'get along with': '人と友好的な関係を築くことを意味します。',
+                'deal with': '問題や状況に対応することを表します。',
+                'put up with': '不快な状況や人を耐え忍ぶことを意味します。',
+                'run out of': '在庫や時間などが尽きることを表します。',
+                'give up': '努力をやめる、断念することを意味します。',
+                'look after': '人や物の面倒を見ることを表します。',
+              };
+              
+              const vocabWord = (vocab.word || '').toLowerCase().trim();
+              const isIdiom = idiomDatabase[vocabWord] !== undefined;
+              const idiomExplanation = isIdiom ? idiomDatabase[vocabWord] : null;
+              
+              return (
+                <div key={`vocab-${vocabIndex}-${vocab.word || vocabIndex}`} className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-yellow-300 font-bold text-sm min-w-[120px]">
+                      {vocab.word || ''}
+                    </span>
+                    <span className="text-gray-300 text-sm flex-1">
+                      {vocab.meaning || ''}
+                    </span>
+                  </div>
+                  {/* イディオムの説明 */}
+                  {isIdiom && idiomExplanation && (
+                    <div className="ml-[124px] mt-1 p-2 bg-purple-900/20 rounded-lg border border-purple-700/50">
+                      <p className="text-purple-200 text-xs">💡 {idiomExplanation}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
