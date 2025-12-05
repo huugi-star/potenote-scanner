@@ -549,6 +549,27 @@ export const TranslationResultScreen = ({
             </motion.button>
           )}
           
+          {/* この英文で問題生成するボタン（英文解釈モード用） */}
+          {result.sentences && result.sentences.length > 0 && onStartQuiz !== undefined && (
+            <motion.button
+              onClick={() => {
+                vibrateLight();
+                if (onStartQuiz) {
+                  onStartQuiz();
+                }
+              }}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <span className="text-xl">📚</span>
+              この英文で問題生成する
+            </motion.button>
+          )}
+          
           <motion.button
             onClick={() => {
               vibrateLight();

@@ -54,7 +54,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const [showAdsModal, setShowAdsModal] = useState(false);
   const [showASPSalesModal, setShowASPSalesModal] = useState(false);
   const [aspAdRecommendation, setAspAdRecommendation] = useState<{ ad_id: string; reason: string } | null>(null);
-  const [currentVocab, setCurrentVocab] = useState<{ word: string; meaning: string; options: string[]; correctIndex: number } | null>(null);
+  const [currentVocab, setCurrentVocab] = useState<{ word: string; meaning: string; options: string[]; correctIndex: number; origin?: string; explanation?: string; isIdiom?: boolean } | null>(null);
   const [selectedVocabAnswer, setSelectedVocabAnswer] = useState<number | null>(null);
   const [loadProgress, setLoadProgress] = useState(0);
   const [showPrepositionGame, setShowPrepositionGame] = useState(false);
@@ -136,16 +136,123 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
     // 一般的な重要語句と選択肢を生成
     const generateVocabQuestion = () => {
       const vocabList = [
-        { word: 'keep up with', meaning: '～に追いつく' },
-        { word: 'take advantage of', meaning: '～を利用する' },
-        { word: 'come up with', meaning: '～を思いつく' },
-        { word: 'look forward to', meaning: '～を楽しみにする' },
-        { word: 'get along with', meaning: '～と仲良くする' },
-        { word: 'deal with', meaning: '～に対処する' },
-        { word: 'put up with', meaning: '～を我慢する' },
-        { word: 'run out of', meaning: '～を使い果たす' },
-        { word: 'give up', meaning: '～を諦める' },
-        { word: 'look after', meaning: '～の世話をする' },
+        // 句動詞（Phrasal Verbs）
+        { word: 'keep up with', meaning: '～に追いつく', isIdiom: false },
+        { word: 'take advantage of', meaning: '～を利用する', isIdiom: false },
+        { word: 'come up with', meaning: '～を思いつく', isIdiom: false },
+        { word: 'look forward to', meaning: '～を楽しみにする', isIdiom: false },
+        { word: 'get along with', meaning: '～と仲良くする', isIdiom: false },
+        { word: 'deal with', meaning: '～に対処する', isIdiom: false },
+        { word: 'put up with', meaning: '～を我慢する', isIdiom: false },
+        { word: 'run out of', meaning: '～を使い果たす', isIdiom: false },
+        { word: 'give up', meaning: '～を諦める', isIdiom: false },
+        { word: 'look after', meaning: '～の世話をする', isIdiom: false },
+        // イディオム（Idioms）
+        { 
+          word: 'break the ice', 
+          meaning: '場の雰囲気を和らげる',
+          origin: '氷を割る',
+          explanation: '船が氷を割って進むように、緊張した雰囲気を和らげることを意味します。',
+          isIdiom: true 
+        },
+        { 
+          word: 'hit the nail on the head', 
+          meaning: '的確に言い当てる',
+          origin: '釘の頭を正確に打つ',
+          explanation: '大工が釘を正確に打つように、物事の核心を正確に捉えることを表します。',
+          isIdiom: true 
+        },
+        { 
+          word: 'once in a blue moon', 
+          meaning: 'めったにない',
+          origin: '青い月に一度',
+          explanation: '「ブルームーン」（月が2回満月になる珍しい現象）のように、非常に稀な出来事を表します。',
+          isIdiom: true 
+        },
+        { 
+          word: 'the ball is in your court', 
+          meaning: 'あなた次第だ',
+          origin: 'ボールはあなたのコートにある',
+          explanation: 'テニスでボールが相手のコートにあるように、次の行動は相手次第という意味です。',
+          isIdiom: true 
+        },
+        { 
+          word: 'bite the bullet', 
+          meaning: '困難に耐える',
+          origin: '弾丸を噛む',
+          explanation: '麻酔がない時代、手術中に痛みを我慢するために弾丸を噛んだことから。',
+          isIdiom: true 
+        },
+        { 
+          word: 'piece of cake', 
+          meaning: 'とても簡単なこと',
+          origin: 'ケーキ一切れ',
+          explanation: 'ケーキを食べるように簡単だという意味から。',
+          isIdiom: true 
+        },
+        { 
+          word: 'under the weather', 
+          meaning: '体調が悪い',
+          origin: '天候の下',
+          explanation: '船乗りが悪天候で体調を崩したことから。',
+          isIdiom: true 
+        },
+        { 
+          word: 'spill the beans', 
+          meaning: '秘密を漏らす',
+          origin: '豆をこぼす',
+          explanation: '古代ギリシャで投票に豆を使い、誤って豆をこぼして秘密が漏れたことから。',
+          isIdiom: true 
+        },
+        { 
+          word: 'cost an arm and a leg', 
+          meaning: '非常に高価だ',
+          origin: '腕と脚がかかる',
+          explanation: '非常に高価で、まるで体の一部を失うような代償を表します。',
+          isIdiom: true 
+        },
+        { 
+          word: 'break a leg', 
+          meaning: '頑張って（幸運を祈る）',
+          origin: '脚を折る',
+          explanation: '演劇界で「幸運を祈る」と言うと不運になるとされ、逆の意味で使われます。',
+          isIdiom: true 
+        },
+        { 
+          word: 'let the cat out of the bag', 
+          meaning: '秘密を漏らす',
+          origin: '袋から猫を出す',
+          explanation: '昔、市場で豚の代わりに猫を袋に入れて売る詐欺があり、袋を開けると猫が出て秘密がバレたことから。',
+          isIdiom: true 
+        },
+        { 
+          word: 'kill two birds with one stone', 
+          meaning: '一石二鳥',
+          origin: '一つの石で二羽の鳥を殺す',
+          explanation: '一つの行動で二つの目的を達成することを表します。',
+          isIdiom: true 
+        },
+        { 
+          word: 'the last straw', 
+          meaning: '我慢の限界',
+          origin: '最後の藁',
+          explanation: '「ラクダの背骨を折る最後の藁」から。小さなことでも積み重なると限界に達することを表します。',
+          isIdiom: true 
+        },
+        { 
+          word: 'when pigs fly', 
+          meaning: 'ありえない（絶対にない）',
+          origin: '豚が飛ぶとき',
+          explanation: '豚が空を飛ぶことは不可能なことから、絶対に起こらないことを表します。',
+          isIdiom: true 
+        },
+        { 
+          word: 'raining cats and dogs', 
+          meaning: '土砂降り',
+          origin: '猫と犬が降る',
+          explanation: '17世紀のイギリスで、激しい雨の音が猫や犬の鳴き声に似ていたことから。',
+          isIdiom: true 
+        },
       ];
 
       const wrongMeanings = [
@@ -168,6 +275,9 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         meaning: randomVocab.meaning,
         options,
         correctIndex,
+        origin: randomVocab.origin,
+        explanation: randomVocab.explanation,
+        isIdiom: randomVocab.isIdiom,
       };
     };
     
@@ -690,8 +800,24 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                   exit={{ opacity: 0, y: -10 }}
                   className="mt-6 p-4 bg-gray-800/50 rounded-xl border border-gray-700 max-w-md mx-auto"
                 >
-                  <p className="text-gray-400 text-xs mb-3 text-center">過去に学んだ重要語句</p>
+                  <p className="text-gray-400 text-xs mb-3 text-center">
+                    {currentVocab.isIdiom ? 'イディオム' : '過去に学んだ重要語句'}
+                  </p>
                   <p className="text-white font-bold text-lg mb-4 text-center">{currentVocab.word}</p>
+                  
+                  {/* イディオムの由来と説明（回答前にも表示） */}
+                  {currentVocab.isIdiom && currentVocab.origin && (
+                    <div className="mb-4 p-3 bg-purple-900/20 rounded-lg border border-purple-700/50">
+                      <p className="text-purple-300 text-xs font-semibold mb-1">💡 由来</p>
+                      <p className="text-purple-200 text-sm mb-2">{currentVocab.origin}</p>
+                      {currentVocab.explanation && (
+                        <>
+                          <p className="text-purple-300 text-xs font-semibold mb-1">📖 意味</p>
+                          <p className="text-purple-200 text-sm">{currentVocab.explanation}</p>
+                        </>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="space-y-2">
                     {currentVocab.options.map((option, index) => {
