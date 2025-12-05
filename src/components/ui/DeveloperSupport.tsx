@@ -56,7 +56,7 @@ export const DeveloperSupport = () => {
             <span>🎁 Amazonで差し入れする</span>
           </a>
           <p className="text-[10px] text-gray-400 mt-1.5">
-            ※ 匿名で送れる設定になっています
+            ※ 匿名で送れる設定になっています。コーヒー1杯分でもその気持ちが嬉しいです。
           </p>
         </div>
 
