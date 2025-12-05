@@ -7,9 +7,11 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Flag, X, BookOpen } from 'lucide-react';
+import { ChevronLeft, Flag, X, BookOpen, Share2 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { MapVisualizer } from '@/components/ui/MapVisualizer';
+import { ShareModal } from '@/components/ui/ShareModal';
+import { vibrateLight } from '@/lib/haptics';
 import type { Flag as FlagType } from '@/types';
 
 // ===== Types =====
@@ -22,6 +24,7 @@ interface MapScreenProps {
 
 export const MapScreen = ({ onBack }: MapScreenProps) => {
   const [selectedFlag, setSelectedFlag] = useState<FlagType | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Store
   const journey = useGameStore(state => state.journey);
@@ -49,7 +52,16 @@ export const MapScreen = ({ onBack }: MapScreenProps) => {
             学習マップ
           </h1>
 
-          <div className="w-16" />
+          <button
+            onClick={() => {
+              vibrateLight();
+              setShowShareModal(true);
+            }}
+            className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+            title="シェア"
+          >
+            <Share2 className="w-5 h-5" />
+          </button>
         </div>
 
         {/* 統計 */}
@@ -192,6 +204,12 @@ export const MapScreen = ({ onBack }: MapScreenProps) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* シェアモーダル */}
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+      />
     </div>
   );
 };

@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Languages } from 'lucide-react';
+import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Languages, Share2 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 import { auth } from '@/lib/firebase';
@@ -34,6 +34,7 @@ import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AuthButton } from '@/components/ui/AuthButton';
 import { OnboardingOverlay } from '@/components/ui/OnboardingOverlay';
+import { ShareModal } from '@/components/ui/ShareModal';
 
 import { vibrateLight } from '@/lib/haptics';
 
@@ -142,8 +143,20 @@ const HomeScreen = ({
               </div>
             )}
           </div>
-          {/* 右上: Googleログインボタン */}
-          <AuthButton />
+          {/* 右上: シェアボタンとGoogleログインボタン */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                vibrateLight();
+                setShowShareModal(true);
+              }}
+              className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+              title="シェア"
+            >
+              <Share2 className="w-5 h-5" />
+            </button>
+            <AuthButton />
+          </div>
           {/* <button
             onClick={() => {
               vibrateLight();
@@ -522,6 +535,7 @@ const AppContent = () => {
   const [showLoginBonus, setShowLoginBonus] = useState(false);
   const [loginBonusData, setLoginBonusData] = useState({ coins: 0, days: 1 });
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Store
   const isVIP = useGameStore(state => state.isVIP);
@@ -892,6 +906,12 @@ const AppContent = () => {
           <OnboardingOverlay onDismiss={handleDismissOnboarding} />
         )}
       </AnimatePresence>
+
+      {/* シェアモーダル */}
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+      />
     </main>
   );
 };
