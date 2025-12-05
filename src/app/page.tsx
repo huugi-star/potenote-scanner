@@ -35,6 +35,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { AuthButton } from '@/components/ui/AuthButton';
 import { OnboardingOverlay } from '@/components/ui/OnboardingOverlay';
 import { ShareModal } from '@/components/ui/ShareModal';
+import { DeveloperSupport } from '@/components/ui/DeveloperSupport';
 
 import { vibrateLight } from '@/lib/haptics';
 
@@ -330,6 +331,9 @@ const HomeScreen = ({
             </span>
           </motion.button>
         )}
+
+        {/* 開発者支援セクション */}
+        <DeveloperSupport />
       </div>
 
       {/* ショップモーダル（一時的に非表示） */}

@@ -13,6 +13,7 @@ import { useGameStore } from '@/store/useGameStore';
 import type { TranslationResult, TranslationHistory } from '@/types';
 import { GRAMMAR_TYPES, ELEMENT_TYPES } from '@/consts/grammarDefinitions';
 import { SyntaxLegend } from '@/components/SyntaxLegend';
+import { DeveloperSupport } from '@/components/ui/DeveloperSupport';
 
 // ===== Types =====
 
@@ -624,6 +625,9 @@ export const TranslationResultScreen = ({
             </div>
           </motion.div>
         )}
+
+        {/* 開発者支援セクション */}
+        <DeveloperSupport />
       </div>
     </div>
   );
