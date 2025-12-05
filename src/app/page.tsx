@@ -97,8 +97,10 @@ const TranslationResultScreenWrapper = ({ onBack, onStartQuiz }: { onBack: () =>
  */
 const HomeScreen = ({
   onNavigate,
+  onShowShare,
 }: {
   onNavigate: (phase: GamePhase) => void;
+  onShowShare: () => void;
 }) => {
   const coins = useGameStore(state => state.coins);
   const isVIP = useGameStore(state => state.isVIP);
@@ -148,7 +150,7 @@ const HomeScreen = ({
             <button
               onClick={() => {
                 vibrateLight();
-                setShowShareModal(true);
+                onShowShare();
               }}
               className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
               title="シェア"
@@ -734,7 +736,10 @@ const AppContent = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <HomeScreen onNavigate={handleNavigate} />
+            <HomeScreen 
+              onNavigate={handleNavigate} 
+              onShowShare={() => setShowShareModal(true)}
+            />
           </motion.div>
         )}
 
