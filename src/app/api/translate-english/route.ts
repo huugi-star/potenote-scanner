@@ -441,15 +441,27 @@ Output:
 CRITICAL REQUIREMENTS:
 1. EXACT TEXT MATCH (最高優先度): The output marked_text MUST contain EVERY SINGLE WORD from the input text. Count words: input word count = output word count. If any word is missing, the output is INVALID.
    - Before finalizing, verify: Extract all words from input (split by spaces), extract all words from marked_text (remove tags), compare counts - they MUST be equal.
-2. Follow the 4 Case Studies above STRICTLY. Use their logic and structure as templates.
-3. marked_text must be ORIGINAL ENGLISH TEXT. Process ALL sentences.
-4. Apply the same patterns from Case Studies to similar structures:
+2. SYMBOL RULE FOR M (修飾語) - ABSOLUTELY CRITICAL:
+   - If role is M (修飾語), you MUST use < > brackets. NEVER use [ ] brackets for M.
+   - Check EVERY tag: If you see <{M...}>, the text BEFORE it MUST be wrapped in < >, NOT [ ].
+   - Before outputting, scan for [text]<{M...}> patterns and convert them to <text><{M...}>
+   - Examples of CORRECT usage:
+     * <quickly><{M}> ✓
+     * <often><{M}> ✓
+     * <because it rained><{M}> ✓
+   - Examples of INCORRECT usage (DO NOT DO THIS):
+     * [quickly]<{M}> ✗
+     * [often]<{M}> ✗
+     * [because it rained]<{M}> ✗
+3. Follow the 4 Case Studies above STRICTLY. Use their logic and structure as templates.
+4. marked_text must be ORIGINAL ENGLISH TEXT. Process ALL sentences.
+5. Apply the same patterns from Case Studies to similar structures:
    - Compound verbs (begin to, continue to, learn to) = ONE verb (like Case 1)
    - Wh-clauses with OSV = separate O' and S' (like Case 2)
    - SVOC structures = separate O and C (like Case 3)
    - Be verb + adjective = separate V and C (like Case 4)
-5. For coordinating conjunctions (and, but, or, so) followed by new subject + verb, split at previous verb and tag conjunction as Conn.
-6. For phrasal verbs with "off" (stay off, keep off), translate with negative nuance ("stay away from", "not enter").
+6. For coordinating conjunctions (and, but, or, so) followed by new subject + verb, split at previous verb and tag conjunction as Conn.
+7. For phrasal verbs with "off" (stay off, keep off), translate with negative nuance ("stay away from", "not enter").
 
 GRAMMAR NOTE GENERATION:
 When a subordinate clause (that/wh/if/because clause) appears, explain its INTERNAL structure:
@@ -530,6 +542,37 @@ VALIDATION CHECKLIST (before outputting):
 
       // バリデーション
       const validatedResult = TranslationSchema.parse(parsedResult);
+
+      // 記号の正規化: M（修飾語）が[]で囲まれている場合は<>に変換
+      const normalizeMarkedText = (text: string): string => {
+        if (!text) return text;
+        
+        // [text]<{M...}> のパターンを <text><{M...}> に変換
+        // ネストしたカッコにも対応するため、より柔軟な正規表現を使用
+        // パターン1: [text]<{M...}> → <text><{M...}>
+        let normalized = text.replace(/\[([^\]]+)\]<\{M([^}]*)\}>/g, '<$1><{M$2}>');
+        
+        // パターン2: [text]<{M:...}> → <text><{M:...}>
+        normalized = normalized.replace(/\[([^\]]+)\]<\{M:([^}]*)\}>/g, '<$1><{M:$2}>');
+        
+        // パターン3: [text]<{M:...:...}> → <text><{M:...:...}>
+        normalized = normalized.replace(/\[([^\]]+)\]<\{M:([^}]*):([^}]*)\}>/g, '<$1><{M:$2:$3}>');
+        
+        return normalized;
+      };
+
+      // 各文のmarked_textを正規化
+      if (validatedResult.sentences) {
+        validatedResult.sentences = validatedResult.sentences.map(sentence => ({
+          ...sentence,
+          marked_text: normalizeMarkedText(sentence.marked_text),
+          // sub_structuresのanalyzed_textも正規化
+          sub_structures: sentence.sub_structures?.map(sub => ({
+            ...sub,
+            analyzed_text: normalizeMarkedText(sub.analyzed_text || '')
+          }))
+        }));
+      }
 
       return NextResponse.json(validatedResult);
     } catch (generateError: any) {

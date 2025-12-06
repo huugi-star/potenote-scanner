@@ -1,7 +1,6 @@
 /**
  * TranslationResultScreen.tsx
- * 
- * 翻訳結果画面
+ * * 翻訳結果画面
  * 原文と翻訳文を見やすく表示する
  */
 
@@ -309,15 +308,25 @@ export const TranslationResultScreen = ({
                   
                   // 記号タイプの判定とGRAMMAR_TYPESの取得
                   let grammarType: keyof typeof GRAMMAR_TYPES | null = null;
-                  if (chunk.symbol === '[]') grammarType = 'noun_clause';
-                  else if (chunk.symbol === '()') grammarType = 'adj_clause';
-                  else if (chunk.symbol === '<>') grammarType = 'adv_clause';
+                  
+                  // ★修正点: M（修飾語）の場合は、記号が何であれ（あるいは無くても） <> として扱う優先度を高くする
+                  const isModifier = role === 'M';
+
+                  if (chunk.symbol === '()') grammarType = 'adj_clause'; // () は形容詞節として優先
+                  else if (isModifier || chunk.symbol === '<>') grammarType = 'adv_clause'; // M または <> なら副詞的修飾(<>)
+                  else if (chunk.symbol === '[]') grammarType = 'noun_clause'; // その他の [] は名詞節
                   else if (role === 'V') grammarType = 'verb_phrase';
                   
                   const grammarInfo = grammarType ? GRAMMAR_TYPES[grammarType] : null;
                   
                   // 記号付きテキストの生成
                   const getSymbolDisplay = () => {
+                    // grammarTypeに基づいて統一された記号を返す
+                    if (grammarType === 'noun_clause') return `[ ${chunkText} ]`;
+                    if (grammarType === 'adv_clause') return `< ${chunkText} >`;
+                    if (grammarType === 'adj_clause') return `( ${chunkText} )`;
+                    
+                    // フォールバック
                     if (chunk.symbol === '[]') return `[ ${chunkText} ]`;
                     if (chunk.symbol === '<>') return `< ${chunkText} >`;
                     if (chunk.symbol === '()') return `( ${chunkText} )`;
@@ -430,11 +439,13 @@ export const TranslationResultScreen = ({
             const chunkTranslation = chunk.chunk_translation || chunk.translation || '';
             const elementInfo = ELEMENT_TYPES[role as keyof typeof ELEMENT_TYPES];
             
-            // 記号タイプの判定
+            // 記号タイプの判定（ポップアップ内でも統一ロジックを適用）
             let grammarType: keyof typeof GRAMMAR_TYPES | null = null;
-            if (chunk.symbol === '[]') grammarType = 'noun_clause';
-            else if (chunk.symbol === '()') grammarType = 'adj_clause';
-            else if (chunk.symbol === '<>') grammarType = 'adv_clause';
+            const isModifier = role === 'M';
+
+            if (chunk.symbol === '()') grammarType = 'adj_clause';
+            else if (isModifier || chunk.symbol === '<>') grammarType = 'adv_clause'; // Mは <> に統一
+            else if (chunk.symbol === '[]') grammarType = 'noun_clause';
             else if (role === 'V') grammarType = 'verb_phrase';
             
             const grammarInfo = grammarType ? GRAMMAR_TYPES[grammarType] : null;
@@ -476,10 +487,11 @@ export const TranslationResultScreen = ({
                     <div className="mb-4">
                       <p className="text-gray-400 text-xs mb-2">英語の塊</p>
                       <p className="text-white font-mono text-xl font-bold">
-                        {chunk.symbol === '[]' && `[ ${chunkText} ]`}
-                        {chunk.symbol === '<>' && `< ${chunkText} >`}
-                        {chunk.symbol === '()' && `( ${chunkText} )`}
-                        {chunk.symbol === 'none' && chunkText}
+                        {/* 統一ロジックに基づいて表示 */}
+                        {grammarType === 'noun_clause' && `[ ${chunkText} ]`}
+                        {grammarType === 'adv_clause' && `< ${chunkText} >`}
+                        {grammarType === 'adj_clause' && `( ${chunkText} )`}
+                        {!grammarType && chunkText}
                       </p>
                     </div>
                     <div className="mb-4">
@@ -740,18 +752,20 @@ const TranslationHistoryItem = ({ history, onDelete }: TranslationHistoryItemPro
                       
                       // 記号タイプの判定とGRAMMAR_TYPESの取得
                       let grammarType: keyof typeof GRAMMAR_TYPES | null = null;
-                      if (chunk.symbol === '[]') grammarType = 'noun_clause';
-                      else if (chunk.symbol === '()') grammarType = 'adj_clause';
-                      else if (chunk.symbol === '<>') grammarType = 'adv_clause';
+                      const isModifier = role === 'M';
+
+                      if (chunk.symbol === '()') grammarType = 'adj_clause';
+                      else if (isModifier || chunk.symbol === '<>') grammarType = 'adv_clause';
+                      else if (chunk.symbol === '[]') grammarType = 'noun_clause';
                       else if (role === 'V') grammarType = 'verb_phrase';
                       
                       const grammarInfo = grammarType ? GRAMMAR_TYPES[grammarType] : null;
                       
-                      // 記号付きテキストの生成
+                      // 記号付きテキストの生成（統一ロジック）
                       const getSymbolDisplay = () => {
-                        if (chunk.symbol === '[]') return `[ ${chunkText} ]`;
-                        if (chunk.symbol === '<>') return `< ${chunkText} >`;
-                        if (chunk.symbol === '()') return `( ${chunkText} )`;
+                        if (grammarType === 'noun_clause') return `[ ${chunkText} ]`;
+                        if (grammarType === 'adv_clause') return `< ${chunkText} >`;
+                        if (grammarType === 'adj_clause') return `( ${chunkText} )`;
                         return chunkText;
                       };
                       
@@ -982,25 +996,13 @@ const SentenceCard = memo(({
         <ZoomInAccordion subStructures={sentence.sub_structures} />
       )}
 
-      {/* 英文構造の詳しい説明（アコーディオン） */}
-      {sentence.structure_explanations && sentence.structure_explanations.length > 0 && (
-        <StructureExplanationsAccordion explanations={sentence.structure_explanations} />
-      )}
-
       {/* 下段：語句・熟語リスト */}
       {sentence.vocab_list && sentence.vocab_list.length > 0 && (
         <div className="mb-3">
           <h3 className="text-sm font-bold text-yellow-400 mb-2">重要語句</h3>
           <div className="bg-gray-50/10 rounded-lg p-3 space-y-2">
             {sentence.vocab_list.map((vocab: any, vocabIndex: number) => {
-              // APIから返されたイディオム情報を優先使用、なければデータベースを参照
-              const vocabWord = (vocab.word || '').toLowerCase().trim();
-              
-              // APIから返された説明がある場合はそれを使用
-              const apiExplanation = vocab.explanation || null;
-              const apiIsIdiom = vocab.isIdiom === true;
-              
-              // フォールバック用のイディオムデータベース（説明のみ）
+              // イディオムデータベース（説明のみ）
               const idiomDatabase: Record<string, string> = {
                 'break the ice': '緊張した雰囲気を和らげることを意味します。',
                 'hit the nail on the head': '物事の核心を正確に捉えることを表します。',
@@ -1029,9 +1031,9 @@ const SentenceCard = memo(({
                 'look after': '人や物の面倒を見ることを表します。',
               };
               
-              // APIから説明がある場合はそれを使用、なければデータベースを参照
-              const isIdiom = apiIsIdiom || idiomDatabase[vocabWord] !== undefined;
-              const idiomExplanation = apiExplanation || (idiomDatabase[vocabWord] || null);
+              const vocabWord = (vocab.word || '').toLowerCase().trim();
+              const isIdiom = idiomDatabase[vocabWord] !== undefined;
+              const idiomExplanation = isIdiom ? idiomDatabase[vocabWord] : null;
               
               return (
                 <div key={`vocab-${vocabIndex}-${vocab.word || vocabIndex}`} className="space-y-2">
@@ -1243,84 +1245,4 @@ const ZoomInAccordion = memo(({ subStructures }: { subStructures: Array<{ target
 
 ZoomInAccordion.displayName = 'ZoomInAccordion';
 
-/**
- * StructureExplanationsAccordion - 英文構造の詳しい説明アコーディオンコンポーネント
- */
-const StructureExplanationsAccordion = memo(({ explanations }: { explanations: Array<{ target_text: string; explanation: string; difficulty_level?: 'easy' | 'medium' | 'hard' }> }) => {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
-
-  const getDifficultyColor = (level?: 'easy' | 'medium' | 'hard') => {
-    switch (level) {
-      case 'easy': return 'text-green-400';
-      case 'medium': return 'text-yellow-400';
-      case 'hard': return 'text-red-400';
-      default: return 'text-gray-400';
-    }
-  };
-
-  const getDifficultyLabel = (level?: 'easy' | 'medium' | 'hard') => {
-    switch (level) {
-      case 'easy': return '初級';
-      case 'medium': return '中級';
-      case 'hard': return '上級';
-      default: return '';
-    }
-  };
-
-  return (
-    <div className="mb-4 space-y-2">
-      {explanations.map((explanation, index) => {
-        const isOpen = openIndex === index;
-        return (
-          <div key={`explanation-${index}-${explanation.target_text.substring(0, 20)}`}>
-            <button
-              onClick={() => setOpenIndex(isOpen ? null : index)}
-              className="w-full flex items-center justify-between p-3 bg-purple-900/20 hover:bg-purple-900/30 rounded-lg border border-purple-700/30 transition-colors"
-            >
-              <div className="flex items-center gap-2 flex-1 text-left">
-                <span className="text-sm">💡</span>
-                <span className="text-sm font-bold text-purple-300 flex-1">
-                  構造解説: <span className="font-mono text-xs">{explanation.target_text}</span>
-                </span>
-                {explanation.difficulty_level && (
-                  <span className={`text-xs font-medium ${getDifficultyColor(explanation.difficulty_level)}`}>
-                    [{getDifficultyLabel(explanation.difficulty_level)}]
-                  </span>
-                )}
-              </div>
-              <motion.div
-                animate={{ rotate: isOpen ? 180 : 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <ChevronDown className="w-5 h-5 text-purple-300" />
-              </motion.div>
-            </button>
-            
-            <AnimatePresence>
-              {isOpen && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="overflow-hidden"
-                >
-                  <div className="bg-purple-50/10 rounded-lg p-4 border border-purple-700/30 mt-2">
-                    <p className="text-purple-200 text-sm leading-relaxed whitespace-pre-wrap">
-                      {explanation.explanation}
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        );
-      })}
-    </div>
-  );
-});
-
-StructureExplanationsAccordion.displayName = 'StructureExplanationsAccordion';
-
 export default TranslationResultScreen;
-
