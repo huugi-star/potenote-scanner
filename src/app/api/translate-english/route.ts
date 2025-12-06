@@ -160,6 +160,11 @@ Output:
     "translation": "誰も、地球がどれだけの人を支えられるか知らない。",
     "vocab_list": [{"word": "support", "meaning": "支える"}],
     "grammar_note": "how many節全体がknowsの目的語(O)になっています。中身を見ると、『how many people』が目的語(O')、『the earth』が主語(S')、『can support』が動詞(V')という構造です。",
+    "structure_explanations": [{
+      "target_text": "how many people the earth can support",
+      "explanation": "これはwh節（how many節）で、文全体では目的語(O)の役割を果たしています。名詞節の一種です。中身を見ると、'how many people'が目的語(O')、'the earth'が主語(S')、'can support'が動詞(V')という構造になっています。語順が通常と異なる倒置構造なので、初学者には難しい部分です。",
+      "difficulty_level": "hard"
+    }],
     "sub_structures": [{
       "target_chunk": "how many people the earth can support",
       "analyzed_text": "how many [people]<{O':_:どれだけの人を}> [the earth]<{S':_:地球が}> can support<{V':_:支えられるか}>"
@@ -243,6 +248,44 @@ Output:
   }]
 }
 
+EXAMPLE with noun clause (名詞節 - structure_explanations必須):
+Input: "Scientists believe that the world will soon be overpopulated."
+Output:
+{
+  "sentences": [{
+    "marked_text": "[Scientists]<{S:_:科学者たちは}> believe<{V:_:信じている}> [that the world will soon be overpopulated]<{O:接続詞that(名詞節):世界がすぐに過密になるということを}>.",
+    "translation": "科学者たちは、世界がすぐに過密になるということを信じている。",
+    "vocab_list": [{"word": "overpopulated", "meaning": "過密な"}],
+    "grammar_note": "believeの後ろにthat節が続いています。このthat節は名詞節で、目的語(O)の役割を果たしています。",
+    "structure_explanations": [{
+      "target_text": "that the world will soon be overpopulated",
+      "explanation": "これは接続詞thatで始まる名詞節です。文全体では目的語(O)の役割を果たしています。中身を見ると、'the world'が主語(S')、'will soon be'が動詞(V')、'overpopulated'が補語(C')という構造になっています。名詞節は、文の中で名詞と同じように使われる節で、主語・目的語・補語になることができます。",
+      "difficulty_level": "medium"
+    }],
+    "sub_structures": [{
+      "target_chunk": "that the world will soon be overpopulated",
+      "analyzed_text": "that [the world]<{S':_:世界が}> will soon be<{V':_:すぐに～になる}> [overpopulated]<{C':_:過密な}>"
+    }]
+  }]
+}
+
+EXAMPLE with long sentence (長文 - structure_explanations推奨):
+Input: "If the population continues to grow at its present rate, the world will face problems."
+Output:
+{
+  "sentences": [{
+    "marked_text": "<If the population continues to grow at its present rate><{M:接続詞if:もし人口が現在のペースで増え続けるなら}> , [the world]<{S:_:世界は}> will face<{V:_:直面するだろう}> [problems]<{O:_:問題に}>.",
+    "translation": "もし人口が現在のペースで増え続けるなら、世界は問題に直面するだろう。",
+    "vocab_list": [{"word": "at its present rate", "meaning": "現在のペースで"}],
+    "grammar_note": "ifで始まる副詞節が文頭に来ています。この節は条件を表し、文全体では修飾語(M)の役割を果たしています。",
+    "structure_explanations": [{
+      "target_text": "If the population continues to grow at its present rate",
+      "explanation": "これは接続詞ifで始まる副詞節で、文全体では修飾語(M)の役割を果たしています。'if'は「もし～なら」という意味で、条件を表します。この節の中では、'the population'が主語(S')、'continues to grow'が動詞(V')、'at its present rate'が修飾語(M')という構造になっています。長い文なので、節の構造を理解することが重要です。",
+      "difficulty_level": "medium"
+    }]
+  }]
+}
+
 EXAMPLE with be verb + participle adjective (Rule 8 - SVC separation):
 Input: "Scientists believe that the world will soon be overpopulated."
 Output:
@@ -252,6 +295,11 @@ Output:
     "translation": "科学者たちは、世界がすぐに過密になると信じている。",
     "vocab_list": [{"word": "overpopulated", "meaning": "過密な"}],
     "grammar_note": "that節全体がbelieveの目的語(O)になっています。中身を見ると、『the world』が主語(S')、『will soon be』が動詞(V')、『overpopulated』が補語(C')という構造です。",
+    "structure_explanations": [{
+      "target_text": "that the world will soon be overpopulated",
+      "explanation": "これは接続詞thatで始まる名詞節です。文全体では目的語(O)の役割を果たしています。名詞節は、文の中で名詞と同じように使われる節で、主語・目的語・補語になることができます。中身を見ると、'the world'が主語(S')、'will soon be'が動詞(V')、'overpopulated'が補語(C')という構造になっています。",
+      "difficulty_level": "medium"
+    }],
     "sub_structures": [{
       "target_chunk": "that the world will soon be overpopulated",
       "analyzed_text": "that [the world]<{S':_:世界が}> will soon be<{V':_:すぐに～になる}> [overpopulated]<{C':_:過密な}>"
@@ -409,19 +457,33 @@ When a subordinate clause (that/wh/if/because clause) appears, explain its INTER
 - For prepositional phrases: "これは[理由/時間/場所]を表す前置詞句です。"
 
 STRUCTURE EXPLANATIONS (for difficult parts - accordion display):
-Generate structure_explanations array for parts that users might find difficult:
-- Subordinate clauses (that/wh/if/because clauses)
-- Complex prepositional phrases
-- Inverted word order
-- Phrasal verbs
-- Passive voice constructions
-- Each explanation should include:
+Generate structure_explanations array for parts that beginners might find difficult. ALWAYS include explanations for:
+1. Noun clauses (名詞節): that節、wh節、whether節など、名詞の役割を果たす節
+   - Example: "that the world will soon be overpopulated", "how many people the earth can support"
+2. Long sentences (長文): 20語以上の文、または複雑な構造を含む文
+3. Subordinate clauses (従属節): that/wh/if/because節など
+4. Complex prepositional phrases (複雑な前置詞句): 5語以上の前置詞句
+5. Inverted word order (倒置): 語順が通常と異なる場合
+6. Phrasal verbs (句動詞): 動詞+前置詞/副詞の組み合わせ
+7. Passive voice constructions (受動態)
+
+Each explanation should include:
   * target_text: The exact text from marked_text that needs explanation
-  * explanation: Detailed explanation of the structure (2-3 sentences)
+  * explanation: Detailed explanation of the structure (2-4 sentences, beginner-friendly)
+    - Explain what role it plays in the sentence (S, O, C, M)
+    - Explain the internal structure if it's a clause (S', V', O', C')
+    - Use simple Japanese that beginners can understand
   * difficulty_level: 'easy', 'medium', or 'hard' (optional)
-- Example: {
-    "target_text": "because it frightened their horses",
-    "explanation": "これは接続詞becauseで始まる副詞節です。文全体では修飾語(M)の役割を果たしています。中身を見ると、'it'が主語(S')、'frightened'が動詞(V')、'their horses'が目的語(O')という構造になっています。",
+
+Examples:
+1. Noun clause example: {
+    "target_text": "that the world will soon be overpopulated",
+    "explanation": "これは接続詞thatで始まる名詞節です。文全体では目的語(O)の役割を果たしています。中身を見ると、'the world'が主語(S')、'will soon be'が動詞(V')、'overpopulated'が補語(C')という構造になっています。名詞節は、文の中で名詞と同じように使われる節です。",
+    "difficulty_level": "medium"
+  }
+2. Long sentence example: {
+    "target_text": "If the population continues to grow at its present rate",
+    "explanation": "これは接続詞ifで始まる副詞節で、文全体では修飾語(M)の役割を果たしています。'if'は「もし～なら」という意味で、条件を表します。この節の中では、'the population'が主語(S')、'continues to grow'が動詞(V')、'at its present rate'が修飾語(M')という構造になっています。",
     "difficulty_level": "medium"
   }
 
