@@ -84,6 +84,11 @@ export async function POST(req: Request) {
 2. 修飾語 (M) は < > (副詞・前置詞句) か ( ) (形容詞・関係詞節) で括る。
 3. 直読直解: 英語の語順通りに日本語訳を当てる。
 
+【重要：メイン構造と従属構造の区別】
+- **メイン構造（marked_text）**: 文全体の骨組みには大文字タグを使用 (S, V, O, C, M)
+- **従属構造（analyzed_text）**: 節の中身には小文字+ダッシュタグを使用 (s', v', o', c', m')
+- この区別を厳密に守ること。混同は許されない。
+
 【重要：模範解答 (Few-Shot Examples)】
 以下のケーススタディを厳密に模倣すること。
 
@@ -99,9 +104,20 @@ PROCESS:
    - sub_structures: Detailed analysis of complex subordinate clauses (optional, for 5+ word clauses)
 
 TAGGING FORMAT: <{Role:Attribute:Meaning}>
-- Role: S, V, O, C, M, Conn
+- Role: S, V, O, C, M, Conn (大文字 - 文全体の骨組みのみ)
 - Attribute: Grammar type or "_"
 - Meaning: Direct Japanese translation
+
+**CRITICAL RULE: Main Structure vs Subordinate Structure Tags**
+- **Main sentence structure (文全体の骨組み)**: Use UPPERCASE letters (S, V, O, C, M)
+  * These tags apply to the entire sentence's main elements
+  * Example: [Many scientists]<{S}> believe<{V}> [that...]<{O}>
+  
+- **Subordinate clause structure (節の中身・入れ子)**: Use LOWERCASE with apostrophe (s', v', o', c', m')
+  * These tags apply ONLY within sub_structures.analyzed_text
+  * Example: that<{conn}> [he]<{s'}> is<{v'}> [honest]<{c'}>
+  
+- **NEVER mix**: Do NOT use s'/v'/o'/c'/m' in marked_text. Do NOT use S/V/O/C/M in analyzed_text.
 
 SYMBOLS (絶対遵守):
 - [ ] = 名詞（S/O/Cになる文の骨格のみ。修飾語には絶対に使わない）
@@ -525,39 +541,48 @@ Example:
 }
 
 SUB-STRUCTURES (従属節内の詳細構造解析 - ズームイン解析) - **MANDATORY**:
-**CRITICAL**: You MUST generate sub_structures array when the sentence contains subordinate clauses or complex structures.
+**CRITICAL**: You MUST generate sub_structures array when the sentence contains subordinate clauses. This is NOT optional.
 
 **Required Conditions** (Generate sub_structures if ANY of these exist):
-1. Noun clauses [ ... ] (名詞節): that節, wh節, whether節など
-2. Adjective clauses ( ... ) (形容詞節): 関係代名詞節など
-3. Adverbial clauses < ... > (副詞節): if節, because節, 分詞構文など
-4. Inverted structures (倒置): 語順が通常と異なる構造
-5. Emphatic structures (強調構文): 解説が必要な箇所
+1. **Noun clauses [ ... ] (名詞節)**: that節, wh節 (what, which, who, where, when, why, how), whether節, if節（名詞節として使われる場合）
+2. **Adjective clauses ( ... ) (形容詞節)**: 関係代名詞節 (that, which, who, whom, whose), 関係副詞節 (where, when, why)
+3. **Adverbial clauses < ... > (副詞節)**: because節, when節, if節（条件）, although節, while節, since節, until節, before節, after節, 分詞構文など
+4. **Inverted structures (倒置)**: 語順が通常と異なる構造
+5. **Emphatic structures (強調構文)**: 解説が必要な箇所
 
 **Rules**:
-1. When a clause is marked with [ ] (名詞節), ( ) (形容詞節), or < > (副詞節), analyze its INTERNAL structure
-2. Use s', v', o', c', m' tags (lowercase with apostrophe) to distinguish from main sentence elements (S, V, O, C, M)
-3. Generate for ALL clauses that have 3+ words or contain subject-verb structure
+1. **MANDATORY**: When a clause is marked with [ ] (名詞節), ( ) (形容詞節), or < > (副詞節), you MUST analyze its INTERNAL structure
+2. **Tag Distinction**: 
+   - Main sentence (marked_text): Use UPPERCASE (S, V, O, C, M)
+   - Subordinate clause (analyzed_text): Use LOWERCASE with apostrophe (s', v', o', c', m')
+3. Generate for ALL clauses that have 3+ words OR contain subject-verb structure
 4. Extract the exact text from marked_text that corresponds to the clause (WITHOUT brackets)
-5. Create analyzed_text with the same tagging format as marked_text, but using s'/v'/o'/c'/m' tags (lowercase)
-6. Include explanation field describing the clause's role and internal structure
+5. Create analyzed_text with the SAME tagging format as marked_text, but using s'/v'/o'/c'/m' tags (lowercase with apostrophe)
+6. Include explanation field describing the clause's role and internal structure (2-3 sentences in Japanese)
 
 **Format**:
-- target_chunk: The exact text from the clause WITHOUT brackets (e.g., "that food production will not keep up")
-- analyzed_text: Tagged text showing internal structure with s'/v'/o'/c'/m' tags (lowercase)
-  * **CRITICAL FORMATTING RULE**: Wrap text elements with brackets for visual clarity:
-    - **Subject (s'), Object (o'), Complement (c')**: Wrap with square brackets [ ... ]
-    - **Verb (v')**: No brackets, just the text
-    - **Modifier (m')**: Wrap with angle brackets < ... >
-    - **Connector (conn)**: No brackets, just the text
-  * Format: Use lowercase tags: <{s':_:意味}>, <{v':_:意味}>, <{o':_:意味}>, <{c':_:意味}>, <{m':_:意味}>
-  * For connectors: <{conn}> or <{Conn}>
-  * Include all words from target_chunk
+- target_chunk: The exact text from the clause WITHOUT brackets (e.g., "that he is honest")
+- analyzed_text: Tagged text showing internal structure with s'/v'/o'/c'/m' tags (lowercase with apostrophe)
+  * **CRITICAL FORMATTING RULE**: Use the SAME format as marked_text, but with lowercase tags:
+    - **Subject (s'), Object (o'), Complement (c')**: Wrap with square brackets [ ... ] and tag with <{s':_:意味}>, <{o':_:意味}>, <{c':_:意味}>
+    - **Verb (v')**: No brackets, tag with <{v':_:意味}>
+    - **Modifier (m')**: Wrap with angle brackets < ... > and tag with <{m':_:意味}>
+    - **Connector (conn)**: Tag with <{conn}> or <{Conn}>
+  * **Format Example**: "that<{conn}> [he]<{s':_:彼が}> is<{v':_:～である}> [honest]<{c':_:正直な}>"
+  * **CRITICAL**: analyzed_text must be formatted EXACTLY like marked_text, but with lowercase tags (s', v', o', c', m')
+  * Include ALL words from target_chunk
   * Show the connection between elements clearly
-  * **Example format**: [food production]<{s':_:食料生産が}> will not keep up<{v':_:追いつかないだろう}> <with population growth><{m':_:人口増加に}>
+  * Use the same bracket system: [ ] for s'/o'/c', < > for m', no brackets for v'
 - explanation: Detailed explanation in Japanese about the clause's role and internal structure (2-3 sentences)
 
 **Example for noun clause**:
+{
+  "target_chunk": "that he is honest",
+  "analyzed_text": "that<{conn}> [he]<{s':_:彼が}> is<{v':_:～である}> [honest]<{c':_:正直な}>",
+  "explanation": "このthat節は文全体の目的語(O)です。内部では 'he' が主語(s')、'is' が動詞(v')、'honest' が補語(c')となっています。"
+}
+
+**Example for noun clause (longer)**:
 {
   "target_chunk": "that food production will not keep up with population growth",
   "analyzed_text": "that<{conn}> [food production]<{s':_:食料生産が}> will not keep up<{v':_:追いつかないだろう}> <with population growth><{m':_:人口増加に}>",
@@ -587,10 +612,13 @@ SUB-STRUCTURES (従属節内の詳細構造解析 - ズームイン解析) - **M
 
 **Important**:
 - **MANDATORY**: Generate sub_structures for EVERY clause marked with [ ], ( ), or < >
-- Always use lowercase with apostrophe (') in tags for subordinate clause elements: s', v', o', c', m'
-- This distinguishes them from main sentence elements: S, V, O, C, M
-- Make sure analyzed_text preserves all words from target_chunk
-- Include explanation field for each sub_structure
+- **Tag Distinction is CRITICAL**:
+  * marked_text: Use UPPERCASE (S, V, O, C, M) for main sentence structure
+  * analyzed_text: Use LOWERCASE with apostrophe (s', v', o', c', m') for subordinate clause structure
+  * NEVER mix: Do NOT use s'/v'/o'/c'/m' in marked_text. Do NOT use S/V/O/C/M in analyzed_text.
+- Make sure analyzed_text preserves ALL words from target_chunk
+- Include explanation field for each sub_structure (2-3 sentences in Japanese)
+- analyzed_text format must match marked_text format exactly, but with lowercase tags
 
 VALIDATION CHECKLIST (before outputting):
 - [ ] All words from input appear in marked_text
