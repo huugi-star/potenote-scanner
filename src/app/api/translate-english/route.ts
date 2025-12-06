@@ -546,15 +546,15 @@ SUB-STRUCTURES (従属節内の詳細構造解析 - ズームイン解析) - **M
 - target_chunk: The exact text from the clause WITHOUT brackets (e.g., "that food production will not keep up")
 - analyzed_text: Tagged text showing internal structure with s'/v'/o'/c'/m' tags (lowercase)
   * **CRITICAL FORMATTING RULE**: Wrap text elements with brackets for visual clarity:
-    - **Subject (s'), Object (o'), Complement (c')**: Wrap with `[ ... ]` (square brackets)
+    - **Subject (s'), Object (o'), Complement (c')**: Wrap with square brackets [ ... ]
     - **Verb (v')**: No brackets, just the text
-    - **Modifier (m')**: Wrap with `< ... >` (angle brackets)
+    - **Modifier (m')**: Wrap with angle brackets < ... >
     - **Connector (conn)**: No brackets, just the text
   * Format: Use lowercase tags: <{s':_:意味}>, <{v':_:意味}>, <{o':_:意味}>, <{c':_:意味}>, <{m':_:意味}>
   * For connectors: <{conn}> or <{Conn}>
   * Include all words from target_chunk
   * Show the connection between elements clearly
-  * **Example format**: "[food production]<{s':_:食料生産が}> will not keep up<{v':_:追いつかないだろう}> <with population growth><{m':_:人口増加に}>"
+  * **Example format**: [food production]<{s':_:食料生産が}> will not keep up<{v':_:追いつかないだろう}> <with population growth><{m':_:人口増加に}>
 - explanation: Detailed explanation in Japanese about the clause's role and internal structure (2-3 sentences)
 
 **Example for noun clause**:
