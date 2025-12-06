@@ -346,10 +346,10 @@ const ZoomInAccordion = ({
               {/* 詳しい解説（名詞節・wh節など） */}
               {structureExplanations && structureExplanations.length > 0 && (
                 <div className="space-y-4">
-                  {(subStructures && subStructures.length > 0) && (
+                  {(subStructures && subStructures.length > 0) || explanation ? (
                     <div className="border-t border-gray-700 pt-6"></div>
-                  )}
-                  <h4 className="text-xs font-bold text-green-400 mb-3 uppercase tracking-wider">📖 詳しい解説</h4>
+                  ) : null}
+                  <h4 className="text-xs font-bold text-green-400 mb-3 uppercase tracking-wider">📖 詳しい解説（構造・解説）</h4>
                   {structureExplanations.map((exp: any, idx: number) => {
                     const getDifficultyBadge = (level?: 'easy' | 'medium' | 'hard') => {
                       if (!level) return null;
