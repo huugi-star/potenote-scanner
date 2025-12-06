@@ -601,7 +601,7 @@ VALIDATION CHECKLIST (before outputting):
 **CRITICAL OUTPUT REQUIREMENT**:
 - You MUST output ONLY valid JSON. Do not include any explanatory text before or after the JSON.
 - Start your response with { and end with }
-- Do not use markdown code blocks (```json or ```)
+- Do not use markdown code blocks
 - Ensure all strings are properly escaped
 - Ensure all brackets and braces are properly matched
 - The output must be parseable by JSON.parse() directly`;
