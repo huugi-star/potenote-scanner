@@ -115,6 +115,7 @@ export const TranslationResultScreen = ({
 const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: number }) => {
   // 詳細データがあるか判定
   const hasDetails = (sentence.sub_structures && sentence.sub_structures.length > 0) || 
+                     (sentence.structure_explanations && sentence.structure_explanations.length > 0) ||
                      (sentence.advanced_grammar_explanation);
 
   return (
@@ -184,6 +185,7 @@ const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: nu
       {hasDetails && (
         <ZoomInAccordion 
           subStructures={sentence.sub_structures}
+          structureExplanations={sentence.structure_explanations}
           explanation={sentence.advanced_grammar_explanation}
         />
       )}
@@ -265,7 +267,15 @@ VisualChunk.displayName = 'VisualChunk';
  * ZoomInAccordion
  * 複雑な構文をビジュアル表示するためのエリア
  */
-const ZoomInAccordion = ({ subStructures, explanation }: { subStructures?: any[], explanation?: string }) => {
+const ZoomInAccordion = ({ 
+  subStructures, 
+  structureExplanations,
+  explanation 
+}: { 
+  subStructures?: any[], 
+  structureExplanations?: any[],
+  explanation?: string 
+}) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -304,29 +314,78 @@ const ZoomInAccordion = ({ subStructures, explanation }: { subStructures?: any[]
               )}
 
               {/* 構造解析（ビジュアル） */}
-              {subStructures && subStructures.map((item: any, idx: number) => (
-                <div key={idx} className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400 font-mono bg-gray-800 px-2 py-1 rounded">
-                      対象: {item.target_chunk}
-                    </span>
-                  </div>
-                  
-                  {/* ネストされたビジュアル解析エリア */}
-                  <div className="bg-[#1a1b26] p-4 rounded-xl border border-gray-600 overflow-x-auto">
-                    <p className="text-[10px] text-gray-500 mb-4 font-bold uppercase tracking-widest">
-                      Inner Structure
-                    </p>
-                    <NestedStructureParser text={item.analyzed_text} />
-                  </div>
+              {subStructures && subStructures.length > 0 && (
+                <div className="space-y-6">
+                  <h4 className="text-xs font-bold text-blue-400 mb-3 uppercase tracking-wider">📋 構造解析</h4>
+                  {subStructures.map((item: any, idx: number) => (
+                    <div key={idx} className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 font-mono bg-gray-800 px-2 py-1 rounded">
+                          対象: {item.target_chunk}
+                        </span>
+                      </div>
+                      
+                      {/* ネストされたビジュアル解析エリア */}
+                      <div className="bg-[#1a1b26] p-4 rounded-xl border border-gray-600 overflow-x-auto">
+                        <p className="text-[10px] text-gray-500 mb-4 font-bold uppercase tracking-widest">
+                          Inner Structure
+                        </p>
+                        <NestedStructureParser text={item.analyzed_text} />
+                      </div>
 
-                  {item.explanation && (
-                    <p className="text-sm text-gray-400 pl-3 border-l-2 border-blue-500/50 italic">
-                      {item.explanation}
-                    </p>
-                  )}
+                      {item.explanation && (
+                        <p className="text-sm text-gray-400 pl-3 border-l-2 border-blue-500/50 italic">
+                          {item.explanation}
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+
+              {/* 詳しい解説（名詞節・wh節など） */}
+              {structureExplanations && structureExplanations.length > 0 && (
+                <div className="space-y-4">
+                  {(subStructures && subStructures.length > 0) && (
+                    <div className="border-t border-gray-700 pt-6"></div>
+                  )}
+                  <h4 className="text-xs font-bold text-green-400 mb-3 uppercase tracking-wider">📖 詳しい解説</h4>
+                  {structureExplanations.map((exp: any, idx: number) => {
+                    const getDifficultyBadge = (level?: 'easy' | 'medium' | 'hard') => {
+                      if (!level) return null;
+                      const badges = {
+                        easy: { label: '初級', color: 'bg-green-500/20 text-green-300 border-green-500/50' },
+                        medium: { label: '中級', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50' },
+                        hard: { label: '上級', color: 'bg-red-500/20 text-red-300 border-red-500/50' },
+                      };
+                      const badge = badges[level];
+                      return (
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold border ${badge.color}`}>
+                          {badge.label}
+                        </span>
+                      );
+                    };
+
+                    return (
+                      <div key={idx} className="bg-[#24283b] p-4 rounded-xl border border-green-500/20">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <p className="text-xs text-green-200 font-mono bg-green-900/30 px-2 py-1 rounded">
+                            {exp.target_text}
+                          </p>
+                          {exp.difficulty_level && (
+                            <div className="flex-shrink-0">
+                              {getDifficultyBadge(exp.difficulty_level)}
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-200 leading-relaxed">
+                          {exp.explanation}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </motion.div>
         )}
