@@ -545,31 +545,44 @@ SUB-STRUCTURES (従属節内の詳細構造解析 - ズームイン解析) - **M
 **Format**:
 - target_chunk: The exact text from the clause WITHOUT brackets (e.g., "that food production will not keep up")
 - analyzed_text: Tagged text showing internal structure with s'/v'/o'/c'/m' tags (lowercase)
+  * **CRITICAL FORMATTING RULE**: Wrap text elements with brackets for visual clarity:
+    - **Subject (s'), Object (o'), Complement (c')**: Wrap with `[ ... ]` (square brackets)
+    - **Verb (v')**: No brackets, just the text
+    - **Modifier (m')**: Wrap with `< ... >` (angle brackets)
+    - **Connector (conn)**: No brackets, just the text
   * Format: Use lowercase tags: <{s':_:意味}>, <{v':_:意味}>, <{o':_:意味}>, <{c':_:意味}>, <{m':_:意味}>
   * For connectors: <{conn}> or <{Conn}>
   * Include all words from target_chunk
   * Show the connection between elements clearly
+  * **Example format**: "[food production]<{s':_:食料生産が}> will not keep up<{v':_:追いつかないだろう}> <with population growth><{m':_:人口増加に}>"
 - explanation: Detailed explanation in Japanese about the clause's role and internal structure (2-3 sentences)
 
 **Example for noun clause**:
 {
-  "target_chunk": "that food production will not keep up",
-  "analyzed_text": "that<{conn}> food production<{s':_:食料生産が}> will not keep up<{v':_:追いつかないだろう}>",
-  "explanation": "このthat節は文全体の目的語(O)です。内部では 'food production' が主語(s')、'will not keep up' が動詞(v')となっています。"
+  "target_chunk": "that food production will not keep up with population growth",
+  "analyzed_text": "that<{conn}> [food production]<{s':_:食料生産が}> will not keep up<{v':_:追いつかないだろう}> <with population growth><{m':_:人口増加に}>",
+  "explanation": "このthat節は文全体の目的語(O)です。内部では 'food production' が主語(s')、'will not keep up' が動詞(v')、'with population growth' が修飾語(m')となっています。"
 }
 
 **Example for relative clause**:
 {
   "target_chunk": "that frightened horses",
-  "analyzed_text": "that<{conn}> frightened<{v':_:驚かせた}> horses<{o':_:馬を}>",
+  "analyzed_text": "that<{conn}> frightened<{v':_:驚かせた}> [horses]<{o':_:馬を}>",
   "explanation": "この関係代名詞節は直前の名詞を修飾する形容詞節です。内部では 'that' が主語(s')、'frightened' が動詞(v')、'horses' が目的語(o')となっています。"
 }
 
 **Example for adverbial clause**:
 {
   "target_chunk": "because it frightened their horses",
-  "analyzed_text": "because<{conn}> it<{s':_:それが}> frightened<{v':_:驚かせた}> their horses<{o':_:彼らの馬を}>",
+  "analyzed_text": "because<{conn}> [it]<{s':_:それが}> frightened<{v':_:驚かせた}> [their horses]<{o':_:彼らの馬を}>",
   "explanation": "このbecause節は理由を表す副詞節で、文全体では修飾語(M)の役割を果たしています。内部では 'it' が主語(s')、'frightened' が動詞(v')、'their horses' が目的語(o')となっています。"
+}
+
+**Example for clause with complement**:
+{
+  "target_chunk": "that the world will soon be overpopulated",
+  "analyzed_text": "that<{conn}> [the world]<{s':_:世界が}> will soon be<{v':_:すぐに～になる}> [overpopulated]<{c':_:過密な}>",
+  "explanation": "このthat節は名詞節で、文全体では目的語(O)の役割を果たしています。内部では 'the world' が主語(s')、'will soon be' が動詞(v')、'overpopulated' が補語(c')となっています。"
 }
 
 **Important**:
