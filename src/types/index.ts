@@ -82,6 +82,7 @@ export interface SentenceResult {
   sub_structures?: Array<{    // 複雑な部分の分解リスト（ズームイン解析）
     target_chunk: string;     // 分解対象の文字列（例: "that the world could..."）
     analyzed_text: string;    // 分解後のタグ付きテキスト（例: "[the world]<{S'}> could..."）
+    target_chunk_index?: number; // どのチャンクの深掘りか（オプション、デバッグ用）
   }>;
   vocab_list?: Array<{        // 重要単語・熟語リスト
     word: string;             // 例: "keep up with"
@@ -96,7 +97,6 @@ export interface SentenceResult {
     difficulty_level?: 'easy' | 'medium' | 'hard'; // 難易度（オプション）
   }>;
   advanced_grammar_explanation?: string | null; // 高度な文法解説（名詞節・WH節・倒置・関係詞の非制限用法など）
-  structure_explanation?: string | null; // 基礎的な文構造の解説（S・V・O・Cの関係を初心者向けに説明）
 }
 
 /**

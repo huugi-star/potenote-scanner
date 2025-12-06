@@ -30,8 +30,7 @@ const TranslationSchema = z.object({
       explanation: z.string(), // 詳しい構造説明
       difficulty_level: z.enum(['easy', 'medium', 'hard']).optional() // 難易度（オプション）
     })).optional(), // 難しい部分の詳しい説明（アコーディオン用）
-    advanced_grammar_explanation: z.string().nullable().optional(), // 高度な文法解説（名詞節・WH節・倒置・関係詞の非制限用法など）
-    structure_explanation: z.string().nullable().optional() // 基礎的な文構造の解説（S・V・O・Cの関係を初心者向けに説明）
+    advanced_grammar_explanation: z.string().nullable().optional() // 高度な文法解説（名詞節・WH節・倒置・関係詞の非制限用法など）
   }))
 });
 
@@ -524,36 +523,46 @@ Example:
   "advanced_grammar_explanation": "この文には名詞節が含まれています。'that the world will soon be overpopulated'という部分は、believeという動詞の目的語として使われている名詞節です。名詞節は、文の中で名詞と同じ役割を果たし、主語・目的語・補語になることができます。この場合、'that'は接続詞として機能し、その後の文全体を1つの名詞として扱っています。初心者にとっては、このような構造が文の主語や目的語になることに慣れるまで時間がかかるかもしれません。"
 }
 
-STRUCTURE EXPLANATION (基礎的な文構造の解説):
-Generate structure_explanation field for EVERY sentence. This should explain the basic sentence structure (S・V・O・C relationships) in beginner-friendly Japanese.
+SUB-STRUCTURES (従属節内の詳細構造解析 - ズームイン解析):
+Generate sub_structures array for clauses (名詞節、形容詞節、副詞節) that contain internal structure.
 
-This field should:
-1. Explain the sentence pattern (第1文型、第2文型、第3文型、第4文型、第5文型)
-2. Identify each element clearly: "主語(S)は～、動詞(V)は～、目的語(O)は～"
-3. Explain connections: Show how elements connect (e.g., "SはOだと信じている")
-4. Explain clause roles: When a clause appears, explain its role (e.g., "[that節]全体が目的語(O)になっています")
-5. Compare word order: Show the difference between English and Japanese word order when helpful
-6. Use beginner-friendly language: Avoid technical jargon, use simple explanations
+Rules:
+1. When a clause is marked with [ ] (名詞節), ( ) (形容詞節), or < > (副詞節), analyze its INTERNAL structure
+2. Use S', V', O', C', M' tags (with apostrophe) to distinguish from main sentence elements (S, V, O, C, M)
+3. Generate for ALL clauses that have 3+ words or contain subject-verb structure
+4. Extract the exact text from marked_text that corresponds to the clause
+5. Create analyzed_text with the same tagging format as marked_text, but using S'/V'/O'/C'/M' tags
 
 Format:
-- structure_explanation: A clear explanation (3-5 sentences) in Japanese that helps beginners understand the basic sentence structure
-- Always generate this field (even for simple sentences)
-- Focus on WHY each element is S, V, O, or C
-- Use examples from the actual sentence
+- target_chunk: The exact text from the clause (e.g., "that food production will not keep up")
+- analyzed_text: Tagged text showing internal structure with S'/V'/O'/C'/M' tags
+  * Format: Same as marked_text but with apostrophe tags: <{S':_:意味}>, <{V':_:意味}>, etc.
+  * Include all words from target_chunk
+  * Show the connection between elements clearly
 
-Example for "Many scientists believe that food production will not keep up.":
+Example for noun clause:
 {
-  "structure_explanation": "この文は S + V + O の第3文型です。主語(S)は『Many scientists（多くの科学者）』、動詞(V)は『believe（信じている）』です。目的語(O)は『that』以下全体（[that food production will not keep up]）で、『食料生産が～ということ』を指しています。つまり『SはOだと信じている』という構造になっています。"
+  "target_chunk": "that food production will not keep up with population growth",
+  "analyzed_text": "that [food production]<{S':_:食料生産が}> will not keep up<{V':_:追いつかないだろう}> <with population growth><{M':_:人口増加に}>"
 }
 
-Example for "The result was very good.":
+Example for relative clause:
 {
-  "structure_explanation": "この文は S + V + C の第2文型です。主語(S)は『The result（結果）』、動詞(V)は『was（だった）』、補語(C)は『very good（非常に良好）』です。be動詞の後ろに補語が来る構造で、『SはCである』という意味を表しています。"
+  "target_chunk": "that frightened horses",
+  "analyzed_text": "that frightened<{V':_:驚かせた}> [horses]<{O':_:馬を}>"
 }
 
-SUB-STRUCTURES (for complex clauses 5+ words):
-- Extract chunk text from marked_text
-- Analyze internal structure with S', V', O', C' tags
+Example for adverbial clause:
+{
+  "target_chunk": "because it frightened their horses",
+  "analyzed_text": "because [it]<{S':_:それが}> frightened<{V':_:驚かせた}> [their horses]<{O':_:彼らの馬を}>"
+}
+
+Important:
+- Always use apostrophe (') in tags for subordinate clause elements: S', V', O', C', M'
+- This distinguishes them from main sentence elements: S, V, O, C, M
+- Generate sub_structures for every clause that has internal subject-verb structure
+- Make sure analyzed_text preserves all words from target_chunk
 
 VALIDATION CHECKLIST (before outputting):
 - [ ] All words from input appear in marked_text

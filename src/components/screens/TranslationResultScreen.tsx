@@ -948,6 +948,7 @@ const getRoleLabel = (role: string | null): string => {
     "V'": "V' (動詞・従属節内)",
     "O'": "O' (目的語・従属節内)",
     "C'": "C' (補語・従属節内)",
+    "M'": "M' (修飾語・従属節内)",
   };
   
   return labelMap[role] || role;
@@ -990,11 +991,6 @@ const SentenceCard = memo(({
           </p>
         </div>
       </div>
-
-      {/* 文の構造・組み立ての解説（アコーディオン） */}
-      {sentence.structure_explanation && (
-        <StructureExplanationAccordion explanation={sentence.structure_explanation} />
-      )}
 
       {/* ズームイン解析エリア（アコーディオン） */}
       {sentence.sub_structures && sentence.sub_structures.length > 0 && (
@@ -1236,13 +1232,32 @@ const ZoomInAccordion = memo(({ subStructures }: { subStructures: Array<{ target
             transition={{ duration: 0.3 }}
             className="overflow-hidden"
           >
-            <div className="bg-blue-50/10 rounded-lg p-4 border border-blue-700/30 space-y-3 mt-2">
+            <div className="bg-blue-50/10 rounded-lg p-4 border border-blue-700/30 space-y-4 mt-2">
               {subStructures.map((subStruct: any, subIndex: number) => (
-                <div key={`substruct-${subIndex}-${subStruct.target_chunk?.substring(0, 20) || subIndex}`} className="space-y-2">
-                  <div className="text-xs text-gray-400 font-mono">
-                    {subStruct.target_chunk || ''}
+                <div 
+                  key={`substruct-${subIndex}-${subStruct.target_chunk?.substring(0, 20) || subIndex}`} 
+                  className="space-y-3"
+                >
+                  {/* 節の説明ヘッダー */}
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-300 text-sm font-bold">📋</span>
+                    <div className="flex-1">
+                      <p className="text-xs text-blue-400 font-semibold mb-1">
+                        この節の中身の構造（S'/V'/O'/C'/M'）
+                      </p>
+                      <p className="text-sm text-blue-200 font-mono bg-blue-900/30 rounded px-2 py-1 border border-blue-700/50">
+                        {subStruct.target_chunk || ''}
+                      </p>
+                    </div>
                   </div>
+                  
+                  {/* 解析結果 */}
                   <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50 overflow-x-auto">
+                    <div className="mb-2">
+                      <p className="text-xs text-blue-400 font-semibold mb-1">
+                        ⚠️ 注意: S'/V'/O'/C'/M'は節の中の要素です（メインのS/V/O/C/Mとは区別）
+                      </p>
+                    </div>
                     <MarkedTextParser 
                       text={subStruct.analyzed_text || ''} 
                       onChunkClick={() => {}}
@@ -1421,64 +1436,5 @@ const AdvancedGrammarAccordion = memo(({
 });
 
 AdvancedGrammarAccordion.displayName = 'AdvancedGrammarAccordion';
-
-/**
- * StructureExplanationAccordion - 基礎的な文構造の解説をアコーディオンで表示
- * S・V・O・Cの関係を初心者向けに丁寧に説明するセクション
- */
-const StructureExplanationAccordion = memo(({ 
-  explanation 
-}: { 
-  explanation: string 
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="mb-4">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-3 bg-slate-800/50 hover:bg-slate-800/70 rounded-lg border border-slate-700/50 transition-colors"
-      >
-        <span className="text-sm font-bold text-slate-300 flex items-center gap-2">
-          <span className="text-lg">🏗️</span>
-          <span>文の構造・組み立ての解説</span>
-        </span>
-        <motion.div
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <ChevronDown className="w-5 h-5 text-slate-400" />
-        </motion.div>
-      </button>
-      
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="overflow-hidden"
-          >
-            <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50 mt-2">
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <span className="text-slate-400 text-lg flex-shrink-0">📖</span>
-                  <div className="flex-1">
-                    <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
-                      {explanation}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-});
-
-StructureExplanationAccordion.displayName = 'StructureExplanationAccordion';
 
 export default TranslationResultScreen;
