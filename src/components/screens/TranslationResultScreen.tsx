@@ -991,6 +991,11 @@ const SentenceCard = memo(({
         </div>
       </div>
 
+      {/* 文の構造・組み立ての解説（アコーディオン） */}
+      {sentence.structure_explanation && (
+        <StructureExplanationAccordion explanation={sentence.structure_explanation} />
+      )}
+
       {/* ズームイン解析エリア（アコーディオン） */}
       {sentence.sub_structures && sentence.sub_structures.length > 0 && (
         <ZoomInAccordion subStructures={sentence.sub_structures} />
@@ -1416,5 +1421,64 @@ const AdvancedGrammarAccordion = memo(({
 });
 
 AdvancedGrammarAccordion.displayName = 'AdvancedGrammarAccordion';
+
+/**
+ * StructureExplanationAccordion - 基礎的な文構造の解説をアコーディオンで表示
+ * S・V・O・Cの関係を初心者向けに丁寧に説明するセクション
+ */
+const StructureExplanationAccordion = memo(({ 
+  explanation 
+}: { 
+  explanation: string 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="mb-4">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-3 bg-slate-800/50 hover:bg-slate-800/70 rounded-lg border border-slate-700/50 transition-colors"
+      >
+        <span className="text-sm font-bold text-slate-300 flex items-center gap-2">
+          <span className="text-lg">🏗️</span>
+          <span>文の構造・組み立ての解説</span>
+        </span>
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ChevronDown className="w-5 h-5 text-slate-400" />
+        </motion.div>
+      </button>
+      
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50 mt-2">
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="text-slate-400 text-lg flex-shrink-0">📖</span>
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
+                      {explanation}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
+StructureExplanationAccordion.displayName = 'StructureExplanationAccordion';
 
 export default TranslationResultScreen;
