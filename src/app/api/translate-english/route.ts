@@ -99,6 +99,8 @@ export async function POST(req: Request) {
   * 原文: "They think we need more laws."
   * 出力: "[They]<{S}> think<{V}> [(that)<{CONN}> we<{s'}> need<{v'}> [more laws]<{o'}>]<{O}>"
   * 説明: think の直後に we が来ているため、省略された (that) を補完
+- **解説の追加（必須）**: grammar_note または structure_explanations に以下のような解説を必ず追加すること:
+  * "think の直後に we が来ているため、省略された接続詞 that があります。この that 節は名詞節で、think の目的語(O)になっています。初学者にとっては、なぜ動詞の後にまた主語が来るのか理解しにくい部分ですが、省略された接続詞 that を補完することで構造が明確になります。"
 
 **Rule 2: 関係代名詞の目的格の省略**
 - パターン: 名詞の直後に主語+動詞が続く場合（関係代名詞の目的格が省略されている）
@@ -107,6 +109,8 @@ export async function POST(req: Request) {
   * 原文: "the book I read"
   * 出力: "[the book]<{S}> <(which)<{REL}> I<{s'}> read<{v'}>><{M}>"
   * 説明: book の直後に I read が来ているため、省略された (which) を補完
+- **解説の追加**: grammar_note または structure_explanations に以下のような解説を必ず追加すること:
+  * "book の直後に I read が来ているため、省略された関係代名詞 which があります。この関係代名詞節は形容詞節で、book を修飾しています。初学者にとっては、なぜ名詞の後に主語+動詞が来るのか理解しにくい部分ですが、省略された関係代名詞を補完することで構造が明確になります。"
 
 **Rule 3: その他の省略**
 - 分詞構文の主語省略: 文脈から主語が明らかな場合、必要に応じて補完
@@ -667,9 +671,9 @@ Example:
 }
 
 SUB-STRUCTURES (従属節内の詳細構造解析 - ズームイン解析) - **MANDATORY**:
-**CRITICAL**: You MUST generate sub_structures array when the sentence contains subordinate clauses. This is NOT optional.
+**CRITICAL**: You MUST generate sub_structures array when the sentence contains subordinate clauses. This is NOT optional. 省略は許されません。
 
-**Required Conditions** (Generate sub_structures if ANY of these exist):
+**Required Conditions** (Generate sub_structures if ANY of these exist - 以下のいずれかが存在する場合は必ず生成):
 1. **Noun clauses [ ... ] (名詞節)**: that節, wh節 (what, which, who, where, when, why, how), whether節, if節（名詞節として使われる場合）
 2. **Adjective clauses ( ... ) (形容詞節)**: 関係代名詞節 (that, which, who, whom, whose), 関係副詞節 (where, when, why)
 3. **Adverbial clauses < ... > (副詞節)**: because節, when節, if節（条件）, although節, while節, since節, until節, before節, after節, 分詞構文など
@@ -677,13 +681,21 @@ SUB-STRUCTURES (従属節内の詳細構造解析 - ズームイン解析) - **M
 5. **Emphatic structures (強調構文)**: 解説が必要な箇所
 
 **Rules**:
-1. **MANDATORY**: When a clause is marked with [ ] (名詞節), ( ) (形容詞節), or < > (副詞節), you MUST analyze its INTERNAL structure
-2. **Tag Distinction**: 
-   - Main sentence (marked_text): Use UPPERCASE (S, V, O, C, M)
-   - Subordinate clause (analyzed_text): Use LOWERCASE with apostrophe (s', v', o', c', m')
-3. Generate for ALL clauses that have 3+ words OR contain subject-verb structure
-4. Extract the exact text from marked_text that corresponds to the clause (WITHOUT brackets)
-5. Create analyzed_text with the SAME tagging format as marked_text, but using s'/v'/o'/c'/m' tags (lowercase with apostrophe)
+1. **MANDATORY**: When a clause is marked with [ ] (名詞節), ( ) (形容詞節), or < > (副詞節), you MUST analyze its INTERNAL structure. 必ず内部構造を解析すること。
+2. **Tag Distinction (タグの厳密な区別)**: 
+   - **Main sentence (marked_text)**: Use UPPERCASE (S, V, O, C, M) - 文全体の骨組みには大文字のみ
+   - **Subordinate clause (analyzed_text)**: Use LOWERCASE with apostrophe (s', v', o', c', m') - 節の中身には小文字+ダッシュのみ
+   - **NEVER mix**: Do NOT use s'/v'/o'/c'/m' in marked_text. Do NOT use S/V/O/C/M in analyzed_text.
+3. Generate for ALL clauses that have 3+ words OR contain subject-verb structure - 3語以上または主語+動詞構造を含む節は全て解析
+4. Extract the exact text from marked_text that corresponds to the clause (WITHOUT brackets) - カッコを除いた正確なテキストを抽出
+5. **analyzed_text Format (analyzed_textのフォーマット)**: 
+   - Create analyzed_text with the SAME tagging format as marked_text, but using s'/v'/o'/c'/m' tags (lowercase with apostrophe)
+   - **CRITICAL**: analyzed_text must be tagged text, NOT plain text. 単なるテキストではなく、メイン文と同様にタグ付けされた状態で出力すること。
+   - Format example: "that<{conn}> [he]<{s':_:彼が}> is<{v':_:～である}> [honest]<{c':_:正直な}>"
+   - Use brackets: [ ... ] for s', o', c' (subject, object, complement in subordinate clause)
+   - Use angle brackets: < ... > for m' (modifier in subordinate clause)
+   - No brackets for v' (verb in subordinate clause)
+   - Include connector tags: <{conn}> or <{rel}> for that, which, etc.
 6. Include explanation field describing the clause's role and internal structure (2-3 sentences in Japanese)
 
 **Format**:
