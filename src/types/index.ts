@@ -82,6 +82,7 @@ export interface SentenceResult {
   sub_structures?: Array<{    // 複雑な部分の分解リスト（ズームイン解析）
     target_chunk: string;     // 分解対象の文字列（例: "that the world could..."）
     analyzed_text: string;    // 分解後のタグ付きテキスト（例: "[the world]<{S'}> could..."）
+    explanation?: string;      // その節の役割と内部構造の詳しい解説（日本語）
     target_chunk_index?: number; // どのチャンクの深掘りか（オプション、デバッグ用）
   }>;
   vocab_list?: Array<{        // 重要単語・熟語リスト

@@ -16,7 +16,8 @@ const TranslationSchema = z.object({
     translation: z.string(), // その文の和訳
     sub_structures: z.array(z.object({
       target_chunk: z.string(), // 分解対象の文字列（例: "that the world could..."）
-      analyzed_text: z.string() // 分解後のタグ付きテキスト（例: "[the world]<{S'}> could..."）
+      analyzed_text: z.string(), // 分解後のタグ付きテキスト（例: "[the world]<{S'}> could..."）
+      explanation: z.string().optional() // その節の役割と内部構造の詳しい解説（日本語）
     })).optional(), // 複雑な部分の分解リスト（ズームイン解析）
     vocab_list: z.array(z.object({
       word: z.string(),   // 例: "keep up with"
@@ -523,46 +524,60 @@ Example:
   "advanced_grammar_explanation": "この文には名詞節が含まれています。'that the world will soon be overpopulated'という部分は、believeという動詞の目的語として使われている名詞節です。名詞節は、文の中で名詞と同じ役割を果たし、主語・目的語・補語になることができます。この場合、'that'は接続詞として機能し、その後の文全体を1つの名詞として扱っています。初心者にとっては、このような構造が文の主語や目的語になることに慣れるまで時間がかかるかもしれません。"
 }
 
-SUB-STRUCTURES (従属節内の詳細構造解析 - ズームイン解析):
-Generate sub_structures array for clauses (名詞節、形容詞節、副詞節) that contain internal structure.
+SUB-STRUCTURES (従属節内の詳細構造解析 - ズームイン解析) - **MANDATORY**:
+**CRITICAL**: You MUST generate sub_structures array when the sentence contains subordinate clauses or complex structures.
 
-Rules:
+**Required Conditions** (Generate sub_structures if ANY of these exist):
+1. Noun clauses [ ... ] (名詞節): that節, wh節, whether節など
+2. Adjective clauses ( ... ) (形容詞節): 関係代名詞節など
+3. Adverbial clauses < ... > (副詞節): if節, because節, 分詞構文など
+4. Inverted structures (倒置): 語順が通常と異なる構造
+5. Emphatic structures (強調構文): 解説が必要な箇所
+
+**Rules**:
 1. When a clause is marked with [ ] (名詞節), ( ) (形容詞節), or < > (副詞節), analyze its INTERNAL structure
-2. Use S', V', O', C', M' tags (with apostrophe) to distinguish from main sentence elements (S, V, O, C, M)
+2. Use s', v', o', c', m' tags (lowercase with apostrophe) to distinguish from main sentence elements (S, V, O, C, M)
 3. Generate for ALL clauses that have 3+ words or contain subject-verb structure
-4. Extract the exact text from marked_text that corresponds to the clause
-5. Create analyzed_text with the same tagging format as marked_text, but using S'/V'/O'/C'/M' tags
+4. Extract the exact text from marked_text that corresponds to the clause (WITHOUT brackets)
+5. Create analyzed_text with the same tagging format as marked_text, but using s'/v'/o'/c'/m' tags (lowercase)
+6. Include explanation field describing the clause's role and internal structure
 
-Format:
-- target_chunk: The exact text from the clause (e.g., "that food production will not keep up")
-- analyzed_text: Tagged text showing internal structure with S'/V'/O'/C'/M' tags
-  * Format: Same as marked_text but with apostrophe tags: <{S':_:意味}>, <{V':_:意味}>, etc.
+**Format**:
+- target_chunk: The exact text from the clause WITHOUT brackets (e.g., "that food production will not keep up")
+- analyzed_text: Tagged text showing internal structure with s'/v'/o'/c'/m' tags (lowercase)
+  * Format: Use lowercase tags: <{s':_:意味}>, <{v':_:意味}>, <{o':_:意味}>, <{c':_:意味}>, <{m':_:意味}>
+  * For connectors: <{conn}> or <{Conn}>
   * Include all words from target_chunk
   * Show the connection between elements clearly
+- explanation: Detailed explanation in Japanese about the clause's role and internal structure (2-3 sentences)
 
-Example for noun clause:
+**Example for noun clause**:
 {
-  "target_chunk": "that food production will not keep up with population growth",
-  "analyzed_text": "that [food production]<{S':_:食料生産が}> will not keep up<{V':_:追いつかないだろう}> <with population growth><{M':_:人口増加に}>"
+  "target_chunk": "that food production will not keep up",
+  "analyzed_text": "that<{conn}> food production<{s':_:食料生産が}> will not keep up<{v':_:追いつかないだろう}>",
+  "explanation": "このthat節は文全体の目的語(O)です。内部では 'food production' が主語(s')、'will not keep up' が動詞(v')となっています。"
 }
 
-Example for relative clause:
+**Example for relative clause**:
 {
   "target_chunk": "that frightened horses",
-  "analyzed_text": "that frightened<{V':_:驚かせた}> [horses]<{O':_:馬を}>"
+  "analyzed_text": "that<{conn}> frightened<{v':_:驚かせた}> horses<{o':_:馬を}>",
+  "explanation": "この関係代名詞節は直前の名詞を修飾する形容詞節です。内部では 'that' が主語(s')、'frightened' が動詞(v')、'horses' が目的語(o')となっています。"
 }
 
-Example for adverbial clause:
+**Example for adverbial clause**:
 {
   "target_chunk": "because it frightened their horses",
-  "analyzed_text": "because [it]<{S':_:それが}> frightened<{V':_:驚かせた}> [their horses]<{O':_:彼らの馬を}>"
+  "analyzed_text": "because<{conn}> it<{s':_:それが}> frightened<{v':_:驚かせた}> their horses<{o':_:彼らの馬を}>",
+  "explanation": "このbecause節は理由を表す副詞節で、文全体では修飾語(M)の役割を果たしています。内部では 'it' が主語(s')、'frightened' が動詞(v')、'their horses' が目的語(o')となっています。"
 }
 
-Important:
-- Always use apostrophe (') in tags for subordinate clause elements: S', V', O', C', M'
+**Important**:
+- **MANDATORY**: Generate sub_structures for EVERY clause marked with [ ], ( ), or < >
+- Always use lowercase with apostrophe (') in tags for subordinate clause elements: s', v', o', c', m'
 - This distinguishes them from main sentence elements: S, V, O, C, M
-- Generate sub_structures for every clause that has internal subject-verb structure
 - Make sure analyzed_text preserves all words from target_chunk
+- Include explanation field for each sub_structure
 
 VALIDATION CHECKLIST (before outputting):
 - [ ] All words from input appear in marked_text

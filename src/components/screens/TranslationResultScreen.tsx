@@ -936,22 +936,30 @@ const getColorClass = (role: string | null): string => {
 const getRoleLabel = (role: string | null): string => {
   if (!role) return '';
   
+  // 大文字・小文字の両方に対応
+  const normalizedRole = role.toUpperCase();
+  
   const labelMap: Record<string, string> = {
     'S': 'S (主語)',
     'V': 'V (動詞)',
     'O': 'O (目的語)',
     'C': 'C (補語)',
     'M': 'M (修飾語)',
-    'Conn': '接続詞',
-    // 従属節内の役割（ダッシュ付き）
-    "S'": "S' (主語・従属節内)",
-    "V'": "V' (動詞・従属節内)",
-    "O'": "O' (目的語・従属節内)",
-    "C'": "C' (補語・従属節内)",
-    "M'": "M' (修飾語・従属節内)",
+    'CONN': '接続詞',
+    // 従属節内の役割（ダッシュ付き）- 大文字・小文字両方に対応
+    "S'": "s' (主語・従属節内)",
+    "V'": "v' (動詞・従属節内)",
+    "O'": "o' (目的語・従属節内)",
+    "C'": "c' (補語・従属節内)",
+    "M'": "m' (修飾語・従属節内)",
   };
   
-  return labelMap[role] || role;
+  // ダッシュ付きの場合は小文字で表示
+  if (role.includes("'")) {
+    return labelMap[normalizedRole] || role.toLowerCase();
+  }
+  
+  return labelMap[normalizedRole] || role;
 };
 
 /**
@@ -1212,7 +1220,7 @@ const ZoomInAccordion = memo(({
   subStructures,
   structureExplanations
 }: { 
-  subStructures: Array<{ target_chunk?: string; analyzed_text?: string }>;
+  subStructures: Array<{ target_chunk?: string; analyzed_text?: string; explanation?: string }>;
   structureExplanations: Array<{ target_text: string; explanation: string; difficulty_level?: 'easy' | 'medium' | 'hard' }>;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -1271,7 +1279,7 @@ const ZoomInAccordion = memo(({
                       <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50 overflow-x-auto">
                         <div className="mb-2">
                           <p className="text-xs text-blue-400 font-semibold mb-1">
-                            ⚠️ 注意: S'/V'/O'/C'/M'は節の中の要素です（メインのS/V/O/C/Mとは区別）
+                            ⚠️ 注意: s'/v'/o'/c'/m'は節の中の要素です（メインのS/V/O/C/Mとは区別）
                           </p>
                         </div>
                         <MarkedTextParser 
@@ -1279,6 +1287,16 @@ const ZoomInAccordion = memo(({
                           onChunkClick={() => {}}
                         />
                       </div>
+                      
+                      {/* 解説（sub_structuresのexplanationフィールド） */}
+                      {subStruct.explanation && (
+                        <div className="mt-3 pt-3 border-t border-blue-700/30">
+                          <p className="text-xs text-blue-400 font-semibold mb-1">解説</p>
+                          <p className="text-sm text-white leading-relaxed bg-blue-900/20 rounded px-3 py-2 border border-blue-700/30">
+                            {subStruct.explanation}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
