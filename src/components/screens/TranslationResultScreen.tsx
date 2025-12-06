@@ -996,6 +996,11 @@ const SentenceCard = memo(({
         <ZoomInAccordion subStructures={sentence.sub_structures} />
       )}
 
+      {/* 詳しい説明エリア（名詞節・wh節などのアコーディオン） */}
+      {sentence.structure_explanations && sentence.structure_explanations.length > 0 && (
+        <StructureExplanationsAccordion explanations={sentence.structure_explanations} />
+      )}
+
       {/* 下段：語句・熟語リスト */}
       {sentence.vocab_list && sentence.vocab_list.length > 0 && (
         <div className="mb-3">
@@ -1244,5 +1249,108 @@ const ZoomInAccordion = memo(({ subStructures }: { subStructures: Array<{ target
 });
 
 ZoomInAccordion.displayName = 'ZoomInAccordion';
+
+/**
+ * StructureExplanationsAccordion - 名詞節・wh節などの詳しい説明をアコーディオンで表示
+ */
+const StructureExplanationsAccordion = memo(({ 
+  explanations 
+}: { 
+  explanations: Array<{ 
+    target_text: string; 
+    explanation: string; 
+    difficulty_level?: 'easy' | 'medium' | 'hard' 
+  }> 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  // 難易度に応じた色とラベル
+  const getDifficultyBadge = (level?: 'easy' | 'medium' | 'hard') => {
+    if (!level) return null;
+    
+    const badges = {
+      easy: { label: '初級', color: 'bg-green-500/20 text-green-300 border-green-500/50' },
+      medium: { label: '中級', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50' },
+      hard: { label: '上級', color: 'bg-red-500/20 text-red-300 border-red-500/50' },
+    };
+    
+    const badge = badges[level];
+    return (
+      <span className={`px-2 py-0.5 rounded text-xs font-bold border ${badge.color}`}>
+        {badge.label}
+      </span>
+    );
+  };
+
+  return (
+    <div className="mb-4">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-3 bg-indigo-900/20 hover:bg-indigo-900/30 rounded-lg border border-indigo-700/30 transition-colors"
+      >
+        <span className="text-sm font-bold text-indigo-300 flex items-center gap-2">
+          <span>📖</span>
+          <span>詳しい説明（名詞節・wh節など）</span>
+          <span className="text-xs font-normal text-indigo-400">
+            ({explanations.length}件)
+          </span>
+        </span>
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ChevronDown className="w-5 h-5 text-indigo-300" />
+        </motion.div>
+      </button>
+      
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-indigo-50/10 rounded-lg p-4 border border-indigo-700/30 space-y-4 mt-2">
+              {explanations.map((explanation, index) => (
+                <div 
+                  key={`explanation-${index}-${explanation.target_text?.substring(0, 20) || index}`} 
+                  className="space-y-2"
+                >
+                  {/* 説明対象のテキスト */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <p className="text-xs text-indigo-400 font-semibold mb-1">説明対象</p>
+                      <p className="text-sm text-indigo-200 font-mono bg-indigo-900/30 rounded px-2 py-1 border border-indigo-700/50">
+                        {explanation.target_text || ''}
+                      </p>
+                    </div>
+                    {/* 難易度バッジ */}
+                    {explanation.difficulty_level && (
+                      <div className="flex-shrink-0 pt-5">
+                        {getDifficultyBadge(explanation.difficulty_level)}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 詳しい説明 */}
+                  <div>
+                    <p className="text-xs text-indigo-400 font-semibold mb-1">解説</p>
+                    <p className="text-sm text-white leading-relaxed bg-indigo-900/20 rounded px-3 py-2 border border-indigo-700/30">
+                      {explanation.explanation || ''}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
+StructureExplanationsAccordion.displayName = 'StructureExplanationsAccordion';
 
 export default TranslationResultScreen;
