@@ -596,7 +596,15 @@ VALIDATION CHECKLIST (before outputting):
 - [ ] All words from input appear in marked_text
 - [ ] All punctuation marks are preserved
 - [ ] Structure follows one of the 4 Case Studies
-- [ ] Tags are correctly applied without dropping text`;
+- [ ] Tags are correctly applied without dropping text
+
+**CRITICAL OUTPUT REQUIREMENT**:
+- You MUST output ONLY valid JSON. Do not include any explanatory text before or after the JSON.
+- Start your response with { and end with }
+- Do not use markdown code blocks (```json or ```)
+- Ensure all strings are properly escaped
+- Ensure all brackets and braces are properly matched
+- The output must be parseable by JSON.parse() directly`;
 
     // テキストが長すぎる場合は切り詰める（1300文字まで）
     const maxTextLength = 1300;
@@ -620,13 +628,35 @@ VALIDATION CHECKLIST (before outputting):
       let parsedResult;
       try {
         // JSON部分を抽出（```json や ``` を除去）
-        const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/) || text.match(/(\{[\s\S]*\})/);
-        const jsonText = jsonMatch ? jsonMatch[1] : text;
+        let jsonText = text.trim();
+        
+        // マークダウンコードブロックを除去
+        jsonText = jsonText.replace(/```(?:json)?\s*/g, '').replace(/```\s*$/g, '');
+        
+        // JSONオブジェクトを抽出（最初の{から最後の}まで）
+        const jsonMatch = jsonText.match(/(\{[\s\S]*\})/);
+        if (!jsonMatch) {
+          throw new Error('JSON object not found in AI response');
+        }
+        
+        jsonText = jsonMatch[1];
+        
+        // デバッグ用：JSONテキストの最初と最後の100文字をログ出力
+        console.log('=== JSON Parse Debug ===');
+        console.log('JSON text length:', jsonText.length);
+        console.log('First 200 chars:', jsonText.substring(0, 200));
+        console.log('Last 200 chars:', jsonText.substring(Math.max(0, jsonText.length - 200)));
+        
         parsedResult = JSON.parse(jsonText);
-      } catch (parseError) {
-        console.error('JSON parse error:', parseError);
-        console.error('Raw text:', text);
-        throw new Error('AIの出力をJSONとして解析できませんでした');
+      } catch (parseError: any) {
+        console.error('=== JSON Parse Error ===');
+        console.error('Error:', parseError.message);
+        console.error('Raw text length:', text.length);
+        console.error('Raw text (first 500 chars):', text.substring(0, 500));
+        console.error('Raw text (last 500 chars):', text.substring(Math.max(0, text.length - 500)));
+        
+        // より詳細なエラーメッセージを返す
+        throw new Error(`AIの出力をJSONとして解析できませんでした: ${parseError.message}`);
       }
 
       // バリデーション
