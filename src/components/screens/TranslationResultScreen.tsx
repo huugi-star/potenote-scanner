@@ -964,20 +964,12 @@ const SentenceCard = memo(({
   sentence: any;
   sentenceIndex: number;
 }) => {
-  // 従属節の検出: marked_textに[ ]、()、<>で囲まれた部分があるかチェック
-  const hasSubordinateClause = (text: string): boolean => {
-    if (!text) return false;
-    // [ ]、()、<>で囲まれた部分を検出
-    const clausePatterns = [
-      /\[[^\]]+\]/g,  // [名詞節]
-      /\([^)]+\)/g,   // (形容詞節)
-      /<[^>]+>/g      // <副詞節>
-    ];
-    return clausePatterns.some(pattern => pattern.test(text));
-  };
-
   const hasSubStructures = sentence.sub_structures && sentence.sub_structures.length > 0;
-  const hasClauses = hasSubordinateClause(sentence.marked_text || '');
+  const hasStructureExplanations = sentence.structure_explanations && sentence.structure_explanations.length > 0;
+  const hasAdvancedGrammar = !!sentence.advanced_grammar_explanation;
+  
+  // ズームインボタンを表示する条件: sub_structuresまたはstructure_explanationsのいずれかがある場合のみ
+  const shouldShowZoomIn = hasSubStructures || hasStructureExplanations;
 
   return (
     <motion.div
@@ -1007,22 +999,16 @@ const SentenceCard = memo(({
         </div>
       </div>
 
-      {/* ズームイン解析エリア（アコーディオン） */}
-      {/* 従属節がある場合、またはsub_structuresが存在する場合に表示 */}
-      {(hasSubStructures || hasClauses) && (
+      {/* ズームイン解析エリア（アコーディオン） - 構造解析と詳細解説を統合 */}
+      {shouldShowZoomIn && (
         <ZoomInAccordion 
-          subStructures={sentence.sub_structures || []} 
-          hasClausesButNoStructures={hasClauses && !hasSubStructures}
+          subStructures={sentence.sub_structures || []}
+          structureExplanations={sentence.structure_explanations || []}
         />
       )}
 
-      {/* 詳しい説明エリア（名詞節・wh節などのアコーディオン） */}
-      {sentence.structure_explanations && sentence.structure_explanations.length > 0 && (
-        <StructureExplanationsAccordion explanations={sentence.structure_explanations} />
-      )}
-
       {/* 高度な文法解説エリア（アコーディオン） */}
-      {sentence.advanced_grammar_explanation && (
+      {hasAdvancedGrammar && (
         <AdvancedGrammarAccordion explanation={sentence.advanced_grammar_explanation} />
       )}
 
@@ -1088,11 +1074,11 @@ const SentenceCard = memo(({
         </div>
       )}
 
-      {/* ワンポイント文法解説 */}
+      {/* ワンポイント文法解説（控えめなデザイン） */}
       {sentence.grammar_note && (
         <div className="mt-3">
-          <div className="bg-purple-900/20 rounded-lg p-3 border border-purple-700/50">
-            <p className="text-purple-200 text-sm leading-relaxed">
+          <div className="bg-purple-900/10 rounded-lg p-2 border border-purple-700/30">
+            <p className="text-purple-300 text-xs leading-relaxed">
               💡 {sentence.grammar_note}
             </p>
           </div>
@@ -1220,13 +1206,14 @@ MarkedTextParser.displayName = 'MarkedTextParser';
 
 /**
  * ZoomInAccordion - ズームイン解析のアコーディオンコンポーネント
+ * 構造解析と詳細解説を統合表示
  */
 const ZoomInAccordion = memo(({ 
-  subStructures, 
-  hasClausesButNoStructures = false 
+  subStructures,
+  structureExplanations
 }: { 
   subStructures: Array<{ target_chunk?: string; analyzed_text?: string }>;
-  hasClausesButNoStructures?: boolean;
+  structureExplanations: Array<{ target_text: string; explanation: string; difficulty_level?: 'easy' | 'medium' | 'hard' }>;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -1238,7 +1225,7 @@ const ZoomInAccordion = memo(({
       >
         <span className="text-sm font-bold text-blue-300 flex items-center gap-2">
           <span>🔍</span>
-          <span>詳しい構造（ズームイン）</span>
+          <span>詳しい構造を見る</span>
         </span>
         <motion.div
           animate={{ rotate: isOpen ? 180 : 0 }}
@@ -1258,49 +1245,104 @@ const ZoomInAccordion = memo(({
             className="overflow-hidden"
           >
             <div className="bg-blue-50/10 rounded-lg p-4 border border-blue-700/30 space-y-4 mt-2">
-              {subStructures.length > 0 ? (
-                subStructures.map((subStruct: any, subIndex: number) => (
-                  <div 
-                    key={`substruct-${subIndex}-${subStruct.target_chunk?.substring(0, 20) || subIndex}`} 
-                    className="space-y-3"
-                  >
-                    {/* 節の説明ヘッダー */}
-                    <div className="flex items-start gap-2">
-                      <span className="text-blue-300 text-sm font-bold">📋</span>
-                      <div className="flex-1">
-                        <p className="text-xs text-blue-400 font-semibold mb-1">
-                          この節の中身の構造（S'/V'/O'/C'/M'）
-                        </p>
-                        <p className="text-sm text-blue-200 font-mono bg-blue-900/30 rounded px-2 py-1 border border-blue-700/50">
-                          {subStruct.target_chunk || ''}
-                        </p>
+              {/* 1. 構造解析（S'/V'/O'/C'/M'タグ付き） */}
+              {subStructures.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-blue-300 mb-2">📋 構造解析</h4>
+                  {subStructures.map((subStruct: any, subIndex: number) => (
+                    <div 
+                      key={`substruct-${subIndex}-${subStruct.target_chunk?.substring(0, 20) || subIndex}`} 
+                      className="space-y-3"
+                    >
+                      {/* 節の説明ヘッダー */}
+                      <div className="flex items-start gap-2">
+                        <span className="text-blue-300 text-sm font-bold">📋</span>
+                        <div className="flex-1">
+                          <p className="text-xs text-blue-400 font-semibold mb-1">
+                            この節の中身の構造（S'/V'/O'/C'/M'）
+                          </p>
+                          <p className="text-sm text-blue-200 font-mono bg-blue-900/30 rounded px-2 py-1 border border-blue-700/50">
+                            {subStruct.target_chunk || ''}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {/* 解析結果 */}
+                      <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50 overflow-x-auto">
+                        <div className="mb-2">
+                          <p className="text-xs text-blue-400 font-semibold mb-1">
+                            ⚠️ 注意: S'/V'/O'/C'/M'は節の中の要素です（メインのS/V/O/C/Mとは区別）
+                          </p>
+                        </div>
+                        <MarkedTextParser 
+                          text={subStruct.analyzed_text || ''} 
+                          onChunkClick={() => {}}
+                        />
                       </div>
                     </div>
-                    
-                    {/* 解析結果 */}
-                    <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50 overflow-x-auto">
-                      <div className="mb-2">
-                        <p className="text-xs text-blue-400 font-semibold mb-1">
-                          ⚠️ 注意: S'/V'/O'/C'/M'は節の中の要素です（メインのS/V/O/C/Mとは区別）
-                        </p>
-                      </div>
-                      <MarkedTextParser 
-                        text={subStruct.analyzed_text || ''} 
-                        onChunkClick={() => {}}
-                      />
-                    </div>
-                  </div>
-                ))
-              ) : hasClausesButNoStructures ? (
-                <div className="text-center py-4">
-                  <p className="text-blue-300 text-sm mb-2">
-                    📝 この文には従属節が含まれています
-                  </p>
-                  <p className="text-blue-400 text-xs">
-                    詳細な構造解析は準備中です。節の構造は上部の記号付き原文で確認できます。
-                  </p>
+                  ))}
                 </div>
-              ) : null}
+              )}
+
+              {/* 2. 詳細解説テキスト（名詞節の役割など） */}
+              {structureExplanations.length > 0 && (
+                <div className="space-y-3">
+                  {subStructures.length > 0 && (
+                    <div className="border-t border-blue-700/30 pt-3"></div>
+                  )}
+                  <h4 className="text-xs font-bold text-blue-300 mb-2">📖 詳しい解説</h4>
+                  {structureExplanations.map((explanation: any, expIndex: number) => {
+                    // 難易度に応じた色とラベル
+                    const getDifficultyBadge = (level?: 'easy' | 'medium' | 'hard') => {
+                      if (!level) return null;
+                      
+                      const badges = {
+                        easy: { label: '初級', color: 'bg-green-500/20 text-green-300 border-green-500/50' },
+                        medium: { label: '中級', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50' },
+                        hard: { label: '上級', color: 'bg-red-500/20 text-red-300 border-red-500/50' },
+                      };
+                      
+                      const badge = badges[level];
+                      return (
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold border ${badge.color}`}>
+                          {badge.label}
+                        </span>
+                      );
+                    };
+
+                    return (
+                      <div 
+                        key={`explanation-${expIndex}-${explanation.target_text?.substring(0, 20) || expIndex}`} 
+                        className="space-y-2"
+                      >
+                        {/* 説明対象のテキスト */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-blue-400 font-semibold mb-1">説明対象</p>
+                            <p className="text-sm text-blue-200 font-mono bg-blue-900/30 rounded px-2 py-1 border border-blue-700/50">
+                              {explanation.target_text || ''}
+                            </p>
+                          </div>
+                          {/* 難易度バッジ */}
+                          {explanation.difficulty_level && (
+                            <div className="flex-shrink-0 pt-5">
+                              {getDifficultyBadge(explanation.difficulty_level)}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* 詳しい説明 */}
+                        <div>
+                          <p className="text-xs text-blue-400 font-semibold mb-1">解説</p>
+                          <p className="text-sm text-white leading-relaxed bg-blue-900/20 rounded px-3 py-2 border border-blue-700/30">
+                            {explanation.explanation || ''}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -1310,109 +1352,6 @@ const ZoomInAccordion = memo(({
 });
 
 ZoomInAccordion.displayName = 'ZoomInAccordion';
-
-/**
- * StructureExplanationsAccordion - 名詞節・wh節などの詳しい説明をアコーディオンで表示
- */
-const StructureExplanationsAccordion = memo(({ 
-  explanations 
-}: { 
-  explanations: Array<{ 
-    target_text: string; 
-    explanation: string; 
-    difficulty_level?: 'easy' | 'medium' | 'hard' 
-  }> 
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  // 難易度に応じた色とラベル
-  const getDifficultyBadge = (level?: 'easy' | 'medium' | 'hard') => {
-    if (!level) return null;
-    
-    const badges = {
-      easy: { label: '初級', color: 'bg-green-500/20 text-green-300 border-green-500/50' },
-      medium: { label: '中級', color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50' },
-      hard: { label: '上級', color: 'bg-red-500/20 text-red-300 border-red-500/50' },
-    };
-    
-    const badge = badges[level];
-    return (
-      <span className={`px-2 py-0.5 rounded text-xs font-bold border ${badge.color}`}>
-        {badge.label}
-      </span>
-    );
-  };
-
-  return (
-    <div className="mb-4">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-3 bg-indigo-900/20 hover:bg-indigo-900/30 rounded-lg border border-indigo-700/30 transition-colors"
-      >
-        <span className="text-sm font-bold text-indigo-300 flex items-center gap-2">
-          <span>📖</span>
-          <span>詳しい説明（名詞節・wh節など）</span>
-          <span className="text-xs font-normal text-indigo-400">
-            ({explanations.length}件)
-          </span>
-        </span>
-        <motion.div
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <ChevronDown className="w-5 h-5 text-indigo-300" />
-        </motion.div>
-      </button>
-      
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="overflow-hidden"
-          >
-            <div className="bg-indigo-50/10 rounded-lg p-4 border border-indigo-700/30 space-y-4 mt-2">
-              {explanations.map((explanation, index) => (
-                <div 
-                  key={`explanation-${index}-${explanation.target_text?.substring(0, 20) || index}`} 
-                  className="space-y-2"
-                >
-                  {/* 説明対象のテキスト */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <p className="text-xs text-indigo-400 font-semibold mb-1">説明対象</p>
-                      <p className="text-sm text-indigo-200 font-mono bg-indigo-900/30 rounded px-2 py-1 border border-indigo-700/50">
-                        {explanation.target_text || ''}
-                      </p>
-                    </div>
-                    {/* 難易度バッジ */}
-                    {explanation.difficulty_level && (
-                      <div className="flex-shrink-0 pt-5">
-                        {getDifficultyBadge(explanation.difficulty_level)}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* 詳しい説明 */}
-                  <div>
-                    <p className="text-xs text-indigo-400 font-semibold mb-1">解説</p>
-                    <p className="text-sm text-white leading-relaxed bg-indigo-900/20 rounded px-3 py-2 border border-indigo-700/30">
-                      {explanation.explanation || ''}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-});
-
-StructureExplanationsAccordion.displayName = 'StructureExplanationsAccordion';
 
 /**
  * AdvancedGrammarAccordion - 高度な文法解説をアコーディオンで表示
