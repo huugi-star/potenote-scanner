@@ -29,7 +29,8 @@ const TranslationSchema = z.object({
       target_text: z.string(), // 説明対象のテキスト（例: "because it frightened their horses"）
       explanation: z.string(), // 詳しい構造説明
       difficulty_level: z.enum(['easy', 'medium', 'hard']).optional() // 難易度（オプション）
-    })).optional() // 難しい部分の詳しい説明（アコーディオン用）
+    })).optional(), // 難しい部分の詳しい説明（アコーディオン用）
+    advanced_grammar_explanation: z.string().nullable().optional() // 高度な文法解説（名詞節・WH節・倒置・関係詞の非制限用法など）
   }))
 });
 
@@ -498,6 +499,29 @@ Examples:
     "explanation": "これは接続詞ifで始まる副詞節で、文全体では修飾語(M)の役割を果たしています。'if'は「もし～なら」という意味で、条件を表します。この節の中では、'the population'が主語(S')、'continues to grow'が動詞(V')、'at its present rate'が修飾語(M')という構造になっています。",
     "difficulty_level": "medium"
   }
+
+ADVANCED GRAMMAR EXPLANATION (高度な文法解説):
+Generate advanced_grammar_explanation field when the sentence contains advanced grammatical structures that might confuse beginners. This should be a comprehensive explanation covering the entire sentence's complex grammar.
+
+Generate this field when the sentence contains:
+1. Noun clauses (名詞節): that節、wh節、whether節など
+2. WH clauses (WH節): what, which, who, where, when, why, how節など
+3. Inversion (倒置): 語順が通常と異なる構造（疑問文、否定語の文頭、仮定法など）
+4. Non-restrictive relative clauses (関係詞の非制限用法): カンマで区切られた関係詞節
+5. Subjunctive mood (仮定法): if節、wish節、as if節など
+6. Participle constructions (分詞構文): 分詞を使った構文
+7. Complex sentence structures (複雑な文構造): 複数の従属節を含む文
+
+Format:
+- advanced_grammar_explanation: A detailed explanation (3-6 sentences) in Japanese that helps beginners understand the advanced grammar structure
+- If no advanced grammar is present, set to null or omit the field
+- Focus on explaining WHY the structure is used and HOW it affects the meaning
+- Use beginner-friendly language with examples
+
+Example:
+{
+  "advanced_grammar_explanation": "この文には名詞節が含まれています。'that the world will soon be overpopulated'という部分は、believeという動詞の目的語として使われている名詞節です。名詞節は、文の中で名詞と同じ役割を果たし、主語・目的語・補語になることができます。この場合、'that'は接続詞として機能し、その後の文全体を1つの名詞として扱っています。初心者にとっては、このような構造が文の主語や目的語になることに慣れるまで時間がかかるかもしれません。"
+}
 
 SUB-STRUCTURES (for complex clauses 5+ words):
 - Extract chunk text from marked_text

@@ -95,6 +95,7 @@ export interface SentenceResult {
     explanation: string;      // 詳しい構造説明
     difficulty_level?: 'easy' | 'medium' | 'hard'; // 難易度（オプション）
   }>;
+  advanced_grammar_explanation?: string | null; // 高度な文法解説（名詞節・WH節・倒置・関係詞の非制限用法など）
 }
 
 /**

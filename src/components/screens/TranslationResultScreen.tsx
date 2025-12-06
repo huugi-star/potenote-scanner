@@ -1001,6 +1001,11 @@ const SentenceCard = memo(({
         <StructureExplanationsAccordion explanations={sentence.structure_explanations} />
       )}
 
+      {/* 高度な文法解説エリア（アコーディオン） */}
+      {sentence.advanced_grammar_explanation && (
+        <AdvancedGrammarAccordion explanation={sentence.advanced_grammar_explanation} />
+      )}
+
       {/* 下段：語句・熟語リスト */}
       {sentence.vocab_list && sentence.vocab_list.length > 0 && (
         <div className="mb-3">
@@ -1352,5 +1357,64 @@ const StructureExplanationsAccordion = memo(({
 });
 
 StructureExplanationsAccordion.displayName = 'StructureExplanationsAccordion';
+
+/**
+ * AdvancedGrammarAccordion - 高度な文法解説をアコーディオンで表示
+ * 名詞節・WH節・倒置・関係詞の非制限用法などの複雑な構文の包括的な解説を表示
+ */
+const AdvancedGrammarAccordion = memo(({ 
+  explanation 
+}: { 
+  explanation: string 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="mb-4">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-3 bg-violet-900/20 hover:bg-violet-900/30 rounded-lg border border-violet-700/30 transition-colors"
+      >
+        <span className="text-sm font-bold text-violet-300 flex items-center gap-2">
+          <span>🔍</span>
+          <span>詳しい文法解説を見る</span>
+        </span>
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ChevronDown className="w-5 h-5 text-violet-300" />
+        </motion.div>
+      </button>
+      
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-violet-50/10 rounded-lg p-4 border border-violet-700/30 mt-2">
+              <div className="space-y-3">
+                <div className="flex items-start gap-2">
+                  <span className="text-violet-300 text-lg">📚</span>
+                  <div className="flex-1">
+                    <p className="text-sm text-white leading-relaxed whitespace-pre-wrap">
+                      {explanation}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
+AdvancedGrammarAccordion.displayName = 'AdvancedGrammarAccordion';
 
 export default TranslationResultScreen;
