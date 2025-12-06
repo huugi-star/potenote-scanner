@@ -89,6 +89,34 @@ export async function POST(req: Request) {
 - **従属構造（analyzed_text）**: 節の中身には小文字+ダッシュタグを使用 (s', v', o', c', m')
 - この区別を厳密に守ること。混同は許されない。
 
+【重要：省略された語の可視化（伊藤メソッド）】
+文法的に省略されている語を ( ) で補って出力し、初学者が構造を理解しやすくする。
+
+**Rule 1: 接続詞 that の省略**
+- パターン: think/believe/say/know/hope などの動詞の直後に主語+動詞が続く場合
+- 処理: 省略されている接続詞 that を (that) として補完し、<{CONN}> タグを付ける
+- 例:
+  * 原文: "They think we need more laws."
+  * 出力: "[They]<{S}> think<{V}> [(that)<{CONN}> we<{s'}> need<{v'}> [more laws]<{o'}>]<{O}>"
+  * 説明: think の直後に we が来ているため、省略された (that) を補完
+
+**Rule 2: 関係代名詞の目的格の省略**
+- パターン: 名詞の直後に主語+動詞が続く場合（関係代名詞の目的格が省略されている）
+- 処理: 省略されている関係代名詞を (which)/(that)/(whom) として補完し、<{REL}> タグを付ける
+- 例:
+  * 原文: "the book I read"
+  * 出力: "[the book]<{S}> <(which)<{REL}> I<{s'}> read<{v'}>><{M}>"
+  * 説明: book の直後に I read が来ているため、省略された (which) を補完
+
+**Rule 3: その他の省略**
+- 分詞構文の主語省略: 文脈から主語が明らかな場合、必要に応じて補完
+- 比較構文の省略: than の後の省略も補完可能な場合は補完
+
+**重要**:
+- 補完した語は必ず ( ) で囲む
+- 補完した語には適切なタグ（CONN, REL など）を付ける
+- 原文には存在しないが、文法的に省略されていると判断できる場合のみ補完する
+
 【重要：模範解答 (Few-Shot Examples)】
 以下のケーススタディを厳密に模倣すること。
 
@@ -150,6 +178,48 @@ SYMBOLS (絶対遵守):
 
 【模範解答 (Few-Shot Examples)】
 以下のケーススタディを厳密に模倣すること。
+
+#### Case 0: 省略された接続詞 that の可視化
+Input: "They think we need more laws."
+Output Logic:
+- think の直後に we が来ている → 省略された接続詞 (that) を補完
+- (that) に <{CONN}> タグを付ける
+- we need more laws は名詞節として [ ] で囲み、<{O}> タグを付ける
+Output:
+{
+  "sentences": [{
+    "marked_text": "[They]<{S:_:彼らは}> think<{V:_:考える}> [(that)<{CONN:_:～ということを}> we<{s':_:我々が}> need<{v':_:必要とする}> [more laws]<{o':_:より多くの法律を}>]<{O:_:～ということを}>.",
+    "translation": "彼らは、我々がより多くの法律を必要とする（ということを）考える。",
+    "vocab_list": [{"word": "law", "meaning": "法律"}],
+    "grammar_note": "think の直後に省略された接続詞 that があります。この that 節は名詞節で、think の目的語(O)になっています。",
+    "sub_structures": [{
+      "target_chunk": "that we need more laws",
+      "analyzed_text": "(that)<{conn}> [we]<{s':_:我々が}> need<{v':_:必要とする}> [more laws]<{o':_:より多くの法律を}>",
+      "explanation": "このthat節は文全体の目的語(O)です。内部では 'we' が主語(s')、'need' が動詞(v')、'more laws' が目的語(o')となっています。原文では接続詞thatが省略されていますが、文法的には存在するため (that) として補完しています。"
+    }]
+  }]
+}
+
+#### Case 0.5: 省略された関係代名詞の可視化
+Input: "the book I read yesterday"
+Output Logic:
+- book の直後に I read が来ている → 省略された関係代名詞 (which) を補完
+- (which) に <{REL}> タグを付ける
+- (which) I read yesterday は形容詞節として ( ) で囲み、<{M}> タグを付ける
+Output:
+{
+  "sentences": [{
+    "marked_text": "[the book]<{S:_:その本は}> <(which)<{REL:_:～を}> I<{s':_:私が}> read<{v':_:読んだ}> yesterday<{m':_:昨日}><{M:関係詞節:私が昨日読んだ}>.",
+    "translation": "その本は、私が昨日読んだ（もの）です。",
+    "vocab_list": [{"word": "read", "meaning": "読む"}],
+    "grammar_note": "book の直後に省略された関係代名詞 which があります。この関係代名詞節は形容詞節で、book を修飾しています。",
+    "sub_structures": [{
+      "target_chunk": "which I read yesterday",
+      "analyzed_text": "(which)<{rel}> [I]<{s':_:私が}> read<{v':_:読んだ}> <yesterday><{m':_:昨日}>",
+      "explanation": "この関係代名詞節は直前の名詞(book)を修飾する形容詞節です。内部では 'I' が主語(s')、'read' が動詞(v')、'yesterday' が修飾語(m')となっています。原文では関係代名詞whichが省略されていますが、文法的には存在するため (which) として補完しています。"
+    }]
+  }]
+}
 
 #### Case 1: 複合動詞と前置詞句
 Input: "For many years, the population began to increase."
