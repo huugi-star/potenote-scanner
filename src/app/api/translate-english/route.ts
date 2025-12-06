@@ -159,6 +159,30 @@ SYMBOLS (絶対遵守):
 - NG例: [often]<{M}> → OK: <often><{M}>
 - NG例: [very good]<{C}> → OK: [very good]<{C}>（Cなので[]はOK）
 
+【重要：熟語・構文の解析ルール】
+熟語や構文は意味的には一つの動詞のように見えるが、構造解析上は必ず分解すること。
+
+**Rule 1: think highly of / speak ill of などの熟語**
+- これらは意味的には「評価する」「悪口を言う」という一つの動詞のようだが、構造解析上は分解する
+- `highly` や `ill` は **副詞 (M)** として `< >` で囲むこと（決して C としないこと）
+- `of ...` は **前置詞句 (M)** として `< >` で囲むこと
+- 例:
+  * 原文: "They think highly of him."
+  * 出力: "[They]<{S:_:彼らは}> think<{V:_:考える}> <highly><{M:副詞:高く}> <of him><{M:前置詞句:彼について}>."
+  * 説明: think highly of は熟語だが、構造上は think + 副詞 + 前置詞句として分解
+
+**Rule 2: 品詞と要素のルール厳守**
+- **副詞（adv）は原則として M として扱うこと。S/O/Cにはしない。**
+- 副詞は常に修飾語(M)の役割を果たす
+- NG例: [highly]<{C}> → OK: <highly><{M}>
+- NG例: [well]<{C}> → OK: <well><{M}>
+- 例外: be動詞の後の形容詞は補語(C)として扱う（例: [very good]<{C}>）
+
+**Rule 3: 前置詞句の扱い**
+- 前置詞句は常に修飾語(M)として `< >` で囲む
+- `of ...`, `in ...`, `on ...`, `at ...` などは全て `< >` で囲む
+- NG例: [of him]<{O}> → OK: <of him><{M}>
+
 【UI整形ルール（絶対遵守）】
 1. 修飾語(M)は必ず< >を使用（最重要）:
    - 役割がM（修飾語）の場合、必ず< >を使用すること。[ ]は絶対に使わない。
@@ -218,6 +242,38 @@ Output:
       "analyzed_text": "(which)<{rel}> [I]<{s':_:私が}> read<{v':_:読んだ}> <yesterday><{m':_:昨日}>",
       "explanation": "この関係代名詞節は直前の名詞(book)を修飾する形容詞節です。内部では 'I' が主語(s')、'read' が動詞(v')、'yesterday' が修飾語(m')となっています。原文では関係代名詞whichが省略されていますが、文法的には存在するため (which) として補完しています。"
     }]
+  }]
+}
+
+#### Case 0.6: 熟語の構造分解（think highly of）
+Input: "They think highly of him."
+Output Logic:
+- think highly of は意味的には「評価する」という一つの動詞だが、構造解析上は分解する
+- highly は副詞(M)として < > で囲む（決して C としない）
+- of him は前置詞句(M)として < > で囲む
+Output:
+{
+  "sentences": [{
+    "marked_text": "[They]<{S:_:彼らは}> think<{V:_:考える}> <highly><{M:副詞:高く}> <of him><{M:前置詞句:彼について}>.",
+    "translation": "彼らは彼を高く評価する。",
+    "vocab_list": [{"word": "think highly of", "meaning": "～を高く評価する", "isIdiom": true, "explanation": "think highly of は熟語で「～を高く評価する」という意味です。構造上は think + 副詞 + 前置詞句として分解されます。"}],
+    "grammar_note": "think highly of は熟語ですが、構造解析上は think (V) + highly (M:副詞) + of him (M:前置詞句) として分解します。副詞は常に修飾語(M)として扱います。"
+  }]
+}
+
+#### Case 0.7: 熟語の構造分解（speak ill of）
+Input: "Don't speak ill of others."
+Output Logic:
+- speak ill of は意味的には「悪口を言う」という一つの動詞だが、構造解析上は分解する
+- ill は副詞(M)として < > で囲む（決して C としない）
+- of others は前置詞句(M)として < > で囲む
+Output:
+{
+  "sentences": [{
+    "marked_text": "Don't<{V:_:～するな}> speak<{V:_:話す}> <ill><{M:副詞:悪く}> <of others><{M:前置詞句:他人について}>.",
+    "translation": "他人の悪口を言うな。",
+    "vocab_list": [{"word": "speak ill of", "meaning": "～の悪口を言う", "isIdiom": true, "explanation": "speak ill of は熟語で「～の悪口を言う」という意味です。構造上は speak + 副詞 + 前置詞句として分解されます。"}],
+    "grammar_note": "speak ill of は熟語ですが、構造解析上は speak (V) + ill (M:副詞) + of others (M:前置詞句) として分解します。副詞は常に修飾語(M)として扱い、S/O/Cにはしません。"
   }]
 }
 
