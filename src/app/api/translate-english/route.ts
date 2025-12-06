@@ -20,9 +20,16 @@ const TranslationSchema = z.object({
     })).optional(), // 複雑な部分の分解リスト（ズームイン解析）
     vocab_list: z.array(z.object({
       word: z.string(),   // 例: "keep up with"
-      meaning: z.string() // 例: "～に遅れずについていく"
+      meaning: z.string(), // 例: "～に遅れずについていく"
+      isIdiom: z.boolean().optional(), // イディオムかどうか
+      explanation: z.string().optional() // イディオムの説明（isIdiomがtrueの場合に推奨）
     })).optional(), // 重要単語・熟語リスト
-    grammar_note: z.string().optional() // ワンポイント文法解説
+    grammar_note: z.string().optional(), // ワンポイント文法解説
+    structure_explanations: z.array(z.object({
+      target_text: z.string(), // 説明対象のテキスト（例: "because it frightened their horses"）
+      explanation: z.string(), // 詳しい構造説明
+      difficulty_level: z.enum(['easy', 'medium', 'hard']).optional() // 難易度（オプション）
+    })).optional() // 難しい部分の詳しい説明（アコーディオン用）
   }))
 });
 
@@ -84,6 +91,8 @@ PROCESS:
    - marked_text: Structure markers with tags <{Role:Attribute:Meaning}> (MUST include ALL words from input)
    - translation: Natural Japanese translation (直読直解の順序)
    - vocab_list: Important words/phrases (optional, max 3 items)
+     * If the word/phrase is an idiom, include isIdiom: true and explanation (brief explanation of the idiom's meaning)
+     * Example: {"word": "break the ice", "meaning": "場の雰囲気を和らげる", "isIdiom": true, "explanation": "緊張した雰囲気を和らげることを意味します。"}
    - grammar_note: One-point grammar explanation (REQUIRED for complex sentences)
    - sub_structures: Detailed analysis of complex subordinate clauses (optional, for 5+ word clauses)
 
@@ -92,15 +101,26 @@ TAGGING FORMAT: <{Role:Attribute:Meaning}>
 - Attribute: Grammar type or "_"
 - Meaning: Direct Japanese translation
 
-SYMBOLS:
-- [ ] = 名詞（S/O/Cになる文の骨格）
-- ( ) = 形容詞・関係詞節（名詞を修飾）
-- < > = 副詞・前置詞句・修飾語（M）
+SYMBOLS (絶対遵守):
+- [ ] = 名詞（S/O/Cになる文の骨格のみ。修飾語には絶対に使わない）
+- ( ) = 形容詞・関係詞節（名詞を修飾する場合のみ）
+- < > = 副詞・前置詞句・修飾語（Mの役割を持つものは必ず< >を使用）
+
+【重要：記号の使い分けルール】
+- 役割がM（修飾語）の場合、必ず< >を使用すること。[]は絶対に使わない。
+- 副詞、前置詞句、副詞節は全て< >で囲む。
+- NG例: [quickly]<{M}> → OK: <quickly><{M}>
+- NG例: [often]<{M}> → OK: <often><{M}>
+- NG例: [very good]<{C}> → OK: [very good]<{C}>（Cなので[]はOK）
 
 【UI整形ルール（絶対遵守）】
-1. 副詞節の完全凝集 (No Breakdown in Main View):
-   - because, when, if, although で始まる副詞節は、メイン表示(marked_text)において内部を絶対に分解せず、一つの < ... ><{M}> として出力すること。
-   - 内部構造は sub_structures 側で生成するため、メイン側では不要。
+1. 修飾語(M)は必ず< >を使用（最重要）:
+   - 役割がM（修飾語）の場合、必ず< >を使用すること。[ ]は絶対に使わない。
+   - 副詞、前置詞句、副詞節は全て< >で囲む。
+   - NG: [quickly]<{M}> → OK: <quickly><{M}>
+   - NG: [often]<{M}> → OK: <often><{M}>
+   - NG: [very good]<{C}> → OK: [very good]<{C}>（Cなので[]はOK）
+   - 副詞節（because, when, if, althoughで始まる）も必ず< ... ><{M}>として出力。
    - NG: <because><{M}> [it]<{S'}> ...
    - OK: <because it frightened their horses><{M:接続詞:なぜなら～だから}>
 
@@ -387,6 +407,23 @@ GRAMMAR NOTE GENERATION:
 When a subordinate clause (that/wh/if/because clause) appears, explain its INTERNAL structure:
 - Template: "この[記号]節は、文全体の[役割]になっています。中身を見ると、『[単語]』が主語(S')、『[単語]』が動詞(V')という構造です。"
 - For prepositional phrases: "これは[理由/時間/場所]を表す前置詞句です。"
+
+STRUCTURE EXPLANATIONS (for difficult parts - accordion display):
+Generate structure_explanations array for parts that users might find difficult:
+- Subordinate clauses (that/wh/if/because clauses)
+- Complex prepositional phrases
+- Inverted word order
+- Phrasal verbs
+- Passive voice constructions
+- Each explanation should include:
+  * target_text: The exact text from marked_text that needs explanation
+  * explanation: Detailed explanation of the structure (2-3 sentences)
+  * difficulty_level: 'easy', 'medium', or 'hard' (optional)
+- Example: {
+    "target_text": "because it frightened their horses",
+    "explanation": "これは接続詞becauseで始まる副詞節です。文全体では修飾語(M)の役割を果たしています。中身を見ると、'it'が主語(S')、'frightened'が動詞(V')、'their horses'が目的語(O')という構造になっています。",
+    "difficulty_level": "medium"
+  }
 
 SUB-STRUCTURES (for complex clauses 5+ words):
 - Extract chunk text from marked_text

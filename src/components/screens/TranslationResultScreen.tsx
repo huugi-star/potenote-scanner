@@ -982,13 +982,25 @@ const SentenceCard = memo(({
         <ZoomInAccordion subStructures={sentence.sub_structures} />
       )}
 
+      {/* 英文構造の詳しい説明（アコーディオン） */}
+      {sentence.structure_explanations && sentence.structure_explanations.length > 0 && (
+        <StructureExplanationsAccordion explanations={sentence.structure_explanations} />
+      )}
+
       {/* 下段：語句・熟語リスト */}
       {sentence.vocab_list && sentence.vocab_list.length > 0 && (
         <div className="mb-3">
           <h3 className="text-sm font-bold text-yellow-400 mb-2">重要語句</h3>
           <div className="bg-gray-50/10 rounded-lg p-3 space-y-2">
             {sentence.vocab_list.map((vocab: any, vocabIndex: number) => {
-              // イディオムデータベース（説明のみ）
+              // APIから返されたイディオム情報を優先使用、なければデータベースを参照
+              const vocabWord = (vocab.word || '').toLowerCase().trim();
+              
+              // APIから返された説明がある場合はそれを使用
+              const apiExplanation = vocab.explanation || null;
+              const apiIsIdiom = vocab.isIdiom === true;
+              
+              // フォールバック用のイディオムデータベース（説明のみ）
               const idiomDatabase: Record<string, string> = {
                 'break the ice': '緊張した雰囲気を和らげることを意味します。',
                 'hit the nail on the head': '物事の核心を正確に捉えることを表します。',
@@ -1017,9 +1029,9 @@ const SentenceCard = memo(({
                 'look after': '人や物の面倒を見ることを表します。',
               };
               
-              const vocabWord = (vocab.word || '').toLowerCase().trim();
-              const isIdiom = idiomDatabase[vocabWord] !== undefined;
-              const idiomExplanation = isIdiom ? idiomDatabase[vocabWord] : null;
+              // APIから説明がある場合はそれを使用、なければデータベースを参照
+              const isIdiom = apiIsIdiom || idiomDatabase[vocabWord] !== undefined;
+              const idiomExplanation = apiExplanation || (idiomDatabase[vocabWord] || null);
               
               return (
                 <div key={`vocab-${vocabIndex}-${vocab.word || vocabIndex}`} className="space-y-2">
@@ -1230,6 +1242,85 @@ const ZoomInAccordion = memo(({ subStructures }: { subStructures: Array<{ target
 });
 
 ZoomInAccordion.displayName = 'ZoomInAccordion';
+
+/**
+ * StructureExplanationsAccordion - 英文構造の詳しい説明アコーディオンコンポーネント
+ */
+const StructureExplanationsAccordion = memo(({ explanations }: { explanations: Array<{ target_text: string; explanation: string; difficulty_level?: 'easy' | 'medium' | 'hard' }> }) => {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const getDifficultyColor = (level?: 'easy' | 'medium' | 'hard') => {
+    switch (level) {
+      case 'easy': return 'text-green-400';
+      case 'medium': return 'text-yellow-400';
+      case 'hard': return 'text-red-400';
+      default: return 'text-gray-400';
+    }
+  };
+
+  const getDifficultyLabel = (level?: 'easy' | 'medium' | 'hard') => {
+    switch (level) {
+      case 'easy': return '初級';
+      case 'medium': return '中級';
+      case 'hard': return '上級';
+      default: return '';
+    }
+  };
+
+  return (
+    <div className="mb-4 space-y-2">
+      {explanations.map((explanation, index) => {
+        const isOpen = openIndex === index;
+        return (
+          <div key={`explanation-${index}-${explanation.target_text.substring(0, 20)}`}>
+            <button
+              onClick={() => setOpenIndex(isOpen ? null : index)}
+              className="w-full flex items-center justify-between p-3 bg-purple-900/20 hover:bg-purple-900/30 rounded-lg border border-purple-700/30 transition-colors"
+            >
+              <div className="flex items-center gap-2 flex-1 text-left">
+                <span className="text-sm">💡</span>
+                <span className="text-sm font-bold text-purple-300 flex-1">
+                  構造解説: <span className="font-mono text-xs">{explanation.target_text}</span>
+                </span>
+                {explanation.difficulty_level && (
+                  <span className={`text-xs font-medium ${getDifficultyColor(explanation.difficulty_level)}`}>
+                    [{getDifficultyLabel(explanation.difficulty_level)}]
+                  </span>
+                )}
+              </div>
+              <motion.div
+                animate={{ rotate: isOpen ? 180 : 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <ChevronDown className="w-5 h-5 text-purple-300" />
+              </motion.div>
+            </button>
+            
+            <AnimatePresence>
+              {isOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden"
+                >
+                  <div className="bg-purple-50/10 rounded-lg p-4 border border-purple-700/30 mt-2">
+                    <p className="text-purple-200 text-sm leading-relaxed whitespace-pre-wrap">
+                      {explanation.explanation}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
+    </div>
+  );
+});
+
+StructureExplanationsAccordion.displayName = 'StructureExplanationsAccordion';
 
 export default TranslationResultScreen;
 

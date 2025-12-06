@@ -86,8 +86,15 @@ export interface SentenceResult {
   vocab_list?: Array<{        // 重要単語・熟語リスト
     word: string;             // 例: "keep up with"
     meaning: string;          // 例: "～に遅れずについていく"
+    isIdiom?: boolean;        // イディオムかどうか（オプション）
+    explanation?: string;      // イディオムの説明（オプション）
   }>;
   grammar_note?: string;      // ワンポイント文法解説
+  structure_explanations?: Array<{  // 難しい部分の詳しい説明（アコーディオン用）
+    target_text: string;      // 説明対象のテキスト（例: "because it frightened their horses"）
+    explanation: string;      // 詳しい構造説明
+    difficulty_level?: 'easy' | 'medium' | 'hard'; // 難易度（オプション）
+  }>;
 }
 
 /**
