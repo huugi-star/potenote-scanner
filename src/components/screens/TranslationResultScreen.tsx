@@ -214,6 +214,9 @@ const VisualChunk = memo(({
   symbol?: string;
   isNested?: boolean;
 }) => {
+  // 句読点のみの場合は解説を表示しない
+  const isPunctuationOnly = /^[.,;:!?'"()\[\]{}<>\-—–\s]+$/.test(text.trim());
+  
   // 色とラベルの決定
   const { colorClasses, label, description } = getChunkStyle(role, symbol, isNested);
   
@@ -225,29 +228,33 @@ const VisualChunk = memo(({
       {/* 1段目: 英文カード */}
       <div className={`
         relative px-3 py-2 rounded-lg text-lg font-bold font-mono text-center shadow-md transition-transform group-hover:scale-105
-        ${colorClasses.bg} ${colorClasses.text} ${colorClasses.border} border-b-4
+        ${isPunctuationOnly ? 'bg-transparent border-transparent' : `${colorClasses.bg} ${colorClasses.text} ${colorClasses.border}`} border-b-4
       `}>
         {displayText}
       </div>
 
-      {/* 2段目: 直訳 */}
-      <div className="mt-2 text-sm text-gray-300 font-medium text-center leading-tight px-1">
-        {translation || '...'}
-      </div>
-
-      {/* 3段目: 役割ラベル */}
-      <div className="mt-1 flex flex-col items-center">
-        {/* 線 */}
-        <div className={`w-0.5 h-2 ${colorClasses.lineBg}`}></div>
-        {/* 丸ラベル */}
-        <div className={`
-          px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap
-          ${colorClasses.labelBg} ${colorClasses.labelText}
-        `}>
-          {label}
-          {description && <span className="ml-1 opacity-80 font-normal normal-case">({description})</span>}
+      {/* 2段目: 直訳（句読点の場合は非表示） */}
+      {!isPunctuationOnly && (
+        <div className="mt-2 text-sm text-gray-300 font-medium text-center leading-tight px-1">
+          {translation || '...'}
         </div>
-      </div>
+      )}
+
+      {/* 3段目: 役割ラベル（句読点の場合は非表示） */}
+      {!isPunctuationOnly && role && (
+        <div className="mt-1 flex flex-col items-center">
+          {/* 線 */}
+          <div className={`w-0.5 h-2 ${colorClasses.lineBg}`}></div>
+          {/* 丸ラベル */}
+          <div className={`
+            px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap
+            ${colorClasses.labelBg} ${colorClasses.labelText}
+          `}>
+            {label}
+            {description && <span className="ml-1 opacity-80 font-normal normal-case">({description})</span>}
+          </div>
+        </div>
+      )}
     </div>
   );
 });
