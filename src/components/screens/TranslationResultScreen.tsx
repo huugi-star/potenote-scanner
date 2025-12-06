@@ -964,6 +964,21 @@ const SentenceCard = memo(({
   sentence: any;
   sentenceIndex: number;
 }) => {
+  // 従属節の検出: marked_textに[ ]、()、<>で囲まれた部分があるかチェック
+  const hasSubordinateClause = (text: string): boolean => {
+    if (!text) return false;
+    // [ ]、()、<>で囲まれた部分を検出
+    const clausePatterns = [
+      /\[[^\]]+\]/g,  // [名詞節]
+      /\([^)]+\)/g,   // (形容詞節)
+      /<[^>]+>/g      // <副詞節>
+    ];
+    return clausePatterns.some(pattern => pattern.test(text));
+  };
+
+  const hasSubStructures = sentence.sub_structures && sentence.sub_structures.length > 0;
+  const hasClauses = hasSubordinateClause(sentence.marked_text || '');
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -993,8 +1008,12 @@ const SentenceCard = memo(({
       </div>
 
       {/* ズームイン解析エリア（アコーディオン） */}
-      {sentence.sub_structures && sentence.sub_structures.length > 0 && (
-        <ZoomInAccordion subStructures={sentence.sub_structures} />
+      {/* 従属節がある場合、またはsub_structuresが存在する場合に表示 */}
+      {(hasSubStructures || hasClauses) && (
+        <ZoomInAccordion 
+          subStructures={sentence.sub_structures || []} 
+          hasClausesButNoStructures={hasClauses && !hasSubStructures}
+        />
       )}
 
       {/* 詳しい説明エリア（名詞節・wh節などのアコーディオン） */}
@@ -1202,7 +1221,13 @@ MarkedTextParser.displayName = 'MarkedTextParser';
 /**
  * ZoomInAccordion - ズームイン解析のアコーディオンコンポーネント
  */
-const ZoomInAccordion = memo(({ subStructures }: { subStructures: Array<{ target_chunk?: string; analyzed_text?: string }> }) => {
+const ZoomInAccordion = memo(({ 
+  subStructures, 
+  hasClausesButNoStructures = false 
+}: { 
+  subStructures: Array<{ target_chunk?: string; analyzed_text?: string }>;
+  hasClausesButNoStructures?: boolean;
+}) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -1233,38 +1258,49 @@ const ZoomInAccordion = memo(({ subStructures }: { subStructures: Array<{ target
             className="overflow-hidden"
           >
             <div className="bg-blue-50/10 rounded-lg p-4 border border-blue-700/30 space-y-4 mt-2">
-              {subStructures.map((subStruct: any, subIndex: number) => (
-                <div 
-                  key={`substruct-${subIndex}-${subStruct.target_chunk?.substring(0, 20) || subIndex}`} 
-                  className="space-y-3"
-                >
-                  {/* 節の説明ヘッダー */}
-                  <div className="flex items-start gap-2">
-                    <span className="text-blue-300 text-sm font-bold">📋</span>
-                    <div className="flex-1">
-                      <p className="text-xs text-blue-400 font-semibold mb-1">
-                        この節の中身の構造（S'/V'/O'/C'/M'）
-                      </p>
-                      <p className="text-sm text-blue-200 font-mono bg-blue-900/30 rounded px-2 py-1 border border-blue-700/50">
-                        {subStruct.target_chunk || ''}
-                      </p>
+              {subStructures.length > 0 ? (
+                subStructures.map((subStruct: any, subIndex: number) => (
+                  <div 
+                    key={`substruct-${subIndex}-${subStruct.target_chunk?.substring(0, 20) || subIndex}`} 
+                    className="space-y-3"
+                  >
+                    {/* 節の説明ヘッダー */}
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-300 text-sm font-bold">📋</span>
+                      <div className="flex-1">
+                        <p className="text-xs text-blue-400 font-semibold mb-1">
+                          この節の中身の構造（S'/V'/O'/C'/M'）
+                        </p>
+                        <p className="text-sm text-blue-200 font-mono bg-blue-900/30 rounded px-2 py-1 border border-blue-700/50">
+                          {subStruct.target_chunk || ''}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* 解析結果 */}
+                    <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50 overflow-x-auto">
+                      <div className="mb-2">
+                        <p className="text-xs text-blue-400 font-semibold mb-1">
+                          ⚠️ 注意: S'/V'/O'/C'/M'は節の中の要素です（メインのS/V/O/C/Mとは区別）
+                        </p>
+                      </div>
+                      <MarkedTextParser 
+                        text={subStruct.analyzed_text || ''} 
+                        onChunkClick={() => {}}
+                      />
                     </div>
                   </div>
-                  
-                  {/* 解析結果 */}
-                  <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50 overflow-x-auto">
-                    <div className="mb-2">
-                      <p className="text-xs text-blue-400 font-semibold mb-1">
-                        ⚠️ 注意: S'/V'/O'/C'/M'は節の中の要素です（メインのS/V/O/C/Mとは区別）
-                      </p>
-                    </div>
-                    <MarkedTextParser 
-                      text={subStruct.analyzed_text || ''} 
-                      onChunkClick={() => {}}
-                    />
-                  </div>
+                ))
+              ) : hasClausesButNoStructures ? (
+                <div className="text-center py-4">
+                  <p className="text-blue-300 text-sm mb-2">
+                    📝 この文には従属節が含まれています
+                  </p>
+                  <p className="text-blue-400 text-xs">
+                    詳細な構造解析は準備中です。節の構造は上部の記号付き原文で確認できます。
+                  </p>
                 </div>
-              ))}
+              ) : null}
             </div>
           </motion.div>
         )}
