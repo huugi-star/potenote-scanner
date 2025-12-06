@@ -1,6 +1,7 @@
 /**
  * TranslationResultScreen.tsx
- * 伊藤メソッド（ビジュアル英文解釈）完全準拠版
+ * 伊藤メソッド（直読直解）完全ビジュアル版
+ * 英文・和訳・役割解説を「縦3段」のブロックで積み上げ、左から右へ読むスタイル
  */
 
 import { useState, useEffect, useRef, memo } from 'react';
@@ -11,7 +12,7 @@ import { useGameStore } from '@/store/useGameStore';
 import type { TranslationResult } from '@/types';
 import { DeveloperSupport } from '@/components/ui/DeveloperSupport';
 
-// ===== Types & Interfaces =====
+// ===== Types =====
 
 interface TranslationResultScreenProps {
   result: TranslationResult;
@@ -25,21 +26,19 @@ interface TranslationResultScreenProps {
 export const TranslationResultScreen = ({
   result,
   onBack,
+  onStartQuiz,
   imageUrl,
 }: TranslationResultScreenProps) => {
   const saveTranslationHistory = useGameStore(state => state.saveTranslationHistory);
   const translationHistory = useGameStore(state => state.translationHistory);
   const hasSavedRef = useRef(false);
 
-  // 自動保存ロジック（シンプル化）
+  // 自動保存
   useEffect(() => {
     if (hasSavedRef.current) return;
-    
-    // データ整合性チェックと保存
     if (result.sentences && result.sentences.length > 0) {
       const originalText = result.sentences.map(s => s.marked_text).join(' ');
       const translatedText = result.sentences.map(s => s.translation).join(' ');
-      
       const isDuplicate = translationHistory.some(h => h.originalText === originalText);
       
       if (!isDuplicate) {
@@ -51,19 +50,22 @@ export const TranslationResultScreen = ({
 
   return (
     <div className="min-h-screen bg-[#1a1b26] p-4 pb-24 font-sans text-gray-100">
-      <div className="max-w-3xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-8">
         
         {/* ヘッダー */}
         <header className="flex items-center gap-3 border-b border-gray-700 pb-4">
-          <div className="p-2 bg-blue-600 rounded-lg">
+          <div className="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-500/20">
             <BookOpen className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-xl font-bold tracking-wide">ビジュアル英文解釈</h1>
+          <div>
+            <h1 className="text-xl font-bold tracking-wide text-white">ビジュアル英文解釈</h1>
+            <p className="text-xs text-gray-400">直読直解で構造を理解する</p>
+          </div>
         </header>
 
         {/* センテンスリスト */}
         {result.sentences && result.sentences.length > 0 ? (
-          <div className="space-y-8">
+          <div className="space-y-10">
             {result.sentences.map((sentence, index) => (
               <VisualSentenceCard 
                 key={index} 
@@ -74,12 +76,21 @@ export const TranslationResultScreen = ({
           </div>
         ) : (
           <div className="text-center text-gray-400 py-10">
-            解析データが見つかりません。再スキャンしてください。
+            データが見つかりません。
           </div>
         )}
 
-        {/* フッターアクション */}
-        <div className="pt-8">
+        {/* フッター */}
+        <div className="pt-8 space-y-3">
+          {onStartQuiz && result.sentences && result.sentences.length > 0 && (
+            <button
+              onClick={() => { vibrateLight(); onStartQuiz(); }}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold flex items-center justify-center gap-2 transition-colors shadow-lg"
+            >
+              <BookOpen className="w-5 h-5" />
+              この英文で問題生成する
+            </button>
+          )}
           <button
             onClick={() => { vibrateLight(); onBack(); }}
             className="w-full py-4 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-600 text-gray-300 font-bold flex items-center justify-center gap-2 transition-colors"
@@ -99,10 +110,10 @@ export const TranslationResultScreen = ({
 
 /**
  * VisualSentenceCard
- * 伊藤メソッドに基づき、英文を構造的に表示するカード
+ * 1つの文を表示するカードコンポーネント
  */
 const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: number }) => {
-  // ズームインデータがあるか確認
+  // 詳細データがあるか判定
   const hasDetails = (sentence.sub_structures && sentence.sub_structures.length > 0) || 
                      (sentence.advanced_grammar_explanation);
 
@@ -111,50 +122,67 @@ const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: nu
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
-      className="bg-[#24283b] rounded-xl border border-gray-700 overflow-hidden shadow-lg"
+      className="bg-[#24283b] rounded-2xl border border-gray-700 overflow-hidden shadow-xl"
     >
-      {/* 1. 原文エリア（ビジュアル解析） */}
-      <div className="p-6 border-b border-gray-700 bg-[#1f2335]">
-        <div className="mb-2 text-xs text-gray-400 font-mono">Sentence {index + 1}</div>
-        <ItoMethodParser text={sentence.marked_text || ''} />
+      {/* 1. ビジュアル解析エリア（メイン） */}
+      <div className="p-6 bg-[#1f2335] border-b border-gray-700">
+        <div className="mb-4 flex items-center gap-2">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-700 text-gray-300">
+            Sentence {index + 1}
+          </span>
+        </div>
+        
+        {/* ここに伊藤メソッド（3段構成）を表示 */}
+        {sentence.chunks ? (
+          // chunksデータがある場合（推奨）
+          <div className="flex flex-wrap items-start gap-x-2 gap-y-6">
+            {sentence.chunks.map((chunk: any, i: number) => (
+              <VisualChunk 
+                key={i} 
+                text={chunk.chunk_text || chunk.text}
+                translation={chunk.chunk_translation || chunk.translation}
+                role={chunk.role || chunk.type}
+                symbol={chunk.symbol}
+              />
+            ))}
+          </div>
+        ) : (
+          // chunksがない場合は marked_text から簡易パース
+          <LegacyParser text={sentence.marked_text} />
+        )}
       </div>
 
       {/* 2. 自然な和訳 */}
-      <div className="p-6 bg-[#24283b]">
-        <h4 className="text-xs font-bold text-emerald-400 mb-2 flex items-center gap-2">
-          <span>日本語訳</span>
-          <div className="h-px flex-1 bg-emerald-400/20"></div>
-        </h4>
-        <p className="text-lg text-gray-200 leading-relaxed font-medium">
-          {sentence.translation}
-        </p>
+      <div className="p-5 bg-[#24283b] border-b border-gray-700/50">
+        <div className="flex items-start gap-3">
+          <span className="text-xl">🇯🇵</span>
+          <p className="text-lg text-gray-100 leading-relaxed font-medium">
+            {sentence.translation}
+          </p>
+        </div>
       </div>
 
-      {/* 3. 重要語句リスト */}
+      {/* 3. 重要語句 */}
       {sentence.vocab_list && sentence.vocab_list.length > 0 && (
-        <div className="px-6 pb-6">
-          <h4 className="text-xs font-bold text-yellow-400 mb-3 flex items-center gap-2">
-            <span>重要語句・イディオム</span>
-            <div className="h-px flex-1 bg-yellow-400/20"></div>
+        <div className="px-6 py-4 bg-[#24283b]">
+          <h4 className="text-xs font-bold text-yellow-500 mb-3 flex items-center gap-2 uppercase tracking-wider">
+            <span>Vocabulary</span>
+            <div className="h-px flex-1 bg-yellow-500/20"></div>
           </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex flex-wrap gap-2">
             {sentence.vocab_list.map((vocab: any, i: number) => (
-              <div key={i} className="flex items-start gap-3 text-sm">
-                <span className="text-yellow-200 font-bold min-w-[30%] break-words">
-                  {vocab.word}
-                </span>
-                <span className="text-gray-400 flex-1">
-                  {vocab.meaning}
-                </span>
+              <div key={i} className="inline-flex items-center gap-2 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
+                <span className="text-yellow-200 font-bold text-sm">{vocab.word}</span>
+                <span className="text-gray-400 text-xs border-l border-gray-600 pl-2">{vocab.meaning}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* 4. 詳しい説明（アコーディオン） */}
+      {/* 4. ズームイン（詳しい説明） */}
       {hasDetails && (
-        <DetailedExplanationAccordion 
+        <ZoomInAccordion 
           subStructures={sentence.sub_structures}
           explanation={sentence.advanced_grammar_explanation}
         />
@@ -166,23 +194,85 @@ const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: nu
 VisualSentenceCard.displayName = 'VisualSentenceCard';
 
 /**
- * DetailedExplanationAccordion
- * 複雑な構文の「ズームイン解析」と「解説」を格納
+ * VisualChunk
+ * 伊藤メソッドの核心部品。
+ * 1. 英文（色付きカード）
+ * 2. 直訳（日本語）
+ * 3. 役割解説（S/V/O...）
+ * の3段構成で表示する。
  */
-const DetailedExplanationAccordion = ({ subStructures, explanation }: { subStructures?: any[], explanation?: string }) => {
+const VisualChunk = memo(({ 
+  text, 
+  translation, 
+  role, 
+  symbol,
+  isNested = false 
+}: { 
+  text: string; 
+  translation?: string; 
+  role?: string; 
+  symbol?: string;
+  isNested?: boolean;
+}) => {
+  // 色とラベルの決定
+  const { colorClasses, label, description } = getChunkStyle(role, symbol, isNested);
+  
+  // 記号で囲む
+  const displayText = formatTextWithSymbol(text, symbol, role);
+
+  return (
+    <div className="flex flex-col items-center group max-w-[280px]">
+      {/* 1段目: 英文カード */}
+      <div className={`
+        relative px-3 py-2 rounded-lg text-lg font-bold font-mono text-center shadow-md transition-transform group-hover:scale-105
+        ${colorClasses.bg} ${colorClasses.text} ${colorClasses.border} border-b-4
+      `}>
+        {displayText}
+      </div>
+
+      {/* 2段目: 直訳 */}
+      <div className="mt-2 text-sm text-gray-300 font-medium text-center leading-tight px-1">
+        {translation || '...'}
+      </div>
+
+      {/* 3段目: 役割ラベル */}
+      <div className="mt-1 flex flex-col items-center">
+        {/* 線 */}
+        <div className={`w-0.5 h-2 ${colorClasses.lineBg}`}></div>
+        {/* 丸ラベル */}
+        <div className={`
+          px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap
+          ${colorClasses.labelBg} ${colorClasses.labelText}
+        `}>
+          {label}
+          {description && <span className="ml-1 opacity-80 font-normal normal-case">({description})</span>}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+VisualChunk.displayName = 'VisualChunk';
+
+/**
+ * ZoomInAccordion
+ * 複雑な構文をビジュアル表示するためのエリア
+ */
+const ZoomInAccordion = ({ subStructures, explanation }: { subStructures?: any[], explanation?: string }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="border-t border-gray-700 bg-[#1a1b26]/50">
+    <div className="border-t border-gray-700 bg-[#1e1e2e]">
       <button
         onClick={() => { vibrateLight(); setIsOpen(!isOpen); }}
-        className="w-full flex items-center justify-between p-4 text-sm font-bold text-blue-300 hover:text-blue-200 hover:bg-blue-500/10 transition-colors"
+        className="w-full flex items-center justify-between p-4 bg-blue-900/10 hover:bg-blue-900/20 transition-colors group"
       >
-        <span className="flex items-center gap-2">
-          🔍 詳しい説明（構造・解説）
-        </span>
+        <div className="flex items-center gap-2 text-blue-300 group-hover:text-blue-200 font-bold text-sm">
+          <span className="text-lg">🔍</span>
+          <span>詳しい説明（構造・解説）</span>
+        </div>
         <motion.div animate={{ rotate: isOpen ? 180 : 0 }}>
-          <ChevronDown className="w-5 h-5" />
+          <ChevronDown className="w-5 h-5 text-blue-400" />
         </motion.div>
       </button>
 
@@ -194,29 +284,38 @@ const DetailedExplanationAccordion = ({ subStructures, explanation }: { subStruc
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="p-6 pt-0 space-y-6">
-              {/* 解説テキスト */}
+            <div className="p-6 space-y-8">
+              
+              {/* 解説文 */}
               {explanation && (
-                <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30">
+                <div className="bg-[#24283b] p-4 rounded-xl border border-blue-500/20 shadow-inner">
+                  <h4 className="text-xs font-bold text-blue-400 mb-2">💡 文法解説</h4>
                   <p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">
                     {explanation}
                   </p>
                 </div>
               )}
 
-              {/* ズームイン構造解析（ネストされたS'V'など） */}
+              {/* 構造解析（ビジュアル） */}
               {subStructures && subStructures.map((item: any, idx: number) => (
-                <div key={idx} className="space-y-2">
-                  <div className="text-xs text-gray-400 font-mono pl-1">
-                    ▼ {item.target_chunk} の内部構造
+                <div key={idx} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 font-mono bg-gray-800 px-2 py-1 rounded">
+                      対象: {item.target_chunk}
+                    </span>
                   </div>
-                  <div className="p-4 bg-[#1f2335] rounded-lg border border-gray-600 overflow-x-auto">
-                    {/* ここでも伊藤メソッドパーサーを再利用してビジュアル表示 */}
-                    <ItoMethodParser text={item.analyzed_text} isNested={true} />
+                  
+                  {/* ネストされたビジュアル解析エリア */}
+                  <div className="bg-[#1a1b26] p-4 rounded-xl border border-gray-600 overflow-x-auto">
+                    <p className="text-[10px] text-gray-500 mb-4 font-bold uppercase tracking-widest">
+                      Inner Structure
+                    </p>
+                    <NestedStructureParser text={item.analyzed_text} />
                   </div>
+
                   {item.explanation && (
-                    <p className="text-sm text-gray-400 pl-2 border-l-2 border-gray-600">
-                      💡 {item.explanation}
+                    <p className="text-sm text-gray-400 pl-3 border-l-2 border-blue-500/50 italic">
+                      {item.explanation}
                     </p>
                   )}
                 </div>
@@ -229,114 +328,153 @@ const DetailedExplanationAccordion = ({ subStructures, explanation }: { subStruc
   );
 };
 
-/**
- * ItoMethodParser
- * 核心となるコンポーネント。
- * テキストを「単語」と「記号（S/V/O/C/M）」の上下2段組みで表示する。
- */
-const ItoMethodParser = memo(({ text, isNested = false }: { text: string, isNested?: boolean }) => {
-  if (!text) return null;
+// ===== Parsers & Helpers =====
 
-  // チャンク分割ロジック
-  // 例: "[Many people]<{S}>" -> text: "[Many people]", role: "S"
-  const chunks: Array<{ text: string; role: string | null }> = [];
-  const regex = /([^<]+)<\{([^}]+)\}>|([^<]+)/g;
-  
+/**
+ * NestedStructureParser
+ * ズームイン用のパーサー。文字列データから VisualChunk を生成する。
+ */
+const NestedStructureParser = ({ text }: { text: string }) => {
+  if (!text) return null;
+  const chunks: any[] = [];
+  const regex = /([^<]+)<\{([^}]+)\}>|([^<]+)/g; // 簡易パース
   let match;
+
   while ((match = regex.exec(text)) !== null) {
     if (match[1] && match[2]) {
-      // タグ付き部分
-      chunks.push({ text: match[1].trim(), role: match[2] });
+      // Roleあり
+      const parts = match[2].split(':');
+      chunks.push({ text: match[1].trim(), role: parts[0], translation: parts[2] || null });
     } else if (match[0].trim()) {
-      // タグなし部分（接続詞や前置詞など、または解析外）
-      // 不要な記号が混じらないようクリーニング
-      const cleanText = match[0].replace(/<\{|\}>/g, '').trim();
-      if (cleanText) chunks.push({ text: cleanText, role: null });
+      // Roleなし
+      const clean = match[0].replace(/<\{|\}>/g, '').trim();
+      if (clean) chunks.push({ text: clean, role: null });
     }
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-x-1.5 gap-y-6 leading-none font-mono">
-      {chunks.map((chunk, i) => {
-        const { style, label } = getRoleStyle(chunk.role);
-        
-        // 役割がない単語（接続詞など）
-        if (!chunk.role) {
-          return (
-            <div key={i} className="pb-1 text-lg text-gray-300">
-              {chunk.text}
-            </div>
-          );
-        }
-
-        // 役割があるチャンク（上下配置）
-        return (
-          <div key={i} className="flex flex-col items-center group">
-            {/* 上段：英文テキスト（カッコ含む） */}
-            <div className={`text-lg px-1 ${style.text} whitespace-nowrap`}>
-              {chunk.text}
-            </div>
-            
-            {/* 下段：役割ラベル（線付き） */}
-            <div className="w-full flex flex-col items-center mt-1">
-              {/* 線 */}
-              <div className={`w-full h-[2px] ${style.line}`}></div>
-              {/* ラベル (S, V, O...) */}
-              <span className={`text-xs font-bold mt-1 ${style.label} uppercase`}>
-                {isNested ? label.toLowerCase() : label}
-              </span>
-            </div>
-          </div>
-        );
-      })}
+    <div className="flex flex-wrap items-start gap-x-2 gap-y-6">
+      {chunks.map((chunk, i) => (
+        <VisualChunk 
+          key={i} 
+          text={chunk.text} 
+          translation={chunk.translation} // sub_structuresにも翻訳があれば表示
+          role={chunk.role}
+          isNested={true}
+        />
+      ))}
     </div>
   );
-});
-
-ItoMethodParser.displayName = 'ItoMethodParser';
-
-// ===== Helpers =====
+};
 
 /**
- * 役割に応じたスタイル定義
- * 伊藤メソッドの「赤(V)」「青(S)」などのイメージに合わせつつ、ダークモードで見やすく調整
+ * LegacyParser
+ * chunksデータがない場合のフォールバック（marked_textから表示）
  */
-const getRoleStyle = (role: string | null) => {
-  if (!role) return { 
-    style: { text: 'text-gray-300', line: 'bg-transparent', label: 'text-transparent' }, 
-    label: '' 
-  };
+const LegacyParser = ({ text }: { text: string }) => {
+  // NestedStructureParserと同じロジックでとりあえず表示
+  return <NestedStructureParser text={text} />;
+};
 
-  // ダッシュや小文字を正規化
+/**
+ * テキストに記号を付与するヘルパー
+ */
+const formatTextWithSymbol = (text: string, symbol?: string, role?: string) => {
+  // 既に記号がついている場合は除去してから付け直す
+  const cleanText = text.replace(/^\[|\]$|^<|>$|^\(|\)$/g, '').trim();
+  
+  // 明示的なSymbol指定があればそれを使う
+  if (symbol === '[]') return `[ ${cleanText} ]`;
+  if (symbol === '<>') return `< ${cleanText} >`;
+  if (symbol === '()') return `( ${cleanText} )`;
+  
+  // Roleに基づくデフォルト
+  if (!role) return cleanText;
   const r = role.replace("'", '').toUpperCase();
-  const isNested = role.includes("'"); // ネスト判定用
+  
+  if (r === 'M' || r.includes('ADV')) return `< ${cleanText} >`; // 副詞的
+  if (r === 'O' || r === 'S' || r === 'C') return `[ ${cleanText} ]`; // 名詞的
+  
+  return cleanText;
+};
 
-  let styles = {
-    text: 'text-gray-100',
-    line: 'bg-gray-500',
-    label: 'text-gray-400'
+/**
+ * 役割に応じたスタイルとラベル定義
+ */
+const getChunkStyle = (role: string | null = '', symbol?: string, isNested?: boolean) => {
+  const r = (role || '').replace("'", '').toUpperCase();
+  
+  // デフォルト
+  let style = {
+    bg: 'bg-gray-800', text: 'text-gray-300', border: 'border-gray-600',
+    lineBg: 'bg-gray-600', labelBg: 'bg-gray-700', labelText: 'text-gray-300'
   };
+  let label = '';
+  let description = '';
 
-  switch (r) {
-    case 'S': // 主語：青系
-      styles = { text: 'text-blue-300', line: 'bg-blue-500', label: 'text-blue-400' };
-      break;
-    case 'V': // 動詞：赤系
-      styles = { text: 'text-red-300', line: 'bg-red-500', label: 'text-red-400' };
-      break;
-    case 'O': // 目的語：緑系
-      styles = { text: 'text-emerald-300', line: 'bg-emerald-500', label: 'text-emerald-400' };
-      break;
-    case 'C': // 補語：緑/紫系
-      styles = { text: 'text-emerald-300', line: 'bg-emerald-500', label: 'text-emerald-400' };
-      break;
-    case 'M': // 修飾語：黄色/グレー系（目立たせすぎない）
-      styles = { text: 'text-gray-300', line: 'bg-yellow-600/50', label: 'text-yellow-600' };
-      break;
-    case 'CONN': // 接続詞
-      styles = { text: 'text-gray-300', line: 'bg-gray-600', label: 'text-gray-500' };
-      break;
+  // 接続詞・関係詞の特別扱い
+  if (r === 'CONN' || r === 'REL') {
+    style = {
+      bg: 'bg-yellow-900/40', text: 'text-yellow-200', border: 'border-yellow-600',
+      lineBg: 'bg-yellow-600', labelBg: 'bg-yellow-600', labelText: 'text-yellow-950'
+    };
+    label = '接続詞';
+    if (symbol === '[]') description = '名詞節';
+    if (symbol === '<>') description = '副詞節';
+    if (symbol === '()') description = '形容詞節';
+    return { colorClasses: style, label, description };
   }
 
-  return { style: styles, label: isNested ? role.toLowerCase() : role }; // 表示用ラベルは元のまま（s'など）返す
+  switch (r) {
+    case 'S':
+      style = {
+        bg: 'bg-blue-900/40', text: 'text-blue-200', border: 'border-blue-500',
+        lineBg: 'bg-blue-500', labelBg: 'bg-blue-500', labelText: 'text-white'
+      };
+      label = isNested ? "S'" : "S";
+      description = isNested ? '主語・従属' : '主語';
+      break;
+    case 'V':
+      style = {
+        bg: 'bg-red-900/40', text: 'text-red-200', border: 'border-red-500',
+        lineBg: 'bg-red-500', labelBg: 'bg-red-500', labelText: 'text-white'
+      };
+      label = isNested ? "V'" : "V";
+      description = isNested ? '動詞・従属' : '動詞';
+      break;
+    case 'O':
+      style = {
+        bg: 'bg-emerald-900/40', text: 'text-emerald-200', border: 'border-emerald-500',
+        lineBg: 'bg-emerald-500', labelBg: 'bg-emerald-500', labelText: 'text-white'
+      };
+      label = isNested ? "O'" : "O";
+      description = isNested ? '目的語・従属' : '目的語';
+      break;
+    case 'C':
+      style = {
+        bg: 'bg-emerald-900/40', text: 'text-emerald-200', border: 'border-emerald-500',
+        lineBg: 'bg-emerald-500', labelBg: 'bg-emerald-500', labelText: 'text-white'
+      };
+      label = isNested ? "C'" : "C";
+      description = isNested ? '補語・従属' : '補語';
+      break;
+    case 'M':
+      style = {
+        bg: 'bg-gray-800', text: 'text-gray-300', border: 'border-gray-500',
+        lineBg: 'bg-gray-500', labelBg: 'bg-gray-600', labelText: 'text-gray-300'
+      };
+      label = isNested ? "M'" : "M";
+      description = '修飾語';
+      break;
+    default:
+      // roleがない、または不明な場合
+      if (!role) {
+         return { colorClasses: style, label: '', description: '' };
+      }
+      label = role;
+  }
+
+  return { colorClasses: style, label, description };
 };
+
+export default TranslationResultScreen;
