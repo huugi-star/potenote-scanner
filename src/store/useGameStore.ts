@@ -19,6 +19,12 @@ const getTodayString = (): string => {
   return new Date().toISOString().split('T')[0];
 };
 
+// ローカル環境判定（開発環境では制限を外す）
+const isLocalDevelopment = (): boolean => {
+  return process.env.NODE_ENV === 'development' || 
+         (typeof window !== 'undefined' && window.location.hostname === 'localhost');
+};
+
 const randomInRange = (min: number, max: number): number => {
   return Math.random() * (max - min) + min;
 };
@@ -436,6 +442,11 @@ export const useGameStore = create<GameStore>()(
       // ===== Scan Management =====
       
       checkScanLimit: () => {
+        // ローカル環境では制限を外す
+        if (isLocalDevelopment()) {
+          return { canScan: true, remaining: Infinity };
+        }
+        
         const state = get();
         const today = getTodayString();
         
@@ -529,6 +540,11 @@ export const useGameStore = create<GameStore>()(
       // ===== Translation Management =====
       
       checkTranslationLimit: () => {
+        // ローカル環境では制限を外す
+        if (isLocalDevelopment()) {
+          return { canTranslate: true, remaining: Infinity };
+        }
+        
         const state = get();
         const today = getTodayString();
         
@@ -1280,6 +1296,8 @@ export const selectCanScan = (state: GameState) => {
 };
 
 export const selectRemainingScanCount = (state: GameState) => {
+  // ローカル環境では制限を外す
+  if (isLocalDevelopment()) return Infinity;
   if (state.isVIP) return Infinity;
   const today = getTodayString();
   if (state.lastScanDate !== today) return LIMITS.FREE_USER.DAILY_SCAN_LIMIT;

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.0.0",
+    "@google/generative-ai": "^0.24.1",
     "@vercel/blob": "^2.0.0",
     "ai": "^4.0.0",
     "browser-image-compression": "^2.0.2",

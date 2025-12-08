@@ -70,7 +70,7 @@ interface QuizSession {
 /**
  * 翻訳結果画面ラッパー（ストアから結果を取得）
  */
-const TranslationResultScreenWrapper = ({ onBack, onStartQuiz }: { onBack: () => void; onStartQuiz?: () => void }) => {
+const TranslationResultScreenWrapper = ({ onBack }: { onBack: () => void }) => {
   const translationResult = useGameStore(state => state.translationResult);
   
   if (!translationResult) {
@@ -87,7 +87,6 @@ const TranslationResultScreenWrapper = ({ onBack, onStartQuiz }: { onBack: () =>
       <TranslationResultScreen
         result={translationResult}
         onBack={onBack}
-        onStartQuiz={onStartQuiz}
       />
     </motion.div>
   );
@@ -364,7 +363,7 @@ const TranslationModeSelectScreen = ({
         <p className="text-gray-400 text-sm text-center mb-8">目的に合わせてモードを選んでください</p>
 
         <div className="space-y-4">
-          {/* 英語学習モード */}
+          {/* 英語学習・構造解析モード（伊藤メソッド） */}
           <motion.button
             onClick={() => {
               vibrateLight();
@@ -384,14 +383,14 @@ const TranslationModeSelectScreen = ({
               <div className="flex-1">
                 <h3 className="text-xl font-bold mb-2">英語学習・構造解析モード</h3>
                 <p className="text-sm text-blue-100 leading-relaxed">
-                  英語を英語の語順のまま理解する『直読直解』スキルを身につけます。
+                  伊藤和夫のビジュアル英文解釈に基づく、直読直解のスキルを身につけます。
                   <br />
                   文の構造（S+V+O）や修飾関係を可視化し、文法も詳しく解説します。
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="px-2 py-1 bg-white/20 rounded text-xs">初学者</span>
-                  <span className="px-2 py-1 bg-white/20 rounded text-xs">受験生</span>
-                  <span className="px-2 py-1 bg-white/20 rounded text-xs">TOEIC学習</span>
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">直読直解</span>
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">構造解析</span>
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">受験対応</span>
                 </div>
               </div>
             </div>
@@ -616,74 +615,6 @@ const AppContent = () => {
     setPhase('translation_result');
   }, []);
 
-  // 翻訳内容からクイズを生成
-  const handleStartQuizFromTranslation = useCallback(async () => {
-    const translationResult = useGameStore.getState().translationResult;
-    if (!translationResult) return;
-
-    vibrateLight();
-    setPhase('scanning');
-    
-    // 原文を取得（英文解釈モードの場合はsentencesから構築）
-    let originalText = translationResult.originalText || '';
-    
-    if (translationResult.sentences && translationResult.sentences.length > 0) {
-      // sentencesから原文を構築（記号を除去）
-      originalText = translationResult.sentences
-        .map(s => {
-          // marked_textから記号タグ（<{...}>）を除去
-          if (s.marked_text) {
-            return s.marked_text.replace(/<\{[^}]+\}>/g, '').trim();
-          }
-          return '';
-        })
-        .filter(text => text.length > 0)
-        .join(' ')
-        .trim();
-      
-      // 空の場合は後方互換用のフィールドを使用
-      if (!originalText && translationResult.marked_text) {
-        originalText = translationResult.marked_text.replace(/<\{[^}]+\}>/g, '').trim();
-      }
-    } else if (translationResult.marked_text && !originalText) {
-      // marked_textがある場合は記号を除去
-      originalText = translationResult.marked_text.replace(/<\{[^}]+\}>/g, '').trim();
-    }
-    
-    if (!originalText) {
-      alert('原文が見つかりませんでした');
-      return;
-    }
-    
-    // 原文をOCRテキストとして使用してクイズを生成
-    try {
-      const quizResponse = await fetch('/api/generate-quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: originalText,
-        }),
-      });
-
-      if (!quizResponse.ok) {
-        const errorText = await quizResponse.text();
-        console.error('Quiz API error:', errorText);
-        throw new Error(`Quiz generation failed: ${quizResponse.status}`);
-      }
-
-      const quizResult = await quizResponse.json();
-      
-      if (quizResult.quiz && quizResult.quiz.questions && quizResult.quiz.questions.length > 0) {
-        handleQuizReady(quizResult.quiz, '', quizResult.ocrText, quizResult.structuredOCR);
-      } else {
-        throw new Error('クイズが生成されませんでした');
-      }
-    } catch (error) {
-      console.error('Failed to generate quiz from translation:', error);
-      alert('クイズの生成に失敗しました');
-    }
-  }, [handleQuizReady]);
-
   // フリークエスト開始
   const handleFreeQuestStart = useCallback((quiz: QuizRaw) => {
     setQuizSession({
@@ -780,8 +711,7 @@ const AppContent = () => {
 
         {phase === 'translation_result' && (
           <TranslationResultScreenWrapper 
-            onBack={handleBackToHome} 
-            onStartQuiz={handleStartQuizFromTranslation}
+            onBack={handleBackToHome}
           />
         )}
 

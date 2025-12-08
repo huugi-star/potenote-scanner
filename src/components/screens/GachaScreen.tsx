@@ -233,16 +233,18 @@ const GachaResultDisplay = ({
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.2 }}
           >
-            {item.visual.type === 'svg_path' ? (
-              <svg viewBox="0 0 24 24" className="w-16 h-16">
-                <path d={item.visual.value} fill="white" stroke="rgba(0,0,0,0.2)" strokeWidth={0.5} />
-              </svg>
-            ) : (
-              <div 
-                className="w-16 h-16 rounded-xl"
-                style={{ backgroundColor: item.visual.value }}
-              />
-            )}
+            {item.visual && item.visual.value ? (
+              item.visual.type === 'svg_path' ? (
+                <svg viewBox="0 0 24 24" className="w-16 h-16">
+                  <path d={item.visual.value} fill="white" stroke="rgba(0,0,0,0.2)" strokeWidth={0.5} />
+                </svg>
+              ) : (
+                <div 
+                  className="w-16 h-16 rounded-xl"
+                  style={{ backgroundColor: item.visual.value }}
+                />
+              )
+            ) : null}
           </motion.div>
 
           {/* アイテム名 */}

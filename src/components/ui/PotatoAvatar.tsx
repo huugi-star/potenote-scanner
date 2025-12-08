@@ -251,6 +251,10 @@ const Equipment = ({
 
     const pos = positions[category as keyof typeof positions] || positions.accessory;
 
+    if (!visual || !visual.value) {
+      return null;
+    }
+
     if (visual.type === 'svg_path') {
       return (
         <g transform={`translate(${pos.x - 12}, ${pos.y - 12})`}>

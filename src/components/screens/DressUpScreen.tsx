@@ -226,16 +226,18 @@ export const DressUpScreen = ({ onBack }: DressUpScreenProps) => {
                     className="w-12 h-12 mx-auto mb-2 rounded-lg flex items-center justify-center"
                     style={{ background: getRarityGradient(item.rarity) }}
                   >
-                    {item.visual.type === 'svg_path' ? (
-                      <svg viewBox="0 0 24 24" className="w-8 h-8">
-                        <path d={item.visual.value} fill="white" />
-                      </svg>
-                    ) : (
-                      <div 
-                        className="w-8 h-8 rounded"
-                        style={{ backgroundColor: item.visual.value }}
-                      />
-                    )}
+                    {item.visual && item.visual.value ? (
+                      item.visual.type === 'svg_path' ? (
+                        <svg viewBox="0 0 24 24" className="w-8 h-8">
+                          <path d={item.visual.value} fill="white" />
+                        </svg>
+                      ) : (
+                        <div 
+                          className="w-8 h-8 rounded"
+                          style={{ backgroundColor: item.visual.value }}
+                        />
+                      )
+                    ) : null}
                   </div>
 
                   {/* アイテム名 */}

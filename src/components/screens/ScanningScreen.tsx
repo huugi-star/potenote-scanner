@@ -383,9 +383,14 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                 translatedText: translateResult.translatedText || translateResult.japanese_translation || '',
                 marked_text: translateResult.marked_text,
                 japanese_translation: translateResult.japanese_translation,
-                sentences: translateResult.sentences, // 新形式
+                sentences: translateResult.sentences, // 新形式（英文解釈モード用）
                 chunks: translateResult.chunks,
                 teacherComment: translateResult.teacherComment,
+                // 多言語モード用のフィールド
+                summary: translateResult.summary,
+                textType: translateResult.textType,
+                tone: translateResult.tone,
+                technicalTerms: translateResult.technicalTerms,
               },
               compressed.dataUrl
             );
