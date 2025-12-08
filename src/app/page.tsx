@@ -363,7 +363,7 @@ const TranslationModeSelectScreen = ({
         <p className="text-gray-400 text-sm text-center mb-8">目的に合わせてモードを選んでください</p>
 
         <div className="space-y-4">
-          {/* 英語学習・構造解析モード（伊藤メソッド） */}
+          {/* 英語学習・構造解析モード */}
           <motion.button
             onClick={() => {
               vibrateLight();
@@ -383,14 +383,14 @@ const TranslationModeSelectScreen = ({
               <div className="flex-1">
                 <h3 className="text-xl font-bold mb-2">英語学習・構造解析モード</h3>
                 <p className="text-sm text-blue-100 leading-relaxed">
-                  伊藤和夫のビジュアル英文解釈に基づく、直読直解のスキルを身につけます。
+                  初学者からTOEIC学習者まで、英文の骨格（S+V+O）や修飾関係を可視化し、直読直解の練習をサポートします。
                   <br />
-                  文の構造（S+V+O）や修飾関係を可視化し、文法も詳しく解説します。
+                  語順のまま理解するための構造カードとシンプルな解説で、文法の要点を押さえながら読み進められます。
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="px-2 py-1 bg-white/20 rounded text-xs">直読直解</span>
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">初学者</span>
+                  <span className="px-2 py-1 bg-white/20 rounded text-xs">TOEIC対応</span>
                   <span className="px-2 py-1 bg-white/20 rounded text-xs">構造解析</span>
-                  <span className="px-2 py-1 bg-white/20 rounded text-xs">受験対応</span>
                 </div>
               </div>
             </div>

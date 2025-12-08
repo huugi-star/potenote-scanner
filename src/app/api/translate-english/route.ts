@@ -26,14 +26,16 @@ const ChunkSchema = z.object({
 });
 
 const SentenceSchema = z.object({
+  sentence_id: z.number(),
   original_text: z.string(),
   chunks: z.array(ChunkSchema),
-  full_translation: z.string(),
+  translation: z.string(),
   vocab_list: z.array(VocabSchema).optional(),
-  details: z.array(z.string()).optional(), // アコーディオン用の詳しい解説
+  details: z.array(z.string()), // アコーディオン用の詳しい解説（必須）
 });
 
 const ResponseSchema = z.object({
+  clean_text: z.string(),
   sentences: z.array(SentenceSchema),
 });
 
@@ -168,13 +170,15 @@ export async function POST(req: Request) {
 
 【出力JSONフォーマット】
 {
+  "clean_text": "OCR補正後の正しい英文",
   "sentences": [
     {
+      "sentence_id": 1,
       "original_text": "原文の一文",
       "chunks": [
         { "text": "...", "translation": "...", "type": "noun|modifier|verb|connector", "role": "S|O|C|M|V|S'|O'|C'|M'|V'|CONN", "explanation": "...", "modifies": "M → V など", "note": "副詞節: 条件 / 接続：並列 / 冠詞の特定性 など" }
       ],
-      "full_translation": "文全体の自然な日本語訳",
+      "translation": "文全体の自然な日本語訳",
       "vocab_list": [
         { "word": "highly", "meaning": "高く、大いに（副詞）" }
       ],
@@ -193,6 +197,15 @@ JSON以外は出力しないでください。
 
     const apiResult = await model.generateContent(prompt);
     const response = apiResult.response;
+
+    // トークン使用量をログ出力
+    const usage = response.usageMetadata;
+    if (usage) {
+      const promptTokens = usage.promptTokenCount ?? 0;
+      const candidatesTokens = usage.candidatesTokenCount ?? 0;
+      const totalTokens = usage.totalTokenCount ?? promptTokens + candidatesTokens;
+      console.log(`[translate-english] Tokens - Prompt: ${promptTokens}, Candidates: ${candidatesTokens}, Total: ${totalTokens}`);
+    }
 
     let out: string;
     try {
@@ -238,19 +251,21 @@ JSON以外は出力しないでください。
         case "C'": return "C'";
         case "M'": return "M'";
         case "V'": return "V'";
+        case "CONN": return "CONN";
         default: return "M";
       }
     };
 
     const normalizeType = (type: any, role: z.infer<typeof ChunkSchema>["role"]): z.infer<typeof ChunkSchema>["type"] => {
-      if (type === "noun" || type === "modifier" || type === "verb") return type;
+      if (type === "noun" || type === "modifier" || type === "verb" || type === "connector") return type;
       if (role === "V" || role === "V'") return "verb";
       if (role === "M" || role === "M'") return "modifier";
+      if (role === "CONN") return "connector";
       return "noun";
     };
 
     if (parsed?.sentences && Array.isArray(parsed.sentences)) {
-      parsed.sentences = parsed.sentences.map((s: any) => {
+      parsed.sentences = parsed.sentences.map((s: any, idx: number) => {
         const chunks = Array.isArray(s.chunks) ? s.chunks.map((c: any) => {
           const role = normalizeRole(c?.role);
           const type = normalizeType(c?.type, role);
@@ -260,17 +275,22 @@ JSON以外は出力しないでください。
             type,
             role,
             explanation: c?.explanation ?? "",
+            modifies: c?.modifies ?? (role === "M" || role === "M'" ? "M → (unspecified)" : undefined),
+            note: c?.note ?? "",
           };
         }) : [];
         return {
+          sentence_id: typeof s?.sentence_id === "number" ? s.sentence_id : idx + 1,
           original_text: s?.original_text ?? "",
           chunks,
-          full_translation: s?.full_translation ?? "",
+          translation: s?.translation ?? s?.full_translation ?? "",
           vocab_list: Array.isArray(s?.vocab_list) ? s.vocab_list : [],
-          details: Array.isArray(s?.details) ? s.details : [],
+          details: Array.isArray(s?.details) && s.details.length > 0 ? s.details : ["従属節・関係詞節・that節の構造と役割を確認してください。"],
         };
       });
     }
+
+    parsed.clean_text = parsed?.clean_text ?? cleaned;
 
     const validated = ResponseSchema.parse(parsed);
     return NextResponse.json(validated);

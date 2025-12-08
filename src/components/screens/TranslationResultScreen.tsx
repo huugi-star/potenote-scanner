@@ -1,6 +1,6 @@
 /**
  * TranslationResultScreen.tsx
- * 伊藤メソッド（直読直解）完全ビジュアル版
+ * 英文構造を3段で可視化する結果画面
  * 英文・和訳・役割解説を「縦3段」のブロックで積み上げ、左から右へ読むスタイル
  */
 
@@ -71,7 +71,7 @@ export const TranslationResultScreen = ({
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-wide text-white">
-              {isMultilangMode ? '多言語翻訳結果' : 'ビジュアル英文解釈'}
+              {isMultilangMode ? '多言語翻訳結果' : '英文構造解析'}
             </h1>
             <p className="text-xs text-gray-400">
               {isMultilangMode ? '自然な日本語に翻訳しました' : '直読直解で構造を理解する'}
@@ -143,7 +143,7 @@ const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: nu
           </span>
         </div>
         
-        {/* ここに伊藤メソッド（3段構成）を表示 */}
+        {/* ここに3段構成のチャンク表示を配置 */}
         {sentence.main_structure ? (
           // main_structureデータがある場合（新しい構造）
           <div className="flex flex-wrap items-start gap-x-2 gap-y-8">
@@ -181,7 +181,7 @@ const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: nu
           >
             <div className="flex items-center gap-2 text-indigo-200 font-bold text-sm">
               <span className="text-lg">📖</span>
-              <span>詳しい解説（従属節・that節・関係詞節のS→V→O）</span>
+              <span>詳しい解説</span>
             </div>
             <motion.div animate={{ rotate: detailsOpen ? 180 : 0 }}>
               <ChevronDown className="w-5 h-5 text-indigo-300" />
@@ -285,11 +285,10 @@ VisualSentenceCard.displayName = 'VisualSentenceCard';
 
 /**
  * VisualChunk
- * 伊藤メソッドの核心部品。
+ * 3段構成でチャンクを表示するコンポーネント。
  * 1. 英文（色付きカード）
  * 2. 直訳（日本語）
  * 3. 役割解説（S/V/O...）
- * の3段構成で表示する。
  */
 // 共通チャンク表示コンポーネント（3段構成の徹底）
 const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boolean }) => {
@@ -302,7 +301,7 @@ const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boole
   let roleColor = "text-gray-500";
   let borderColor = "border-transparent";
 
-  // 伊藤メソッドの記号ルール
+  // 記号ルール
   switch (bracketType) {
     case "noun": // S, O, C, s', o', c'
       leftB = "【"; rightB = "】";
