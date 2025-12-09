@@ -316,12 +316,12 @@ export const ResultScreen = ({
           <div className="mt-4 space-y-2 text-sm text-gray-400">
             <div className="flex justify-between">
               <span>基本報酬</span>
-              <span>3 コイン + 1~3 km</span>
+              <span>3 コイン</span>
             </div>
             {correctCount > 0 && (
               <div className="flex justify-between">
                 <span>正解ボーナス</span>
-                <span>+{(correctCount * 0.5).toFixed(1)} km</span>
+                <span>+{(correctCount * DISTANCE.CORRECT_ANSWER).toFixed(1)} km</span>
               </div>
             )}
             {isPerfect && (
@@ -330,7 +330,7 @@ export const ResultScreen = ({
                   <Star className="w-4 h-4" />
                   パーフェクトボーナス
                 </span>
-                <span>+2 コイン + 2 km</span>
+                <span>+2 コイン + {DISTANCE.PERFECT_BONUS.toFixed(1)} km</span>
               </div>
             )}
           </div>

@@ -649,10 +649,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                       <AlertCircle className="w-8 h-8 text-red-400" />
                     </div>
                     <p className="text-red-400 font-medium mb-2">
-                      本日のスキャン回数上限（5回）
+                      本日のスキャン回数上限（3回）
                     </p>
                     <p className="text-gray-500 text-sm">
-                      広告を視聴して3回回復するか、VIPプラン（1日100回まで）にアップグレードしてください
+                      回復オプションを購入するか、VIPプラン（1日50回まで）にアップグレードしてください（実装予定）。
                     </p>
                   </>
                 )}
