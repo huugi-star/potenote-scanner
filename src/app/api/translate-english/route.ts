@@ -21,8 +21,8 @@ const ChunkSchema = z.object({
   type: z.enum(["noun", "modifier", "verb", "connector"]),
   role: z.enum(["S", "O", "C", "M", "V", "S'", "O'", "C'", "M'", "V'", "CONN"]),
   explanation: z.string().optional(),
-  modifies: z.string().optional(), // Mがどこを修飾するか (例: "M → V: live")
-  note: z.string().optional(), // 語法・冠詞など最小限の補足
+  modifies: z.string().optional(),
+  note: z.string().optional(),
 });
 
 const SentenceSchema = z.object({
@@ -31,7 +31,7 @@ const SentenceSchema = z.object({
   chunks: z.array(ChunkSchema),
   translation: z.string(),
   vocab_list: z.array(VocabSchema).optional(),
-  details: z.array(z.string()), // アコーディオン用の詳しい解説（必須）
+  details: z.array(z.string()),
 });
 
 const ResponseSchema = z.object({
@@ -42,35 +42,42 @@ const ResponseSchema = z.object({
 // ===== Helpers =====
 const cleanOCRText = (text: string): string => {
   let cleaned = text;
-
-  // 日本語指示・ノイズ除去
   cleaned = cleaned.replace(/ビジュアル\s*\d*/gi, "");
   cleaned = cleaned.replace(/文構造を解析し[，,]?\s*和訳しなさい/gi, "");
   cleaned = cleaned.replace(/英文解釈/gi, "");
-
-  // ページ・設問番号
   cleaned = cleaned.replace(/^[\s]*[\(（\[]?[A-Za-z]?\d+[\)）\]]?[\.。]?\s*/gm, "");
   cleaned = cleaned.replace(/\b\d{3,}\b/g, "");
-
-  // 単独大文字ノイズ
   cleaned = cleaned.replace(/\s+[A-Z]{1,3}(?=\s|$|[,.;!?])/g, (match) => {
     const keep = ["I", "A", "US", "UK", "TV", "PC", "AI", "IT", "OK", "AM", "PM", "Mr", "Mrs", "Ms", "Dr"];
     return keep.includes(match.trim()) ? match : " ";
   });
   cleaned = cleaned.replace(/^\s*[A-Z]{1,3}\s*$/gm, "");
   cleaned = cleaned.replace(/\b(Pl|RSS|WWW|URL|PDF|MP3|MP4|GPS)\b/gi, "");
-
-  // 記号・空白整理
   cleaned = cleaned.replace(/-{3,}/g, "");
   cleaned = cleaned.replace(/[^\w\s.,!?;:'"(){}\[\]-]+/g, " ");
   cleaned = cleaned.replace(/\s+/g, " ").trim();
-
   return cleaned;
 };
 
-const stripCodeFences = (text: string): string => {
+// ★修正: 強力なJSONクリーニング関数
+const cleanJsonOutput = (text: string): string => {
   if (!text) return "";
-  return text.replace(/```json|```/g, "").trim();
+  
+  // 1. Markdownの ```json ... ``` を削除
+  let cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+  // 2. 最初と最後の { } を探して、余計な文字（"Here is the JSON:"など）を削除
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+
+  // 3. よくある構文エラーの修正
+  // 末尾のカンマ削除:  , }  ->  }   や   , ]  ->  ]
+  cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
+  
+  return cleaned;
 };
 
 // ===== Main =====
@@ -83,7 +90,7 @@ export async function POST(req: Request) {
     const { image, text } = await req.json();
     let extractedText: string | undefined = text;
 
-    // OCR
+    // OCR処理
     if (!extractedText && image) {
       if (!process.env.GOOGLE_VISION_API_KEY) {
         return NextResponse.json({ error: "GOOGLE_VISION_API_KEY is not configured" }, { status: 500 });
@@ -119,128 +126,123 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "テキストが提供されていません" }, { status: 400 });
     }
 
-    // クリーニング
     const cleaned = cleanOCRText(extractedText);
 
-    // Geminiモデル
+    // Geminiモデル設定（Gemini 2.0 Flash / Lite / 1.5 Flash-8B などお好きなものに）
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.0-flash", 
       generationConfig: { responseMimeType: "application/json" },
     });
 
     const prompt = `
 あなたは伊藤和夫「ビジュアル英文解釈」のエキスパートです。
+この構文解析はAIが自動で行っています。精度は100%ではなく、特にS/Vや節の境界に誤りが含まれる場合があります。大枠の構造理解の型、直読直解の流れや呼吸をつかむ補助として利用してください。
 以下の英文を伊藤メソッドに従って解析し、指定のJSONのみを出力してください。
 
-【OCR誤字訂正（最重要）】
-- 入力はOCR由来のため誤字・脱字・記号誤りを含みます。解析前に文脈から正しい英文へ復元してください。
-- 例: "The1r"→"Their", "modem life"→"modern life"
-- 不自然なピリオドは除去またはカンマに修正し、英文として自然な形に直してから解析すること
+【JSON出力の絶対厳守ルール】
+1. **ValidなJSON**であること。末尾に不要なカンマ（trailing comma）をつけないこと。
+2. 文字列内のダブルクォーテーションは必ずエスケープすること（例: "彼は\\"悪魔\\"と言った"）。
+3. JSON以外の解説テキストは一切出力しないこと。
 
-【前処理・クリーニング】
-- 日本語指示、ページ番号、設問番号（(1), [A] 等）、意味不明な記号を完全に削除
-- 文中改行は連結し、正しい英文に復元してから解析
+【OCR誤字訂正】
+- 入力はOCR由来です。文脈から正しい英文へ復元してください。
+- "The1r"→"Their", 不自然なピリオドの除去など。
 
 【チャンク分割と記号ルール】
 1) 名詞的要素（S/O/C/名詞節）: type "noun", role S/O/C/S'/O'/C'、記号は【】
 2) 修飾的要素（副詞/前置詞句など）: type "modifier", role M/M'、記号は＜＞
 3) 動詞的要素: type "verb", role V/V'、記号なし
-4) 接続詞（and/butなど）: type "connector", role CONN とし、機能を note に「接続：並列」「接続：逆接」のように記載
+4) 接続詞: type "connector", role CONN
 
-【節と矢印の扱い（最重要）】
-- that節・wh節は「節全体」を O として1ブロックで扱う（that単体にラベルを付けない）
-- 主節・従属節ともに S → V → O の直線構造を意識して並べる（S' → V' → O'）
-- 副詞節（if/when/because/althoughなど）は「副詞節：条件/理由/時/譲歩」など意味ラベルを note に付与し、修飾先（文全体やV）も明記
-- 従属節・that節・関係詞節について、節の役割と内部構造を「詳しい解説」(details) に段落で追加する
-- details 配列は必須で、各従属節/関係詞節/that節ごとに1段落以上入れる（アコーディオン表示用）
+【節と矢印の扱い】
+- that節・wh節は「節全体」を O として1ブロックで扱う
+- details 配列には、従属節やthat節の内部構造（S' V' O'）の解説を必ず含める
 
-【修飾語の明示】
-- M は必ず「どの語を修飾しているか」を modifies に “M → V” “M → S” のように明記する
 
-【語法・冠詞の補足】
-- note に the の特定性、such の強調、increase が自動詞/他動詞か、主語省略/再提示（and後のS/V）など最小限の補足を一行で入れる
 
-【解説の質】
-- 各チャンクの explanation に「なぜその役割か」を初心者向けに具体的に書く
-  例: "前置詞inで始まる句なのでMです。動詞livedを修飾しています。"
 
-【訳抜け防止・省略補完】
-- 省略された that / which / when / because などは（that）（which）を補って解析
-- 全チャンクの translation は必ず日本語。英語のままは禁止
 
+【構文解析の絶対ルール（上書き）】
+1. **There is 構文の例外処理**:
+   - "There is/are/was/were S" の構文において、"There" は必ず type: "modifier", role: "M" とせよ。
+   - 後ろの名詞（意味上の主語）を role: "S" または "S'" とせよ。決して "C" としてはならない。
+   
+2. **句動詞 (Phrasal Verbs) の整合性**:
+   - "stay off", "look at" などの群動詞を V と認定した場合、その対象語は必ず role: "O" (目的語) とせよ。
+   - × stay off(V) <the road>(M)
+   - ○ stay off(V) [the road](O)
+
+3. **Be動詞の補語**:
+   - Be動詞の後ろにある前置詞句（例: only for horses）が C (補語) になる場合、記号は副詞用の ＜＞ ではなく、形容詞用の ( ) または名詞用の [ ] を使用せよ。
+
+【解析の優先順位（Safe-Fail Strategy）】
+- 最優先はVの特定とSVOCの骨格維持。SとO/Cの境界を明確に。
+- 修飾語の係り先が曖昧なら、無理にmodifiesを書かず、< > や ( ) だけで示す（誤指定するより空欄を選ぶ）。
+- 節内部が複雑で自信が持てないときは、節全体を [名詞節] や <副詞節> の大きな塊として示し、内部を無理に分解しない。
 【出力JSONフォーマット】
 {
   "clean_text": "OCR補正後の正しい英文",
   "sentences": [
     {
       "sentence_id": 1,
-      "original_text": "原文の一文",
+      "original_text": "原文",
       "chunks": [
-        { "text": "...", "translation": "...", "type": "noun|modifier|verb|connector", "role": "S|O|C|M|V|S'|O'|C'|M'|V'|CONN", "explanation": "...", "modifies": "M → V など", "note": "副詞節: 条件 / 接続：並列 / 冠詞の特定性 など" }
+        { "text": "...", "translation": "...", "type": "noun", "role": "S", "explanation": "...", "modifies": "...", "note": "..." }
       ],
-      "translation": "文全体の自然な日本語訳",
-      "vocab_list": [
-        { "word": "highly", "meaning": "高く、大いに（副詞）" }
-      ],
-      "details": [
-        "従属節・that節・関係詞節の役割と内部構造を説明した段落（アコーディオン用）"
-      ]
+      "translation": "和訳",
+      "vocab_list": [ { "word": "...", "meaning": "..." } ],
+      "details": [ "詳しい解説..." ]
     }
   ]
 }
 
 【解析対象の英文】
 ${cleaned}
-
-JSON以外は出力しないでください。
 `;
 
     const apiResult = await model.generateContent(prompt);
     const response = apiResult.response;
 
-    // トークン使用量をログ出力
+    // トークン使用量とコストのログ出力（レシート）
     const usage = response.usageMetadata;
     if (usage) {
-      const promptTokens = usage.promptTokenCount ?? 0;
-      const candidatesTokens = usage.candidatesTokenCount ?? 0;
-      const totalTokens = usage.totalTokenCount ?? promptTokens + candidatesTokens;
-      console.log(`[translate-english] Tokens - Prompt: ${promptTokens}, Candidates: ${candidatesTokens}, Total: ${totalTokens}`);
+        const inputTokens = usage.promptTokenCount || 0;
+        const outputTokens = usage.candidatesTokenCount || 0;
+        // Gemini 2.0 Flash 概算レート ($1=150円)
+        const totalCost = (inputTokens * 0.0000225) + (outputTokens * 0.00009);
+        
+        console.log("🧾 ============ レシート ============");
+        console.log(`📥 Input : ${inputTokens} tokens`);
+        console.log(`📤 Output: ${outputTokens} tokens`);
+        console.log(`💰 Cost  : 約 ${totalCost.toFixed(4)} 円`);
+        console.log("===================================");
     }
 
     let out: string;
     try {
-      const textResp = response.text();
-      if (typeof textResp === "string") {
-        out = textResp;
-      } else if (textResp && typeof textResp === "object") {
-        out = JSON.stringify(textResp);
-      } else {
-        out = String(textResp || "");
-      }
+      out = response.text();
     } catch (err) {
-      const cand = response.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!cand) throw err;
-      out = cand;
+      out = "";
     }
 
-    out = stripCodeFences(out);
-
+    // JSONクリーニング実行
+    const jsonString = cleanJsonOutput(out);
+    
     let parsed: any;
     try {
-      parsed = JSON.parse(out);
+      parsed = JSON.parse(jsonString);
     } catch (err) {
-      console.error("JSON parse error:", err, out);
-      return NextResponse.json({ error: "JSON parse failed", details: String(err) }, { status: 500 });
+      console.error("JSON Parsing Failed. Raw text sample:", jsonString.slice(0, 200) + "...");
+      console.error("Error details:", err);
+      // エラー時は生のテキストを返すか、エラーメッセージを返す
+      return NextResponse.json({ error: "AIの回答を解析できませんでした。もう一度お試しください。", details: String(err) }, { status: 500 });
     }
 
-    // --- Post-process to normalize roles and types before validation ---
+    // Role/Typeの正規化処理（前回と同じ）
     const normalizeRole = (role: any): z.infer<typeof ChunkSchema>["role"] => {
       if (!role) return "M";
-      const r = String(role).trim();
-      // collapse double apostrophes like S'' -> S'
-      const collapsed = r.replace(/''+/g, "'");
-      const upper = collapsed.toUpperCase();
-      switch (upper) {
+      const r = String(role).trim().replace(/''+/g, "'").toUpperCase();
+      switch (r) {
         case "S": return "S";
         case "O": return "O";
         case "C": return "C";
@@ -256,12 +258,12 @@ JSON以外は出力しないでください。
       }
     };
 
-    const normalizeType = (type: any, role: z.infer<typeof ChunkSchema>["role"]): z.infer<typeof ChunkSchema>["type"] => {
-      if (type === "noun" || type === "modifier" || type === "verb" || type === "connector") return type;
-      if (role === "V" || role === "V'") return "verb";
-      if (role === "M" || role === "M'") return "modifier";
-      if (role === "CONN") return "connector";
-      return "noun";
+    const normalizeType = (type: any, role: any): z.infer<typeof ChunkSchema>["type"] => {
+        if (["noun", "modifier", "verb", "connector"].includes(type)) return type;
+        if (role.startsWith("V")) return "verb";
+        if (role === "CONN") return "connector";
+        if (role.startsWith("M")) return "modifier";
+        return "noun";
     };
 
     if (parsed?.sentences && Array.isArray(parsed.sentences)) {
@@ -275,7 +277,7 @@ JSON以外は出力しないでください。
             type,
             role,
             explanation: c?.explanation ?? "",
-            modifies: c?.modifies ?? (role === "M" || role === "M'" ? "M → (unspecified)" : undefined),
+            modifies: c?.modifies ?? undefined,
             note: c?.note ?? "",
           };
         }) : [];
@@ -285,7 +287,7 @@ JSON以外は出力しないでください。
           chunks,
           translation: s?.translation ?? s?.full_translation ?? "",
           vocab_list: Array.isArray(s?.vocab_list) ? s.vocab_list : [],
-          details: Array.isArray(s?.details) && s.details.length > 0 ? s.details : ["従属節・関係詞節・that節の構造と役割を確認してください。"],
+          details: Array.isArray(s?.details) ? s.details : [],
         };
       });
     }
@@ -294,12 +296,12 @@ JSON以外は出力しないでください。
 
     const validated = ResponseSchema.parse(parsed);
     return NextResponse.json(validated);
+
   } catch (e: any) {
-    console.error("Translation error:", e?.message || String(e));
+    console.error("Server Error:", e?.message || String(e));
     return NextResponse.json(
-      { error: "Failed to translate", details: e?.message || String(e) },
+      { error: "Internal Server Error", details: e?.message || String(e) },
       { status: 500 }
     );
   }
 }
-

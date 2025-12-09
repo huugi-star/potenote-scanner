@@ -4,7 +4,7 @@
  * 英文・和訳・役割解説を「縦3段」のブロックで積み上げ、左から右へ読むスタイル
  */
 
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Home, ChevronDown, BookOpen } from 'lucide-react';
 import { vibrateLight } from '@/lib/haptics';
@@ -27,6 +27,9 @@ export const TranslationResultScreen = ({
   onBack,
   imageUrl,
 }: TranslationResultScreenProps) => {
+  const [tipShown, setTipShown] = useState(false);
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const [symbolsOpen, setSymbolsOpen] = useState(false);
   const saveTranslationHistory = useGameStore(state => state.saveTranslationHistory);
   const translationHistory = useGameStore(state => state.translationHistory);
   const hasSavedRef = useRef(false);
@@ -37,9 +40,15 @@ export const TranslationResultScreen = ({
     
     // 英文解釈モードの場合
     if (result.sentences && result.sentences.length > 0) {
-      const originalText = result.sentences.map(s => s.marked_text).join(' ');
-      const translatedText = result.sentences.map(s => s.translation).join(' ');
-      const isDuplicate = translationHistory.some(h => h.originalText === originalText);
+      const originalText = result.sentences
+        .map((s: any) => s.marked_text ?? s.original_text ?? s.originalText ?? s.original ?? '')
+        .filter(Boolean)
+        .join(' ');
+      const translatedText = result.sentences
+        .map((s: any) => s.translation ?? s.full_translation ?? '')
+        .filter(Boolean)
+        .join(' ');
+      const isDuplicate = translationHistory.some(h => h.originalText === originalText && h.translatedText === translatedText);
       
       if (!isDuplicate) {
         saveTranslationHistory({ ...result, originalText, translatedText }, imageUrl);
@@ -59,6 +68,13 @@ export const TranslationResultScreen = ({
 
   // 多言語モードかどうかを判定
   const isMultilangMode = !result.sentences && result.translatedText && result.originalText;
+  const fullEnglishText = useMemo(() => {
+    if (!result.sentences || result.sentences.length === 0) return '';
+    return result.sentences
+      .map((s: any) => s.marked_text ?? s.original_text ?? s.originalText ?? s.original ?? s.text ?? '')
+      .filter(Boolean)
+      .join(' ');
+  }, [result.sentences]);
 
   return (
     <div className="min-h-screen bg-[#1a1b26] p-4 pb-24 font-sans text-gray-100">
@@ -79,6 +95,80 @@ export const TranslationResultScreen = ({
           </div>
         </header>
 
+        {/* 英文解釈モード用 注意書き＆記号の読み方 */}
+        {!isMultilangMode && (
+          <div className="space-y-3">
+            <div className="border border-indigo-500/30 bg-indigo-900/10 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setNoticeOpen(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left text-indigo-100 font-semibold"
+              >
+                <span>⚠️ AI解析との向き合い方</span>
+                <motion.div animate={{ rotate: noticeOpen ? 180 : 0 }}>
+                  <ChevronDown className="w-5 h-5 text-indigo-200" />
+                </motion.div>
+              </button>
+              <AnimatePresence>
+                {noticeOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="px-4 pb-4 text-sm text-indigo-100 space-y-3"
+                  >
+                    <p>このモードは教科書的な正解を覚える場所ではありません。AIというパートナー相手の「打ち込み稽古」です。</p>
+                    <p className="text-indigo-200/90">※AIは時折ミスをしますが、あえて修正せず流れを止めずに読み切り、後から違和感を振り返ることで「突破力」を鍛えてください。</p>
+                    <div className="space-y-2">
+                      <p className="font-bold">習得すべき三つの型</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>壱ノ型：塊（チャンク）読み — 単語ではなく意味の塊で捉え、リズムよく左→右で読む。</li>
+                        <li>弐ノ型：返り読み禁止 — 量をこなし、直読直解を続けることで脳に文法リズムを刻む。</li>
+                        <li>奥義：【予測の呼吸】 — Sの次はV、接続詞の次は節…という英語の呼吸を体に染み込ませる。</li>
+                      </ul>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="border border-indigo-500/30 bg-indigo-900/10 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setSymbolsOpen(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left text-indigo-100 font-semibold"
+              >
+                <span>🔍 記号と構造の読み方</span>
+                <motion.div animate={{ rotate: symbolsOpen ? 180 : 0 }}>
+                  <ChevronDown className="w-5 h-5 text-indigo-200" />
+                </motion.div>
+              </button>
+              <AnimatePresence>
+                {symbolsOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="px-4 pb-4 text-sm text-indigo-100 space-y-3"
+                  >
+                    <div>
+                      <p className="font-bold text-indigo-100 mb-1">1. 文の骨組み (SVOC) — 場所で役割が決まる</p>
+                      <p className="text-indigo-200/90"><span className="text-red-300 font-bold">S</span> (主人公)：「〜は」</p>
+                      <p className="text-indigo-200/90"><span className="text-red-300 font-bold">V</span> (結論)：「〜する」 — ここが最重要。Vの後ろを見て O か C かを予測。</p>
+                      <p className="text-indigo-200/90"><span className="text-red-300 font-bold">O</span> (ターゲット)：「〜を」 (S ≠ O)</p>
+                      <p className="text-indigo-200/90"><span className="text-red-300 font-bold">C</span> (イコール)：「〜だ」 (S ＝ C)</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-bold text-indigo-100 mb-1">2. 記号のルール</p>
+                      <p>【　】：文の骨組み（主役）— 絶対に省けない「誰が・何を」などメインパーツ</p>
+                      <p>（　）：名詞のお飾り（説明）— 直前の【名詞】を詳しく説明するアクセサリー</p>
+                      <p>＜　＞：文の背景（おまけ）— 「いつ・どこで・なぜ」等の補足。骨組みにはならない</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
+
         {/* 多言語モードの表示 */}
         {isMultilangMode ? (
           <MultilangTranslationView result={result} />
@@ -89,8 +179,19 @@ export const TranslationResultScreen = ({
                 key={index} 
                 sentence={sentence} 
                 index={index} 
+                tipShown={tipShown}
+                setTipShown={setTipShown}
               />
             ))}
+
+            {/* 全文相談ボタン */}
+            <div className="mt-4">
+              <FullConsultButton
+                fullText={fullEnglishText}
+                tipShown={tipShown}
+                setTipShown={setTipShown}
+              />
+            </div>
           </div>
         ) : (
           <div className="text-center text-gray-400 py-10">
@@ -121,12 +222,19 @@ export const TranslationResultScreen = ({
  * VisualSentenceCard
  * 1つの文を表示するカードコンポーネント
  */
-const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: number }) => {
+const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { sentence: any, index: number, tipShown: boolean, setTipShown: (v: boolean) => void }) => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   // 詳細データがあるか判定（新しい構造と後方互換性）
   const hasDetails = (sentence.sub_structures && sentence.sub_structures.length > 0) || 
                      (sentence.structure_explanations && sentence.structure_explanations.length > 0) ||
                      (sentence.advanced_grammar_explanation);
+
+  const originalSentence = sentence.marked_text ?? sentence.original_text ?? sentence.originalText ?? sentence.original ?? '';
+  const focusChunk = (sentence.main_structure && sentence.main_structure.length > 0
+    ? sentence.main_structure[0]
+    : (sentence.chunks && sentence.chunks.length > 0 ? sentence.chunks[0] : null));
+  const targetText = focusChunk?.text ?? originalSentence ?? '';
+  const currentRole = focusChunk?.role ?? '未指定';
 
   return (
     <motion.div
@@ -141,6 +249,15 @@ const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: nu
           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-700 text-gray-300">
             Sentence {index + 1}
           </span>
+          <div className="ml-auto">
+            <ExternalConsultButton
+              target={targetText}
+              sentence={originalSentence}
+              currentRole={currentRole}
+              tipShown={tipShown}
+              setTipShown={setTipShown}
+            />
+          </div>
         </div>
         
         {/* ここに3段構成のチャンク表示を配置 */}
@@ -172,7 +289,7 @@ const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: nu
         )}
       </div>
 
-      {/* 詳しい解説（従属節・that節・関係詞節） */}
+      {/* 詳しい解説（Zoom-In） */}
       {sentence.details && sentence.details.length > 0 && (
         <div className="border-t border-gray-700 bg-[#1e1e2e]">
           <button
@@ -181,7 +298,7 @@ const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: nu
           >
             <div className="flex items-center gap-2 text-indigo-200 font-bold text-sm">
               <span className="text-lg">📖</span>
-              <span>詳しい解説</span>
+              <span>詳しい解説（クリックでズームイン）</span>
             </div>
             <motion.div animate={{ rotate: detailsOpen ? 180 : 0 }}>
               <ChevronDown className="w-5 h-5 text-indigo-300" />
@@ -199,9 +316,15 @@ const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: nu
                   {sentence.details.map((line: string, idx: number) => (
                     <div
                       key={idx}
-                      className="text-sm text-gray-200 leading-relaxed bg-[#24283b] border border-indigo-500/20 rounded-lg p-3"
+                      className="text-sm text-indigo-50 leading-relaxed bg-gradient-to-r from-indigo-900/40 to-indigo-800/40 border border-indigo-500/30 rounded-xl p-3 shadow-inner"
                     >
-                      {line}
+                      <div className="text-[11px] uppercase tracking-widest text-indigo-300 mb-1 font-semibold flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-300" />
+                        Zoom-In {idx + 1}
+                      </div>
+                      <div className="whitespace-pre-wrap font-mono text-[13px] text-indigo-100 leading-snug">
+                        {line}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -282,6 +405,94 @@ const VisualSentenceCard = memo(({ sentence, index }: { sentence: any, index: nu
 });
 
 VisualSentenceCard.displayName = 'VisualSentenceCard';
+
+// ===== External Consult Buttons =====
+
+const ExternalConsultButton = ({ target, sentence, currentRole, tipShown, setTipShown }: { target: string; sentence: string; currentRole: string; tipShown: boolean; setTipShown: (v: boolean) => void }) => {
+  const [copied, setCopied] = useState(false);
+
+  const consultPrompt = `
+以下の英文構造解析について質問です。
+
+【英文】
+${sentence}
+
+【質問箇所】
+"${target}"
+
+【現在の判定】
+役割: ${currentRole}
+
+この箇所の文法的な役割（S/V/O/C/M）と、なぜそうなるのかの理由を、初心者にもわかりやすく解説してください。
+  `.trim();
+
+  const handleConsult = async () => {
+    try {
+      await navigator.clipboard.writeText(consultPrompt);
+      setCopied(true);
+      if (!tipShown) {
+        setTipShown(true);
+        alert('プロンプトをコピーしました。ChatGPTが開いたらペーストしてください。');
+      }
+      setTimeout(() => {
+        window.open('https://chatgpt.com/', '_blank');
+        setCopied(false);
+      }, 700);
+    } catch (err) {
+      alert('コピーに失敗しました');
+    }
+  };
+
+  return (
+    <button
+      onClick={handleConsult}
+      className="ml-2 w-8 h-8 inline-flex items-center justify-center rounded-full border border-indigo-400/60 bg-indigo-900/40 hover:bg-indigo-800/60 text-xs"
+      title="外部AIに質問"
+    >
+      {copied ? '✅' : '🔍'}
+    </button>
+  );
+};
+
+const FullConsultButton = ({ fullText, tipShown, setTipShown }: { fullText: string; tipShown: boolean; setTipShown: (v: boolean) => void }) => {
+  const [copied, setCopied] = useState(false);
+
+  const prompt = `
+以下の英文全体の構造分析と文法解説をお願いします。
+
+【全文】
+${fullText}
+
+それぞれの文のS/V/O/C/Mを分解しながら、文章全体のつながりも説明してください。
+初心者向けにゆっくり丁寧にお願いします。
+  `.trim();
+
+  const handleConsult = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+      if (!tipShown) {
+        setTipShown(true);
+        alert('プロンプトをコピーしました。ChatGPTが開いたらペーストしてください。');
+      }
+      setTimeout(() => {
+        window.open('https://chatgpt.com/', '_blank');
+        setCopied(false);
+      }, 700);
+    } catch {
+      alert('コピーに失敗しました');
+    }
+  };
+
+  return (
+    <button
+      onClick={handleConsult}
+      className="mt-6 w-full py-3 text-sm font-bold rounded-xl bg-blue-500 text-white hover:bg-blue-600"
+    >
+      {copied ? 'コピー完了！ChatGPTを開いてください' : '全文についてChatGPTに相談する'}
+    </button>
+  );
+};
 
 /**
  * VisualChunk
