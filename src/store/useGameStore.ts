@@ -25,10 +25,6 @@ const isLocalDevelopment = (): boolean => {
          (typeof window !== 'undefined' && window.location.hostname === 'localhost');
 };
 
-const randomInRange = (min: number, max: number): number => {
-  return Math.random() * (max - min) + min;
-};
-
 const weightedRandom = <T extends { dropWeight: number }>(items: T[]): T => {
   const totalWeight = items.reduce((sum, item) => sum + item.dropWeight, 0);
   let random = Math.random() * totalWeight;
