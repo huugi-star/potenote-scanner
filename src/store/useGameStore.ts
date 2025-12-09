@@ -83,6 +83,7 @@ interface GameActions {
   checkScanLimit: () => { canScan: boolean; remaining: number; error?: string };
   incrementScanCount: () => void;
   recoverScanCount: () => void;
+  purchaseScanRecovery: () => { success: boolean; message: string };
   
   checkFreeQuestGenerationLimit: () => { canGenerate: boolean; remaining: number; error?: string };
   incrementFreeQuestGenerationCount: () => void;
@@ -486,6 +487,40 @@ export const useGameStore = create<GameStore>()(
         const newCount = Math.max(0, state.dailyScanCount - REWARDS.AD_REWARDS.SCAN_RECOVERY_COUNT);
         set({ dailyScanCount: newCount });
         get().syncWithCloud();
+      },
+
+      // 100コインでスキャンを1回分回復（消費カウントを1減らす）
+      purchaseScanRecovery: () => {
+        const state = get();
+        const today = getTodayString();
+        // 日付が変わっていたらリセットしてから判定
+        if (state.lastScanDate !== today) {
+          set({ dailyScanCount: 0, lastScanDate: today });
+        }
+
+        // VIPは実質無制限なので処理不要
+        if (state.isVIP) {
+          return { success: false, message: 'VIPは回復不要です' };
+        }
+
+        // 既に残回数があるなら不要
+        const remaining = LIMITS.FREE_USER.DAILY_SCAN_LIMIT - get().dailyScanCount;
+        if (remaining > 0) {
+          return { success: false, message: 'まだ残回数があります' };
+        }
+
+        // コイン消費チェック（100コイン固定）
+        const cost = 100;
+        if (!get().spendCoins(cost)) {
+          return { success: false, message: 'コインが不足しています (100コイン必要)' };
+        }
+
+        // 消費カウントを1減らし、残回数+1相当とする
+        set(state => ({
+          dailyScanCount: Math.max(0, state.dailyScanCount - 1),
+        }));
+        get().syncWithCloud();
+        return { success: true, message: 'スキャン回数を1回回復しました' };
       },
       
       // ===== Free Quest Generation Management =====

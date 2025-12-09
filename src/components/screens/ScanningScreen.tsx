@@ -74,7 +74,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const checkTranslationLimit = useGameStore(state => state.checkTranslationLimit);
   const incrementScanCount = useGameStore(state => state.incrementScanCount);
   const incrementTranslationCount = useGameStore(state => state.incrementTranslationCount);
-  // const recoverScanCount = useGameStore(state => state.recoverScanCount);
+  const purchaseScanRecovery = useGameStore(state => state.purchaseScanRecovery);
   const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
@@ -678,11 +678,22 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                   )}
                   
                   <motion.button
-                    disabled
-                    className="w-full py-4 rounded-xl bg-gray-700 text-gray-400 font-bold flex items-center justify-center gap-2 cursor-not-allowed"
+                    onClick={() => {
+                      vibrateLight();
+                      const res = purchaseScanRecovery();
+                      if (res.success) {
+                        addToast('success', res.message);
+                        setScanState('idle');
+                      } else {
+                        addToast('error', res.message);
+                      }
+                    }}
+                    className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-bold flex items-center justify-center gap-2"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                   >
                     <Play className="w-5 h-5" />
-                    回復オプションは利用できません
+                    100コインで1回回復
                   </motion.button>
 
                   {/* VIP購入ボタン（一時的に非表示） */}
