@@ -772,7 +772,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                   ? '画像を処理中...' 
                   : scanType === 'translation'
                     ? (translationMode === 'multilang' ? '要約中...' : '英文解釈中...')
-                    : 'OCR & クイズ生成中...'}
+            : 'クイズ作成中...'}
               </p>
               <p className="text-gray-400 text-sm mb-6">
                 {scanType === 'translation' 

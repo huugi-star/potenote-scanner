@@ -43,9 +43,14 @@ export const AuthButton = () => {
           console.error('Logout Error:', error);
         }
       }
-      // UIDをクリアしつつ、ローカル状態を完全リセット
+      // UIDをクリアしつつ、ゲスト利用のスキャン回数は保持したままリセット
       await setUserId(null);
-      useGameStore.getState().reset();
+      const store = useGameStore.getState();
+      if (store.resetPreserveGuestUsage) {
+        store.resetPreserveGuestUsage();
+      } else {
+        store.reset();
+      }
     } finally {
       setLoading(false);
       setShowLogoutConfirm(false);

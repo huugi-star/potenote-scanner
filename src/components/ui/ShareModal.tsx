@@ -95,10 +95,10 @@ export const ShareModal = ({ isOpen, onClose }: ShareModalProps) => {
           {/* 招待文言 */}
           <div className="mb-6 text-center">
             <p className="text-white text-lg font-medium mb-2">
-              友達と一緒に勉強して、ガチャを回そう！
+              このアプリをシェアして、みんなで学習を楽しもう
             </p>
             <p className="text-gray-400 text-sm">
-              このアプリをシェアして、みんなで英語学習を楽しもう
+              画像から瞬時に解析・翻訳。構造可視化で直読直解の練習ができます。
             </p>
           </div>
           

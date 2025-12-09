@@ -25,6 +25,7 @@ import { AffiliateSection } from '@/components/ui/AffiliateSection';
 import { useToast } from '@/components/ui/Toast';
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
 import { confettiIslandClear } from '@/lib/confetti';
+import { DISTANCE } from '@/lib/constants';
 import type { QuizRaw, QuizResult, StructuredOCR } from '@/types';
 
 // ===== Types =====
@@ -90,9 +91,9 @@ export const ResultScreen = ({
     let quizResult: QuizResult;
     
     if (isFreeQuest) {
-      // フリークエスト: 基本2コイン、満点+1、正解0.5km、満点+2km
-      const coins = isPerfect ? 3 : 2;
-      const distance = correctCount * 0.5 + (isPerfect ? 2 : 0);
+      // フリークエスト: 基本3コイン、満点+2、正解1km、満点+3km
+      const coins = isPerfect ? (3 + 2) : 3;
+      const distance = correctCount * DISTANCE.CORRECT_ANSWER + (isPerfect ? DISTANCE.PERFECT_BONUS : 0);
       quizResult = {
         quizId: `freequest_${Date.now()}`,
         correctCount,

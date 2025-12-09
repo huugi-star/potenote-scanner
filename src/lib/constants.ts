@@ -10,7 +10,7 @@
 export const REWARDS = {
   // クエストクリア報酬
   QUEST_CLEAR: {
-    BASE_COINS: 3,           // 基本コイン
+    BASE_COINS: 3,           // 基本コイン（スキャン/フリークエスト共通）
     PERFECT_BONUS: 2,        // パーフェクトボーナス (+2コイン)
     TOTAL_PERFECT: 5,        // パーフェクト時の合計 (3+2)
   },
@@ -34,15 +34,15 @@ export const REWARDS = {
 export const DISTANCE = {
   // スキャン時の基本距離
   SCAN_BASE: {
-    MIN: 1,                  // 最小 +1km
-    MAX: 3,                  // 最大 +3km
+    MIN: 0,                  // 0km（ベースなし）
+    MAX: 0,                  // 0km（ベースなし）
   },
   
   // 正解ボーナス
-  CORRECT_ANSWER: 0.5,       // 1問正解ごとに +0.5km
+  CORRECT_ANSWER: 1,         // 1問正解ごとに +1km
   
   // パーフェクトボーナス
-  PERFECT_BONUS: 2,          // パーフェクト時 +2km
+  PERFECT_BONUS: 3,          // パーフェクト時 +3km
 } as const;
 
 // ===== VIP Plan (課金プラン) =====
@@ -66,7 +66,7 @@ export const VIP_PLAN = {
 export const LIMITS = {
   // Free ユーザーの制限
   FREE_USER: {
-    DAILY_SCAN_LIMIT: 5,     // 1日5回まで（スキャン）
+    DAILY_SCAN_LIMIT: 3,     // 1日3回まで（スキャン）
     DAILY_FREE_QUEST_GENERATION_LIMIT: 3, // 1日3回まで（フリークエストの新問題生成）
     DAILY_TRANSLATION_LIMIT: 3, // 1日3回まで（翻訳）
     MAX_STAMINA: 5,          // 最大スタミナ

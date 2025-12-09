@@ -144,6 +144,7 @@ interface GameActions {
   setHasLaunched: () => void;
   
   reset: () => void;
+  resetPreserveGuestUsage: () => void;
 
   // ===== Auth & Cloud Sync =====
   setUserId: (uid: string | null) => Promise<void>;
@@ -689,18 +690,18 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const isPerfect = correctCount === totalQuestions;
         
-        let baseCoins = REWARDS.QUEST_CLEAR.BASE_COINS;
+        let baseCoins = REWARDS.QUEST_CLEAR.BASE_COINS; // スキャン/通常クエスト共通 +3
         if (isPerfect) {
-          baseCoins += REWARDS.QUEST_CLEAR.PERFECT_BONUS;
+          baseCoins += REWARDS.QUEST_CLEAR.PERFECT_BONUS; // パーフェクト +2
         }
         
         const shouldDouble = state.isVIP || isAdWatched;
         const earnedCoins = shouldDouble ? baseCoins * 2 : baseCoins;
         
-        const scanBaseDistance = randomInRange(DISTANCE.SCAN_BASE.MIN, DISTANCE.SCAN_BASE.MAX);
+        // 距離: 正解1問につき +1km、パーフェクト時 +0.003km (3m)
         const correctBonus = correctCount * DISTANCE.CORRECT_ANSWER;
         const perfectBonus = isPerfect ? DISTANCE.PERFECT_BONUS : 0;
-        const earnedDistance = scanBaseDistance + correctBonus + perfectBonus;
+        const earnedDistance = correctBonus + perfectBonus;
         
         return {
           quizId: `quiz_${Date.now()}`,
@@ -1234,6 +1235,16 @@ export const useGameStore = create<GameStore>()(
       
       reset: () => {
         set(initialState);
+      },
+
+      // ログアウト時にゲストのスキャン回数を保持したままリセット
+      resetPreserveGuestUsage: () => {
+        const { dailyScanCount, lastScanDate } = get();
+        set({
+          ...initialState,
+          dailyScanCount,
+          lastScanDate,
+        });
       },
     }),
     {
