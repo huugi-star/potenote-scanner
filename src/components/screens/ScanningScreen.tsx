@@ -24,7 +24,6 @@ import {
 } from 'lucide-react';
 import { useGameStore, selectRemainingScanCount } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
-import { AdsModal } from '@/components/ui/AdsModal';
 import { ASPSalesModal } from '@/components/ui/ASPSalesModal';
 // import { ShopModal } from '@/components/ui/ShopModal'; // 一時的に非表示
 import { useToast } from '@/components/ui/Toast';
@@ -51,7 +50,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const [scanState, setScanState] = useState<ScanState>('idle');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [showAdsModal, setShowAdsModal] = useState(false);
   const [showASPSalesModal, setShowASPSalesModal] = useState(false);
   const [aspAdRecommendation, setAspAdRecommendation] = useState<{ ad_id: string; reason: string } | null>(null);
   const [currentVocab, setCurrentVocab] = useState<{ word: string; meaning: string; options: string[]; correctIndex: number; explanation?: string; isIdiom?: boolean } | null>(null);
@@ -76,7 +74,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const checkTranslationLimit = useGameStore(state => state.checkTranslationLimit);
   const incrementScanCount = useGameStore(state => state.incrementScanCount);
   const incrementTranslationCount = useGameStore(state => state.incrementTranslationCount);
-  const recoverScanCount = useGameStore(state => state.recoverScanCount);
+  // const recoverScanCount = useGameStore(state => state.recoverScanCount);
   const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
@@ -517,14 +515,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
     }
   };
 
-  // 広告視聴完了
-  const handleAdRewardClaimed = () => {
-    recoverScanCount();
-    setShowAdsModal(false);
-    vibrateSuccess();
-    addToast('success', 'スキャン回数が回復しました！');
-  };
-
   // VIP購入（一時的に非表示）
   // const handleVIPPurchase = () => {
   //   const expiresAt = new Date();
@@ -688,16 +678,11 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                   )}
                   
                   <motion.button
-                    onClick={() => {
-                      vibrateLight();
-                      setShowAdsModal(true);
-                    }}
-                    className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-bold flex items-center justify-center gap-2"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    disabled
+                    className="w-full py-4 rounded-xl bg-gray-700 text-gray-400 font-bold flex items-center justify-center gap-2 cursor-not-allowed"
                   >
                     <Play className="w-5 h-5" />
-                    動画を見て3回回復
+                    回復オプションは利用できません
                   </motion.button>
 
                   {/* VIP購入ボタン（一時的に非表示） */}
@@ -773,11 +758,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                   : scanType === 'translation'
                     ? (translationMode === 'multilang' ? '要約中...' : '英文解釈中...')
             : 'クイズ作成中...'}
-              </p>
-              <p className="text-gray-400 text-sm mb-6">
-                {scanType === 'translation' 
-                  ? 'Google Vision + GPT-4o-mini' 
-                  : 'Google Vision + GPT-4o-mini'}
               </p>
 
               {/* 過去の重要語句をランダム表示（二択問題形式、多言語モードでは表示しない） */}
@@ -947,14 +927,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         </AnimatePresence>
       </div>
 
-      {/* モーダル */}
-      <AdsModal
-        isOpen={showAdsModal}
-        onClose={() => setShowAdsModal(false)}
-        adType="scan_recovery"
-        onRewardClaimed={handleAdRewardClaimed}
-      />
-      
       {/* ASP広告モーダル */}
       <ASPSalesModal
         isOpen={showASPSalesModal}
