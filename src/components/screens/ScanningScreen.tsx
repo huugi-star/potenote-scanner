@@ -960,7 +960,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           )}
         </AnimatePresence>
       </div>
-
+      
       {/* ASP広告モーダル */}
       <ASPSalesModal
         isOpen={showASPSalesModal}
