@@ -47,6 +47,21 @@ const getRoleLabel = (role: string | null): string => {
   }
 };
 
+// 文オブジェクトから表示用の原文を取得（フォールバック付き）
+const getSentenceSourceText = (sentence: any): string => {
+  if (!sentence) return '';
+  if (sentence.marked_text) return sentence.marked_text;
+  if (sentence.original_text) return sentence.original_text;
+  if (sentence.originalText) return sentence.originalText;
+  if (sentence.original) return sentence.original;
+  if (sentence.text) return sentence.text;
+  if (Array.isArray(sentence.chunks)) {
+    const joined = sentence.chunks.map((c: any) => c?.text ?? '').filter(Boolean).join(' ');
+    if (joined.trim()) return joined.trim();
+  }
+  return '';
+};
+
 // ===== Sub Components =====
 
 /**
@@ -236,7 +251,7 @@ const SentenceCard = memo(({
       <div className="mb-4">
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-600 overflow-x-auto">
           <MarkedTextParser 
-            text={sentence.marked_text || ''} 
+            text={getSentenceSourceText(sentence)} 
             onChunkClick={(index) => {
               console.log('Chunk clicked:', sentenceIndex, index);
             }}
@@ -327,7 +342,7 @@ const TranslationHistoryItem = ({ history, onDelete }: { history: TranslationHis
   const getPreviewText = () => {
     if (hasEnglishLearningData && history.sentences && history.sentences.length > 0) {
       const firstSentence = history.sentences[0];
-      const preview = firstSentence.translation || firstSentence.marked_text || '';
+      const preview = firstSentence.translation || getSentenceSourceText(firstSentence) || '';
       return preview.length > 100 ? preview.substring(0, 100) + '...' : preview;
     }
     if (hasMarkedText) {
@@ -524,7 +539,7 @@ const TranslationHistoryItem = ({ history, onDelete }: { history: TranslationHis
                 <div>
                   <h3 className="text-sm font-bold text-gray-300 mb-2">記号付き原文</h3>
                   <div className="bg-gray-700 rounded-lg p-4 border border-gray-600 overflow-x-auto">
-                    <MarkedTextParser text={history.marked_text!} />
+                    <MarkedTextParser text={history.marked_text || history.originalText || ''} />
                   </div>
                 </div>
                 {/* 全文和訳 */}
