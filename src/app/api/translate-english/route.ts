@@ -281,13 +281,27 @@ ${cleaned}
             note: c?.note ?? "",
           };
         }) : [];
+        // detailsを文字列に正規化（LLMがオブジェクトを返す場合に備える）
+        const normalizedDetails = Array.isArray(s?.details)
+          ? s.details
+              .map((d: any) => {
+                if (typeof d === "string") return d;
+                try {
+                  return JSON.stringify(d);
+                } catch {
+                  return String(d ?? "");
+                }
+              })
+              .filter((d: any) => typeof d === "string" && d.trim().length > 0)
+          : [];
+
         return {
           sentence_id: typeof s?.sentence_id === "number" ? s.sentence_id : idx + 1,
           original_text: s?.original_text ?? "",
           chunks,
           translation: s?.translation ?? s?.full_translation ?? "",
           vocab_list: Array.isArray(s?.vocab_list) ? s.vocab_list : [],
-          details: Array.isArray(s?.details) ? s.details : [],
+          details: normalizedDetails,
         };
       });
     }

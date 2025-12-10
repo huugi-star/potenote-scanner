@@ -52,12 +52,13 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const categoryParam = searchParams.get('category') as keyof typeof SEARCH_PARAMS | null;
-    const keywordParam = searchParams.get('keyword') || undefined;
+    const keywordParamRaw = searchParams.get('keyword') || undefined;
+    const keywordParam = keywordParamRaw?.trim();
     const hitsParam = Number(searchParams.get('hits')) || 10;
     
     const category: keyof typeof SEARCH_PARAMS = categoryParam && SEARCH_PARAMS[categoryParam] ? categoryParam : 'books';
     const { keyword: defaultKeyword, fallbackKeyword } = SEARCH_PARAMS[category];
-    const keyword = keywordParam || defaultKeyword;
+    const keyword = keywordParam && keywordParam.length > 0 ? keywordParam : defaultKeyword;
     // 楽天APIを呼び出し
     const searchUrl =
       `https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601?` +
@@ -74,48 +75,43 @@ export async function GET(request: Request) {
       // 取得件数
       `hits=${Math.max(1, Math.min(hitsParam, 30))}`;
 
-    const response = await fetch(searchUrl);
-
-    if (!response.ok) {
-      // レスポンス本文もログに出して原因を特定しやすくする
-      const errorText = await response.text();
-      console.error('Rakuten API response error:', response.status, errorText);
-      throw new Error(`楽天APIエラー: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    // 画像URLを高解像度化
-    const normalizeImageUrl = (url: string): string => {
-      if (!url) return url;
-      if (url.includes('_ex=')) {
-        return url.replace(/_ex=\d+x\d+/, '_ex=600x600');
+    const fetchItems = async (url: string) => {
+      const response = await fetch(url);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Rakuten API response error:', response.status, errorText);
+        return [];
       }
-      return url.includes('?') ? `${url}&_ex=600x600` : `${url}?_ex=600x600`;
+      const data = await response.json();
+      return data.Items?.map((raw: any) => {
+        const item = raw.Item ?? raw.item ?? raw;
+        const mediumImageUrls: string[] =
+          Array.isArray(item.mediumImageUrls)
+            ? item.mediumImageUrls
+                .map((img: any) => {
+                  const u = img?.imageUrl;
+                  if (!u) return u;
+                  if (u.includes('_ex=')) return u.replace(/_ex=\d+x\d+/, '_ex=600x600');
+                  return u.includes('?') ? `${u}&_ex=600x600` : `${u}?_ex=600x600`;
+                })
+                .filter((url: unknown): url is string => typeof url === 'string')
+            : [];
+
+        return {
+          itemName: item.itemName,
+          itemPrice: String(item.itemPrice),
+          itemUrl: item.itemUrl,
+          mediumImageUrls,
+          shopName: item.shopName,
+          affiliateUrl: item.affiliateUrl,
+        };
+      }) || [];
     };
 
-    // 商品データを整形（楽天APIのレスポンス形式に合わせて安全に変換）
-    let items = data.Items?.map((raw: any) => {
-      const item = raw.Item ?? raw.item ?? raw;
-      const mediumImageUrls: string[] =
-        Array.isArray(item.mediumImageUrls)
-          ? item.mediumImageUrls
-              .map((img: any) => normalizeImageUrl(img?.imageUrl))
-              .filter((url: unknown): url is string => typeof url === 'string')
-          : [];
+    let items = await fetchItems(searchUrl);
 
-      return {
-        itemName: item.itemName,
-        itemPrice: String(item.itemPrice),
-        itemUrl: item.itemUrl,
-        mediumImageUrls,
-        shopName: item.shopName,
-        affiliateUrl: item.affiliateUrl,
-      };
-    }) || [];
-
-    // 0件だった場合は、NGKeyword を外しつつフォールバックキーワードで再検索
-    if (!items.length && fallbackKeyword) {
+    // 0件またはAPIエラー時にフォールバックキーワードで再検索
+    if ((!items.length || items.every((it: any) => !it.itemUrl)) && fallbackKeyword) {
       const fallbackUrl =
         `https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601?` +
         `applicationId=${encodeURIComponent(RAKUTEN_APP_ID)}&` +
@@ -124,29 +120,7 @@ export async function GET(request: Request) {
         `keyword=${encodeURIComponent(fallbackKeyword)}&` +
         `availability=1&` +
         `hits=${Math.max(1, Math.min(hitsParam, 30))}`;
-
-      const fallbackResponse = await fetch(fallbackUrl);
-      if (fallbackResponse.ok) {
-        const fallbackData = await fallbackResponse.json();
-        items = fallbackData.Items?.map((raw: any) => {
-          const item = raw.Item ?? raw.item ?? raw;
-          const mediumImageUrls: string[] =
-            Array.isArray(item.mediumImageUrls)
-              ? item.mediumImageUrls
-                  .map((img: any) => img?.imageUrl)
-                  .filter((url: unknown): url is string => typeof url === 'string')
-              : [];
-
-          return {
-            itemName: item.itemName,
-            itemPrice: String(item.itemPrice),
-            itemUrl: item.itemUrl,
-            mediumImageUrls,
-            shopName: item.shopName,
-            affiliateUrl: item.affiliateUrl,
-          };
-        }) || [];
-      }
+      items = await fetchItems(fallbackUrl);
     }
 
     return NextResponse.json({ items });

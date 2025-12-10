@@ -661,20 +661,22 @@ const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boole
       borderColor = "border-gray-600";
   }
 
+  const cleanTranslation = (chunk.translation || "").replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu, "");
+
   return (
     <div 
-      className="flex flex-col items-center group"
+      className="flex flex-col items-center group max-w-[260px]"
     >
       {/* 1段目：英文 (ブラケット付き) */}
-      <div className={`text-xl px-1 py-1 border-b-2 ${borderColor} ${textColor} whitespace-nowrap`}>
+      <div className={`text-xl px-2 py-1 border-b-2 ${borderColor} ${textColor} whitespace-pre-wrap break-words text-center`}>
         <span className="opacity-60 mr-1">{leftB}</span>
         {chunk.text}
         <span className="opacity-60 ml-1">{rightB}</span>
       </div>
 
       {/* 2段目：直訳 (直読直解) */}
-      <div className="mt-2 text-sm text-gray-300 font-medium max-w-[200px] text-center">
-        {chunk.translation}
+      <div className="mt-2 text-sm text-gray-300 font-medium max-w-[220px] text-center whitespace-pre-wrap break-words">
+        {cleanTranslation}
       </div>
 
       {/* 3段目：文法役割 (S/V/O...) + Gemini解説エリア */}
