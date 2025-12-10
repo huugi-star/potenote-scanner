@@ -454,7 +454,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
       {/* 2. 自然な和訳 */}
       <div className="p-5 bg-[#24283b] border-b border-gray-700/50">
         <div className="flex items-start gap-3">
-          <span className="text-xl">🇯🇵</span>
+          <span className="text-sm px-2 py-1 rounded bg-gray-700 text-gray-200">訳</span>
           <p className="text-lg text-gray-100 leading-relaxed font-medium">
             {sentence.full_translation || sentence.translation}
           </p>
