@@ -73,7 +73,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const setEnglishLearningMode = useGameStore(state => state.setEnglishLearningMode);
   const remainingScans = useGameStore(selectRemainingScanCount);
   const checkScanLimit = useGameStore(state => state.checkScanLimit);
-  const checkTranslationLimit = useGameStore(state => state.checkTranslationLimit);
   const incrementScanCount = useGameStore(state => state.incrementScanCount);
   const incrementTranslationCount = useGameStore(state => state.incrementTranslationCount);
   const purchaseScanRecovery = useGameStore(state => state.purchaseScanRecovery);
@@ -284,15 +283,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
     vibrateLight();
 
     // 制限チェック（消費はまだしない）
-    if (scanType === 'translation') {
-      const limitCheck = checkTranslationLimit();
-      if (!limitCheck.canTranslate) {
-        setErrorMessage(limitCheck.error || '翻訳回数の上限に達しました');
-        setScanState('error');
-        vibrateError();
-        return;
-      }
-    } else {
+    if (scanType !== 'translation') {
       const limitCheck = checkScanLimit();
       if (!limitCheck.canScan) {
         setErrorMessage(limitCheck.error || 'スキャン回数の上限に達しました');
