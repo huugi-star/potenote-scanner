@@ -87,6 +87,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canScan = isVIP || remainingScans > 0;
+  const canUpload = scanType === 'translation' ? true : canScan;
 
   // ページ更新後にストアから復元されたクイズがある場合は、ready状態にする
   useEffect(() => {
@@ -629,14 +630,14 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
             >
               <div
                 className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${
-                  canScan 
+                  canUpload 
                     ? 'border-gray-600 hover:border-cyan-500 cursor-pointer' 
                     : 'border-gray-700 bg-gray-800/50 cursor-not-allowed'
                 }`}
-                onDrop={canScan ? handleDrop : undefined}
+                onDrop={canUpload ? handleDrop : undefined}
                 onDragOver={(e) => e.preventDefault()}
                 onClick={() => {
-                  if (canScan) {
+                  if (canUpload) {
                     vibrateLight();
                     fileInputRef.current?.click();
                   }
@@ -648,10 +649,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                   accept="image/*"
                   className="hidden"
                   onChange={handleInputChange}
-                  disabled={!canScan}
+                  disabled={!canUpload}
                 />
 
-                {canScan ? (
+                {canUpload ? (
                   <>
                     <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cyan-500/20 flex items-center justify-center">
                       <Camera className="w-8 h-8 text-cyan-400" />
@@ -690,7 +691,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
               </div>
 
               {/* Freeユーザー向け回復オプション */}
-              {!isVIP && !canScan && (
+              {!isVIP && scanType === 'quiz' && !canScan && (
                 <div className="mt-6 space-y-3">
                   {/* ASP広告モーダル表示ボタン（ad_recommendationがある場合のみ） */}
                   {aspAdRecommendation && (
