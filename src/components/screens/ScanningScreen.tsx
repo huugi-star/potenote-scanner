@@ -86,7 +86,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canScan = isVIP || remainingScans > 0;
-  const canUpload = scanType === 'translation' ? true : canScan;
+  // スキャン残数が0なら翻訳モードでもアップロード不可
+  const canUpload = canScan;
 
   // ページ更新後にストアから復元されたクイズがある場合は、ready状態にする
   useEffect(() => {
