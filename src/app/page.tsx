@@ -244,12 +244,6 @@ const HomeScreen = ({
         <motion.button
           onClick={() => {
             vibrateLight();
-            const checkLimit = useGameStore.getState().checkTranslationLimit();
-            if (!checkLimit.canTranslate) {
-              // 制限オーバーの場合はエラーメッセージを表示（将来的に広告モーダルを表示）
-              alert(checkLimit.error || '翻訳回数の上限に達しました');
-              return;
-            }
             onNavigate('translation_mode_select');
           }}
           className="w-full mt-3 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600/80 to-emerald-500/80 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20"
