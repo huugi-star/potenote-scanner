@@ -78,18 +78,6 @@ export const ASPSalesModal = ({
     return () => clearInterval(interval);
   }, [isOpen, adRecommendation]);
 
-  // 外部リンクを開く
-  const handleOpenLink = () => {
-    if (selectedAd?.url) {
-      window.open(selectedAd.url, '_blank', 'noopener,noreferrer');
-    } else {
-      // URLが設定されていない場合は、商品名で検索
-      const searchQuery = encodeURIComponent(selectedAd?.name || '');
-      window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank', 'noopener,noreferrer');
-    }
-    onClose();
-  };
-
   if (!adRecommendation || !selectedAd) {
     return null;
   }
@@ -215,13 +203,20 @@ export const ASPSalesModal = ({
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={handleOpenLink}
-                  className="w-full py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-transform hover:scale-[1.02] active:scale-[0.98] bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30"
+                <a
+                  href={selectedAd.url || '#'}
+                  target="_blank"
+                  rel="nofollow noopener noreferrer"
+                  className="block w-full"
+                  onClick={onClose}
                 >
-                  <ExternalLink className="w-5 h-5" />
-                  詳細を見る
-                </button>
+                  <button
+                    className="w-full py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-transform hover:scale-[1.02] active:scale-[0.98] bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30"
+                  >
+                    <ExternalLink className="w-5 h-5" />
+                    詳細を見る
+                  </button>
+                </a>
               )}
             </div>
 

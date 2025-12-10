@@ -97,9 +97,9 @@ export function AdsModal({ isOpen, onClose, adType, onRewardClaimed, adRecommend
           <a
             href={targetAd.url || '#'}
             target="_blank"
-            rel="noopener noreferrer"
+            rel="nofollow noopener noreferrer"
             onClick={handleClickAd}
-            className="block group relative overflow-hidden rounded-xl border border-slate-600 hover:border-indigo-400 transition-all shadow-lg"
+            className="w-full block text-left group relative overflow-hidden rounded-xl border border-slate-600 hover:border-indigo-400 transition-all shadow-lg"
           >
             {/* ★修正ポイント: どんなサイズの画像でも綺麗に見せるレイアウト
               aspect-video (16:9) の枠の中に、object-contain で画像を収め、
@@ -117,6 +117,7 @@ export function AdsModal({ isOpen, onClose, adType, onRewardClaimed, adRecommend
                   <img 
                     src={targetAd.imageUrl} 
                     alt={targetAd.name} 
+                    loading="lazy"
                     className="relative w-full h-full object-contain z-10 transition-transform duration-500 group-hover:scale-105" 
                   />
                 </>

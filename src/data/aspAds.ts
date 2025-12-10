@@ -25,7 +25,7 @@ export interface AspAdItem {
     {
       id: 'ways_tutoring',
       name: '個別指導塾WAYS（中高一貫校専門）',
-      url: 'https://px.a8.net/svt/ejp?a8mat=45K455+BXV1UY+52LC+674EP', // ★あなたのリンク
+      url: 'https://px.a8.net/svt/ejp?a8mat=45K455+BXV1UY+52LC+5Z6WX', // ★あなたのリンク
       imageUrl: 'https://www22.a8.net/svt/bgt?aid=251201273722&wid=004&eno=01&mid=s00000023664001041000&mc=1', // ★あなたの画像パス
       descriptionForAI: `結果が出ない」のは
 君の能力不足ではありません。
