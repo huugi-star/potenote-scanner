@@ -69,6 +69,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const isVIP = useGameStore(state => state.isVIP);
   const scanType = useGameStore(state => state.scanType);
   const translationMode = useGameStore(state => state.translationMode);
+  const englishLearningMode = useGameStore(state => state.englishLearningMode);
+  const setEnglishLearningMode = useGameStore(state => state.setEnglishLearningMode);
   const remainingScans = useGameStore(selectRemainingScanCount);
   const checkScanLimit = useGameStore(state => state.checkScanLimit);
   const checkTranslationLimit = useGameStore(state => state.checkTranslationLimit);
@@ -591,6 +593,35 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
             ssrEffect={isVIP}
           />
         </div>
+
+        {/* 英文解釈モードの学習属性選択（スキャン前） */}
+        {scanType === 'translation' && translationMode === 'english_learning' && (
+          <div className="mb-6 bg-gray-800/80 border border-indigo-500/30 rounded-xl p-4 space-y-2">
+            <p className="text-sm text-indigo-100 font-semibold">学習モードを選択してください</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEnglishLearningMode('STUDENT')}
+                className={`px-3 py-2 rounded-lg text-sm font-bold border transition-colors ${
+                  englishLearningMode === 'STUDENT'
+                    ? 'bg-indigo-600 text-white border-indigo-400'
+                    : 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600'
+                }`}
+              >
+                🎓 学生・受験
+              </button>
+              <button
+                onClick={() => setEnglishLearningMode('TOEIC')}
+                className={`px-3 py-2 rounded-lg text-sm font-bold border transition-colors ${
+                  englishLearningMode === 'TOEIC'
+                    ? 'bg-indigo-600 text-white border-indigo-400'
+                    : 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600'
+                }`}
+              >
+                🏢 社会人・TOEIC
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* メインコンテンツ */}
@@ -730,8 +761,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
             />
           )}
 
-          {/* アップロード/処理中 */}
-          {(scanState === 'uploading' || scanState === 'processing') && !showPrepositionGame && (
+          {/* アップロード/処理中（ゲーム表示有無にかかわらず進行度を表示） */}
+          {(scanState === 'uploading' || scanState === 'processing') && (
             <motion.div
               key="processing"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -749,8 +780,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                 </div>
               )}
               
-              {/* ロードメーター（翻訳モードのみ表示） */}
-              {scanType === 'translation' && (
+              {/* ロードメーター（翻訳モード・クイズモードいずれも表示） */}
+              {(scanState === 'uploading' || scanState === 'processing') && (
                 <div className="w-full max-w-xs mx-auto mb-6">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-gray-400 text-sm">処理中...</span>

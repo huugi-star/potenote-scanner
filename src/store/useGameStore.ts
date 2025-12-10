@@ -65,6 +65,7 @@ interface GameState extends UserState {
   // スキャンタイプと翻訳結果
   scanType: 'quiz' | 'translation';
   translationMode: 'english_learning' | 'multilang' | null; // 翻訳モード
+  englishLearningMode: 'STUDENT' | 'TOEIC'; // 英文解釈の学習プロファイル
   translationResult: TranslationResult | null;
   
   // 生成されたクイズ（ページ更新後も保持）
@@ -94,6 +95,7 @@ interface GameActions {
   
   setScanType: (type: 'quiz' | 'translation') => void;
   setTranslationMode: (mode: 'english_learning' | 'multilang' | null) => void;
+  setEnglishLearningMode: (mode: 'STUDENT' | 'TOEIC') => void;
   setTranslationResult: (result: TranslationResult | null) => void;
   
   // 生成されたクイズの保存・取得
@@ -200,6 +202,7 @@ const initialState: GameState = {
   
   scanType: 'quiz',
   translationMode: null,
+  englishLearningMode: 'STUDENT',
   translationResult: null,
   
   generatedQuiz: null,
@@ -621,6 +624,10 @@ export const useGameStore = create<GameStore>()(
       
       setTranslationMode: (mode) => {
         set({ translationMode: mode });
+      },
+
+      setEnglishLearningMode: (mode) => {
+        set({ englishLearningMode: mode });
       },
       
       setTranslationResult: (result) => {

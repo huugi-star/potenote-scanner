@@ -12,6 +12,8 @@ interface AdsModalProps {
   adRecommendation?: { 
     ad_id: string;
     reason: string;
+    url?: string;
+    name?: string;
   };
 }
 
@@ -19,7 +21,17 @@ export function AdsModal({ isOpen, onClose, adType, onRewardClaimed, adRecommend
   const [canClose, setCanClose] = useState(false);
   const [countdown, setCountdown] = useState(5);
 
-  const targetAd = ASP_ADS.find(ad => ad.id === adRecommendation?.ad_id) || ASP_ADS[0];
+  const fallbackAd = adRecommendation?.ad_id === 'rakuten_fallback'
+    ? {
+        id: 'rakuten_fallback',
+        name: adRecommendation.name || '楽天で探す',
+        url: adRecommendation.url || 'https://search.rakuten.co.jp/',
+        imageUrl: '/images/ads/rakuten-placeholder.png',
+        descriptionForAI: adRecommendation.reason,
+      }
+    : undefined;
+
+  const targetAd = fallbackAd || ASP_ADS.find(ad => ad.id === adRecommendation?.ad_id) || ASP_ADS[0];
   const salesCopy = adRecommendation?.reason || targetAd.descriptionForAI;
 
   useEffect(() => {
@@ -67,14 +79,16 @@ export function AdsModal({ isOpen, onClose, adType, onRewardClaimed, adRecommend
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-bold text-indigo-300 tracking-wider uppercase">AI Learning Advisor</div>
-            <div className="text-white font-bold text-sm">学習アドバイス</div>
+            <div className="text-[10px] font-bold text-indigo-300 tracking-wider uppercase">PR</div>
+            <div className="text-white font-bold text-sm">
+              処理中... (残り {countdown} 秒)
+            </div>
           </div>
         </div>
 
         <div className="p-6 space-y-6">
           <div className="relative bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-            <p className="text-base text-white font-medium leading-relaxed">
+            <p className="text-base text-white font-medium leading-relaxed whitespace-pre-wrap overflow-y-auto max-h-72">
               「{salesCopy}」
             </p>
             <div className="absolute -bottom-2 left-6 w-4 h-4 bg-slate-800 border-b border-r border-slate-700 transform rotate-45"></div>
@@ -135,12 +149,12 @@ export function AdsModal({ isOpen, onClose, adType, onRewardClaimed, adRecommend
             >
               {canClose ? (
                 <>
-                  アドバイスを閉じて回復 <ArrowRight className="w-4 h-4" />
+                  広告を閉じる <ArrowRight className="w-4 h-4" />
                 </>
               ) : (
                 <>
                   <Timer className="w-4 h-4 animate-spin" />
-                  メッセージを確認中... ({countdown})
+                  コイン2倍の処理中… ({countdown})
                 </>
               )}
                 </button>

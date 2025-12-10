@@ -23,6 +23,7 @@ interface RakutenItem {
 
 interface AffiliateSectionProps {
   milestoneCount: number; // 累計クリア回数（例：3, 6, 9...）
+  keywordHint?: string;   // スキャン等から渡されるキーワード
 }
 
 // ===== Constants =====
@@ -75,11 +76,11 @@ const selectCategory = () => {
 /**
  * 楽天APIから商品を取得（Next.js API Route経由）
  */
-const fetchRakutenItems = async (categoryKey: string): Promise<RakutenItem[]> => {
+const fetchRakutenItems = async (categoryKey: string, keywordHint?: string): Promise<RakutenItem[]> => {
   try {
     // Next.js API Route経由で呼び出し（CORS問題を回避）
     const response = await fetch(
-      `/api/rakuten-items?category=${categoryKey}`
+      `/api/rakuten-items?category=${categoryKey}${keywordHint ? `&keyword=${encodeURIComponent(keywordHint)}` : ''}`
     );
     
     if (!response.ok) {
@@ -111,7 +112,7 @@ const generateMockItems = (): RakutenItem[] => {
 
 // ===== Main Component =====
 
-export const AffiliateSection = ({ milestoneCount }: AffiliateSectionProps) => {
+export const AffiliateSection = ({ milestoneCount, keywordHint }: AffiliateSectionProps) => {
   const [items, setItems] = useState<RakutenItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<ReturnType<typeof selectCategory> | null>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
@@ -123,13 +124,13 @@ export const AffiliateSection = ({ milestoneCount }: AffiliateSectionProps) => {
       const category = selectCategory();
       setSelectedCategory(category);
       
-      const fetchedItems = await fetchRakutenItems(category.key);
+      const fetchedItems = await fetchRakutenItems(category.key, keywordHint);
       setItems(fetchedItems);
       setLoading(false);
     };
 
     loadItems();
-  }, [milestoneCount]); // マイルストーンが変わるたびに再読み込み
+  }, [milestoneCount, keywordHint]); // マイルストーンやキーワードが変わるたびに再読み込み
 
   const scrollLeft = () => {
     const container = document.getElementById('affiliate-scroll');
@@ -227,7 +228,7 @@ export const AffiliateSection = ({ milestoneCount }: AffiliateSectionProps) => {
                   <img
                     src={item.mediumImageUrls[0]}
                     alt={item.itemName}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain bg-black"
                     onError={(e) => {
                       // 画像読み込みエラー時のフォールバック
                       (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x300?text=No+Image';

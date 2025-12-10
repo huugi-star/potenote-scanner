@@ -348,7 +348,7 @@ export const ResultScreen = ({
             whileTap={{ scale: 0.98 }}
           >
             <Play className="w-5 h-5" />
-            動画を見てコイン2倍！
+            コインを2倍にする
           </motion.button>
         )}
 
@@ -367,7 +367,7 @@ export const ResultScreen = ({
 
         {/* アフィリエイトセクション（3回に1回表示） */}
         {shouldShowAffiliate && (
-          <AffiliateSection milestoneCount={totalQuizClears} />
+          <AffiliateSection milestoneCount={totalQuizClears} keywordHint={quiz.keywords?.[0]} />
         )}
 
         {/* キーワードフラッグ */}

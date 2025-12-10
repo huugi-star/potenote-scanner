@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ExternalLink, Sparkles } from 'lucide-react';
+import { X, ExternalLink, Sparkles, Timer } from 'lucide-react';
 import { ASP_ADS, type AspAdItem } from '@/data/aspAds';
 
 // ===== Types =====
@@ -18,6 +18,8 @@ interface ASPSalesModalProps {
   adRecommendation: {
     ad_id: string;
     reason: string;
+    url?: string;
+    name?: string;
   } | null;
 }
 
@@ -39,8 +41,19 @@ export const ASPSalesModal = ({
   // 広告情報を取得
   useEffect(() => {
     if (adRecommendation) {
-      const ad = ASP_ADS.find(a => a.id === adRecommendation.ad_id);
-      setSelectedAd(ad || null);
+      if (adRecommendation.ad_id === 'rakuten_fallback') {
+        setSelectedAd({
+          id: 'rakuten_fallback',
+          name: adRecommendation.name || '楽天で探す',
+          url: adRecommendation.url || 'https://search.rakuten.co.jp/',
+          imageUrl: '/images/ads/rakuten-placeholder.png',
+          descriptionForAI: adRecommendation.reason,
+          keywords: [],
+        });
+      } else {
+        const ad = ASP_ADS.find(a => a.id === adRecommendation.ad_id);
+        setSelectedAd(ad || null);
+      }
     }
   }, [adRecommendation]);
 
@@ -116,7 +129,7 @@ export const ASPSalesModal = ({
                 <div className="flex items-center gap-3">
                   <Sparkles className="w-6 h-6 text-purple-400" />
                   <h2 className="text-lg font-bold text-white">
-                    AI先生からのアドバイス
+                    広告
                   </h2>
                 </div>
                 {canClick && (
@@ -164,7 +177,7 @@ export const ASPSalesModal = ({
                     <span className="text-white text-sm font-bold">AI</span>
                   </div>
                   <div className="flex-1">
-                    <p className="text-gray-200 leading-relaxed whitespace-pre-wrap">
+                    <p className="text-gray-200 leading-relaxed whitespace-pre-wrap overflow-y-auto max-h-72">
                       {adRecommendation.reason}
                     </p>
                   </div>
@@ -174,7 +187,7 @@ export const ASPSalesModal = ({
               {/* 商品説明 */}
               {selectedAd.descriptionForAI && (
                 <div className="bg-gray-800/30 rounded-lg p-3 mb-4">
-                  <p className="text-gray-300 text-sm leading-relaxed">
+                  <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap overflow-y-auto max-h-72">
                     {selectedAd.descriptionForAI}
                   </p>
                 </div>
@@ -210,6 +223,30 @@ export const ASPSalesModal = ({
                   詳細を見る
                 </button>
               )}
+            </div>
+
+            {/* 閉じるボタン（待機/閲覧後共通） */}
+            <div className="px-6 pb-6 bg-gray-900/60">
+              <button
+                onClick={onClose}
+                disabled={!canClick}
+                className={`w-full py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+                  canClick
+                    ? 'bg-slate-800 text-white hover:bg-slate-700 border border-slate-600'
+                    : 'bg-slate-800/50 text-slate-500 cursor-not-allowed'
+                }`}
+              >
+                {canClick ? (
+                  <>
+                    広告を閉じてコイン2倍
+                  </>
+                ) : (
+                  <>
+                    <Timer className="w-4 h-4 animate-spin" />
+                    メッセージを確認中... ({remainingSeconds})
+                  </>
+                )}
+              </button>
             </div>
           </motion.div>
         </motion.div>

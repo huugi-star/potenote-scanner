@@ -51,17 +51,13 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const category = searchParams.get('category') as keyof typeof SEARCH_PARAMS | null;
+    const categoryParam = searchParams.get('category') as keyof typeof SEARCH_PARAMS | null;
+    const keywordParam = searchParams.get('keyword') || undefined;
+    const hitsParam = Number(searchParams.get('hits')) || 10;
     
-    if (!category || !SEARCH_PARAMS[category]) {
-      return NextResponse.json(
-        { error: 'Invalid category' },
-        { status: 400 }
-      );
-    }
-
-    const { keyword, fallbackKeyword } = SEARCH_PARAMS[category];
-
+    const category: keyof typeof SEARCH_PARAMS = categoryParam && SEARCH_PARAMS[categoryParam] ? categoryParam : 'books';
+    const { keyword: defaultKeyword, fallbackKeyword } = SEARCH_PARAMS[category];
+    const keyword = keywordParam || defaultKeyword;
     // 楽天APIを呼び出し
     const searchUrl =
       `https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601?` +
@@ -76,7 +72,7 @@ export async function GET(request: Request) {
       // 在庫ありのみ
       `availability=1&` +
       // 取得件数
-      `hits=10`;
+      `hits=${Math.max(1, Math.min(hitsParam, 30))}`;
 
     const response = await fetch(searchUrl);
 
@@ -89,13 +85,22 @@ export async function GET(request: Request) {
 
     const data = await response.json();
     
+    // 画像URLを高解像度化
+    const normalizeImageUrl = (url: string): string => {
+      if (!url) return url;
+      if (url.includes('_ex=')) {
+        return url.replace(/_ex=\d+x\d+/, '_ex=600x600');
+      }
+      return url.includes('?') ? `${url}&_ex=600x600` : `${url}?_ex=600x600`;
+    };
+
     // 商品データを整形（楽天APIのレスポンス形式に合わせて安全に変換）
     let items = data.Items?.map((raw: any) => {
       const item = raw.Item ?? raw.item ?? raw;
       const mediumImageUrls: string[] =
         Array.isArray(item.mediumImageUrls)
           ? item.mediumImageUrls
-              .map((img: any) => img?.imageUrl)
+              .map((img: any) => normalizeImageUrl(img?.imageUrl))
               .filter((url: unknown): url is string => typeof url === 'string')
           : [];
 
@@ -118,7 +123,7 @@ export async function GET(request: Request) {
         `sort=standard&` +
         `keyword=${encodeURIComponent(fallbackKeyword)}&` +
         `availability=1&` +
-        `hits=10`;
+        `hits=${Math.max(1, Math.min(hitsParam, 30))}`;
 
       const fallbackResponse = await fetch(fallbackUrl);
       if (fallbackResponse.ok) {

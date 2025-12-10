@@ -11,6 +11,8 @@ import { vibrateLight } from '@/lib/haptics';
 import { useGameStore } from '@/store/useGameStore';
 import type { TranslationResult } from '@/types';
 import { DeveloperSupport } from '@/components/ui/DeveloperSupport';
+import { AdsModal } from '@/components/ui/AdsModal';
+import { getAffiliateByMode } from '@/utils/affiliate';
 
 // ===== Types =====
 
@@ -27,12 +29,18 @@ export const TranslationResultScreen = ({
   onBack,
   imageUrl,
 }: TranslationResultScreenProps) => {
+  const [showAdsModal, setShowAdsModal] = useState(false);
   const [tipShown, setTipShown] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [symbolsOpen, setSymbolsOpen] = useState(false);
   const saveTranslationHistory = useGameStore(state => state.saveTranslationHistory);
+  const addCoins = useGameStore(state => state.addCoins);
+  const affiliateMode = useGameStore(state => state.englishLearningMode);
   const translationHistory = useGameStore(state => state.translationHistory);
   const hasSavedRef = useRef(false);
+  const baseRewardGivenRef = useRef(false);
+  const adRewardGivenRef = useRef(false);
+  const [affiliateImages, setAffiliateImages] = useState<Record<string, string>>({});
 
   // 自動保存
   useEffect(() => {
@@ -76,9 +84,57 @@ export const TranslationResultScreen = ({
       .join(' ');
   }, [result.sentences]);
 
+  // アフィリエイト推薦（モードと英文量で判定、毎回ランダム2件）
+  const affiliatePick = useMemo(() => {
+    if (isMultilangMode) return null;
+    return getAffiliateByMode(fullEnglishText, affiliateMode);
+  }, [affiliateMode, fullEnglishText, isMultilangMode]);
+
+  // 楽天画像フェッチ
+  useEffect(() => {
+    const fetchImages = async () => {
+      if (!affiliatePick) return;
+      const entries = await Promise.all(
+        affiliatePick.items.map(async (item) => {
+          try {
+            const res = await fetch(`/api/rakuten-items?keyword=${encodeURIComponent(item.title)}&hits=1`);
+            if (!res.ok) return [item.title, ''] as const;
+            const data = await res.json();
+            const first = data.items?.[0];
+            const img = first?.mediumImageUrls?.[0] || '';
+            return [item.title, img] as const;
+          } catch {
+            return [item.title, ''] as const;
+          }
+        })
+      );
+      const map: Record<string, string> = {};
+      entries.forEach(([title, img]) => { map[title] = img; });
+      setAffiliateImages(map);
+    };
+    fetchImages();
+  }, [affiliatePick]);
+
+  // 英文解釈モード報酬付与（ベース3コイン）
+  useEffect(() => {
+    if (isMultilangMode) return;
+    if (!result.sentences || result.sentences.length === 0) return;
+    if (baseRewardGivenRef.current) return;
+    addCoins(3);
+    baseRewardGivenRef.current = true;
+  }, [addCoins, isMultilangMode, result.sentences]);
+
+  const handleAdRewardClaim = () => {
+    if (adRewardGivenRef.current) return;
+    addCoins(3); // ベース3枚を倍にするため、追加で+3
+    adRewardGivenRef.current = true;
+    setShowAdsModal(false);
+  };
+
   return (
-    <div className="min-h-screen bg-[#1a1b26] p-4 pb-24 font-sans text-gray-100">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <>
+      <div className="min-h-screen bg-[#1a1b26] p-4 pb-24 font-sans text-gray-100">
+        <div className="max-w-4xl mx-auto space-y-8">
         
         {/* ヘッダー */}
         <header className="flex items-center gap-3 border-b border-gray-700 pb-4">
@@ -200,7 +256,60 @@ export const TranslationResultScreen = ({
         )}
 
         {/* フッター */}
-        <div className="pt-8 space-y-3">
+        <div className="pt-8 space-y-4">
+            {/* おすすめ教材（英文解釈モードのみ表示） */}
+            {!isMultilangMode && affiliatePick && (
+              <div className="rounded-2xl border border-indigo-500/30 bg-indigo-900/20 p-4 space-y-3">
+                <h3 className="text-sm font-bold text-indigo-100">{affiliatePick.title}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {affiliatePick.items.map((item, idx) => (
+                    <div key={idx} className="bg-gray-800/60 border border-gray-700 rounded-xl overflow-hidden">
+                      <div className="w-full aspect-[3/2] bg-gray-900 relative">
+                        {affiliateImages[item.title] ? (
+                          <img
+                            src={affiliateImages[item.title]}
+                            alt={item.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">Loading...</div>
+                        )}
+                      </div>
+                      <div className="p-3 space-y-2">
+                        <div className="text-sm text-white line-clamp-2 min-h-[2.5rem]">{item.title}</div>
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-bold text-amber-300 hover:text-amber-200"
+                        >
+                          楽天で見る &gt;
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          {/* 英文解釈モード: 報酬＆広告ボタン（フッターに配置） */}
+          {!isMultilangMode && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+                <div className="text-amber-200 font-bold text-sm">獲得報酬</div>
+                <div className="text-amber-300 font-extrabold text-lg">コイン 3 枚</div>
+              </div>
+              <motion.button
+                onClick={() => { vibrateLight(); setShowAdsModal(true); }}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                コインを2倍にする
+              </motion.button>
+            </div>
+          )}
+
           <button
             onClick={() => { vibrateLight(); onBack(); }}
             className="w-full py-4 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-600 text-gray-300 font-bold flex items-center justify-center gap-2 transition-colors"
@@ -211,8 +320,16 @@ export const TranslationResultScreen = ({
         </div>
 
         <DeveloperSupport />
+        </div>
       </div>
-    </div>
+      {/* 広告視聴モーダル（コイン2倍） */}
+      <AdsModal
+        isOpen={showAdsModal}
+        onClose={() => setShowAdsModal(false)}
+        adType="coin_doubler"
+        onRewardClaimed={handleAdRewardClaim}
+      />
+    </>
   );
 };
 
@@ -408,22 +525,15 @@ VisualSentenceCard.displayName = 'VisualSentenceCard';
 
 // ===== External Consult Buttons =====
 
-const ExternalConsultButton = ({ target, sentence, currentRole, tipShown, setTipShown }: { target: string; sentence: string; currentRole: string; tipShown: boolean; setTipShown: (v: boolean) => void }) => {
+const ExternalConsultButton = ({ target: _target, sentence, currentRole: _currentRole, tipShown, setTipShown }: { target: string; sentence: string; currentRole: string; tipShown: boolean; setTipShown: (v: boolean) => void }) => {
   const [copied, setCopied] = useState(false);
 
   const consultPrompt = `
-以下の英文構造解析について質問です。
-
 【英文】
 ${sentence}
 
-【質問箇所】
-"${target}"
-
-【現在の判定】
-役割: ${currentRole}
-
-この箇所の文法的な役割（S/V/O/C/M）と、なぜそうなるのかの理由を、初心者にもわかりやすく解説してください。
+【質問】
+この文章の文法的な役割（S/V/O/C/M）と、なぜそうなるのかの理由を、初心者にもわかりやすく解説してください。
   `.trim();
 
   const handleConsult = async () => {

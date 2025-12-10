@@ -115,6 +115,13 @@ JSON形式で以下の構造で出力してください：
       temperature: 0.3,
     });
 
+    // トークン使用量をログ（ターミナル出力）
+    const usage: any = (result as any)?.usage ?? {};
+    const promptTokens = usage.promptTokens ?? usage.prompt_tokens ?? 0;
+    const completionTokens = usage.completionTokens ?? usage.completion_tokens ?? 0;
+    const totalTokens = usage.totalTokens ?? usage.total_tokens ?? (promptTokens + completionTokens);
+    console.log(`[translate] Tokens - Prompt: ${promptTokens}, Completion: ${completionTokens}, Total: ${totalTokens}`);
+
     // JSONパース
     let parsedResult;
     try {
