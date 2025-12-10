@@ -80,8 +80,8 @@ interface GameState extends UserState {
 interface GameActions {
   loginCheck: () => { isNewDay: boolean; bonusCoins: number };
   
-  checkScanLimit: () => { canScan: boolean; remaining: number; error?: string };
-  incrementScanCount: () => void;
+  checkScanLimit: (amount?: number) => { canScan: boolean; remaining: number; error?: string };
+  incrementScanCount: (amount?: number) => void;
   recoverScanCount: () => void;
   purchaseScanRecovery: () => { success: boolean; message: string };
   
@@ -439,7 +439,7 @@ export const useGameStore = create<GameStore>()(
       
       // ===== Scan Management =====
       
-      checkScanLimit: () => {
+      checkScanLimit: (amount = 1) => {
         // ローカル環境では制限を外す
         if (isLocalDevelopment()) {
           return { canScan: true, remaining: Infinity };
@@ -452,7 +452,7 @@ export const useGameStore = create<GameStore>()(
           set({ dailyScanCount: 0, lastScanDate: today });
           return { 
             canScan: true, 
-            remaining: state.isVIP ? Infinity : LIMITS.FREE_USER.DAILY_SCAN_LIMIT 
+            remaining: state.isVIP ? Infinity : Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - amount) 
           };
         }
         
@@ -462,7 +462,7 @@ export const useGameStore = create<GameStore>()(
         
         const remaining = LIMITS.FREE_USER.DAILY_SCAN_LIMIT - state.dailyScanCount;
         
-        if (remaining <= 0) {
+        if (remaining < amount) {
           return { 
             canScan: false, 
             remaining: 0, 
@@ -473,11 +473,11 @@ export const useGameStore = create<GameStore>()(
         return { canScan: true, remaining };
       },
       
-      incrementScanCount: () => {
+      incrementScanCount: (amount = 1) => {
         const state = get();
         set({
-          dailyScanCount: state.dailyScanCount + 1,
-          totalScans: state.totalScans + 1,
+          dailyScanCount: state.dailyScanCount + amount,
+          totalScans: state.totalScans + amount,
         });
         get().syncWithCloud();
       },
