@@ -108,7 +108,16 @@ export async function GET(request: Request) {
       }) || [];
     };
 
-    let items = await fetchItems(searchUrl);
+    const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+    const keywordNorm = normalize(keyword || '');
+
+    const filterByKeyword = (items: any[]) => {
+      if (!keywordNorm) return items;
+      return items.filter((it) => normalize(it.itemName || '').includes(keywordNorm));
+    };
+
+    let itemsRaw = await fetchItems(searchUrl);
+    let items = filterByKeyword(itemsRaw);
 
     // 0件またはAPIエラー時にフォールバックキーワードで再検索
     if ((!items.length || items.every((it: any) => !it.itemUrl)) && fallbackKeyword) {
@@ -120,7 +129,8 @@ export async function GET(request: Request) {
         `keyword=${encodeURIComponent(fallbackKeyword)}&` +
         `availability=1&` +
         `hits=${Math.max(1, Math.min(hitsParam, 30))}`;
-      items = await fetchItems(fallbackUrl);
+      itemsRaw = await fetchItems(fallbackUrl);
+      items = filterByKeyword(itemsRaw);
     }
 
     return NextResponse.json({ items });

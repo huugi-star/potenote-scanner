@@ -291,13 +291,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         vibrateError();
         return;
       }
-      const scanCheck = checkScanLimit();
-      if (!scanCheck.canScan) {
-        setErrorMessage(scanCheck.error || 'スキャン回数の上限に達しました');
-        setScanState('error');
-        vibrateError();
-        return;
-      }
     } else {
       const limitCheck = checkScanLimit();
       if (!limitCheck.canScan) {
@@ -380,9 +373,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           // 少し待ってから翻訳結果を表示（100%表示を確認できるように）
           await new Promise(resolve => setTimeout(resolve, 500));
           
-          // ★成功時のみ翻訳回数とスキャン回数（1クレジット消費）を消費
+          // ★成功時のみ翻訳回数を消費（スキャン回数は消費しない）
           incrementTranslationCount();
-          incrementScanCount();
           
           if (onTranslationReady) {
             onTranslationReady(
