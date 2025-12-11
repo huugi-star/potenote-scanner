@@ -251,7 +251,7 @@ const HomeScreen = ({
           whileTap={{ scale: 0.98 }}
         >
           <Languages className="w-4 h-4" />
-          スキャンして翻訳
+          スキャンして英語学習・翻訳
         </motion.button>
 
         {/* フリークエスト */}
