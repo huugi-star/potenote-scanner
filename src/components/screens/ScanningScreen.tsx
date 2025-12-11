@@ -8,7 +8,7 @@
  * ★重要: スキャン回数はAPI成功時のみ消費する
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Camera, 
@@ -31,6 +31,7 @@ import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/i
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
 import { LIMITS } from '@/lib/constants';
 import type { QuizRaw, StructuredOCR, QuizResult, TranslationResult } from '@/types';
+import { PREPOSITION_QUIZ, PrepositionQuizItem } from '@/data/prepositionQuiz';
 
 // ===== Types =====
 
@@ -49,8 +50,13 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const [scanState, setScanState] = useState<ScanState>('idle');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [progress, setProgress] = useState<number>(0);
+  const [progressLabel, setProgressLabel] = useState<string>('');
   const [showASPSalesModal, setShowASPSalesModal] = useState(false);
   const [aspAdRecommendation, setAspAdRecommendation] = useState<{ ad_id: string; reason: string } | null>(null);
+  const [preQuiz, setPreQuiz] = useState<PrepositionQuizItem[]>([]);
+  const [preQuizIndex, setPreQuizIndex] = useState(0);
+  const [preQuizSelected, setPreQuizSelected] = useState<number | null>(null);
   // const [showShopModal, setShowShopModal] = useState(false); // 一時的に非表示
   // ストアから生成されたクイズを取得
   const generatedQuiz = useGameStore(state => state.generatedQuiz);
@@ -72,6 +78,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const incrementTranslationCount = useGameStore(state => state.incrementTranslationCount);
   const purchaseScanRecovery = useGameStore(state => state.purchaseScanRecovery);
   const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
+  const setTranslationResult = useGameStore(state => state.setTranslationResult);
+  const setLastScanQuizId = useGameStore(state => state.setLastScanQuizId);
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
   // Toast
@@ -79,18 +87,105 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const progressTimerRef = useRef<number | null>(null);
 
   const canScan = isVIP || remainingScans > 0;
   // スキャン残数が0なら翻訳モードでもアップロード不可
   const canUpload = canScan;
 
+  const displayProgress = Math.min(100, Math.max(0, Math.round(progress)));
+  const fallbackProgressLabel = scanState === 'uploading'
+    ? '画像を送信中...'
+    : scanState === 'processing'
+      ? (scanType === 'translation'
+        ? (translationMode === 'multilang' ? '多言語翻訳を実行中...' : '英文解釈を実行中...')
+        : 'クイズを生成中...')
+      : '';
+  const effectiveProgressLabel = progressLabel || fallbackProgressLabel;
+
+  const stopProgressTicker = useCallback((finalValue?: number) => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    if (typeof finalValue === 'number') {
+      setProgress(finalValue);
+    }
+  }, []);
+
+  const startProgressTicker = useCallback(() => {
+    stopProgressTicker();
+    const step = scanType === 'translation' && translationMode === 'english_learning' ? 3 : 5;
+    setProgress(step);
+    progressTimerRef.current = window.setInterval(() => {
+      setProgress(prev => {
+        const next = Math.min(prev + step, 95);
+        if (next >= 95 && progressTimerRef.current) {
+          clearInterval(progressTimerRef.current);
+          progressTimerRef.current = null;
+        }
+        return next;
+      });
+    }, 1000);
+  }, [scanType, translationMode, stopProgressTicker]);
+
+  useEffect(() => {
+    return () => {
+      stopProgressTicker();
+    };
+  }, [stopProgressTicker]);
+
   // ページ更新後にストアから復元されたクイズがある場合は、ready状態にする
+  useEffect(() => {
+    // 画面入場時に前回のスキャン状態をリセット
+    clearGeneratedQuiz();
+    setTranslationResult(null);
+    setLastScanQuizId(null);
+    setSelectedImage(null);
+    setScanState('idle');
+    setErrorMessage('');
+    stopProgressTicker(0);
+    setProgressLabel('');
+    setAspAdRecommendation(null);
+    setPreQuiz([]);
+    setPreQuizIndex(0);
+    setPreQuizSelected(null);
+  }, [clearGeneratedQuiz, setTranslationResult, setLastScanQuizId, stopProgressTicker]);
+
   useEffect(() => {
     if (generatedQuiz && scanImageUrl && scanState === 'idle') {
       setScanState('ready');
       setSelectedImage(scanImageUrl);
     }
   }, [generatedQuiz, scanImageUrl, scanState]);
+
+  // 英語学習モード用：前置詞クイズをランダムにセット（50問）
+  useEffect(() => {
+    if (scanType === 'translation' && translationMode === 'english_learning') {
+      const shuffled = [...PREPOSITION_QUIZ].sort(() => Math.random() - 0.5).slice(0, 50);
+      setPreQuiz(shuffled);
+      setPreQuizIndex(0);
+      setPreQuizSelected(null);
+    } else {
+      setPreQuiz([]);
+      setPreQuizIndex(0);
+      setPreQuizSelected(null);
+    }
+  }, [scanType, translationMode]);
+
+  const currentPreQuiz = useMemo(() => {
+    if (preQuiz.length === 0) return null;
+    return preQuiz[preQuizIndex % preQuiz.length];
+  }, [preQuiz, preQuizIndex]);
+
+  const handlePreQuizSelect = (idx: number) => {
+    setPreQuizSelected(idx);
+  };
+
+  const handlePreQuizNext = () => {
+    setPreQuizIndex((i) => (i + 1) % (preQuiz.length || 1));
+    setPreQuizSelected(null);
+  };
 
   // ページ更新後にストアから復元されたクイズがある場合は、ready状態にする
   useEffect(() => {
@@ -109,15 +204,18 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const handleFileSelect = useCallback(async (file: File) => {
     vibrateLight();
 
-    // 制限チェック（消費はまだしない）
-    if (scanType !== 'translation') {
-      const limitCheck = checkScanLimit();
-      if (!limitCheck.canScan) {
-        setErrorMessage(limitCheck.error || 'スキャン回数の上限に達しました');
-        setScanState('error');
-        vibrateError();
-        return;
-      }
+    startProgressTicker();
+    setProgressLabel('画像を確認中...');
+
+    // 制限チェック（消費はまだしない）- 翻訳モードでもスキャン残数を参照
+    const limitCheck = checkScanLimit();
+    if (!limitCheck.canScan) {
+      setErrorMessage(limitCheck.error || 'スキャン回数の上限に達しました');
+      setScanState('error');
+      stopProgressTicker(0);
+      setProgressLabel('');
+      vibrateError();
+      return;
     }
 
     // バリデーション
@@ -125,20 +223,25 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
     if (!validation.valid) {
       setErrorMessage(validation.error || '無効なファイルです');
       setScanState('error');
+      stopProgressTicker(0);
+      setProgressLabel('');
       vibrateError();
       return;
     }
 
     setScanState('uploading');
     setErrorMessage('');
+    setProgressLabel('プレビューを準備中...');
     try {
       // 1. 画像を圧縮（プレビュー用）
       const compressed = await compressForAI(file);
       setSelectedImage(compressed.dataUrl);
+      setProgressLabel('画像を最適化中...');
       setScanState('processing');
       
       // 2. OCR用に画像補正（コントラスト・シャープネス強化）
       const enhancedImage = await preprocessImageForOCR(file);
+      setProgressLabel('OCR用に補正中...');
 
       const controller = new AbortController();
       // 英語学習モードは処理に時間がかかるため、タイムアウトを120秒に延長
@@ -147,6 +250,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
 
       if (scanType === 'translation') {
         // 翻訳モード
+        setProgressLabel(translationMode === 'multilang' ? '多言語翻訳をリクエスト中...' : '英文解釈をリクエスト中...');
         // 英語学習モードの場合は専用APIを使用
         const apiEndpoint = translationMode === 'english_learning' 
           ? '/api/translate-english' 
@@ -163,6 +267,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         });
 
         clearTimeout(timeoutId);
+        setProgressLabel('結果を解析中...');
 
         if (!translateResponse.ok) {
           const errorData = await translateResponse.json().catch(() => ({}));
@@ -180,8 +285,11 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         
         if (hasSentencesFormat || hasNewFormat || hasOldFormat) {
           // 進行度を100%にして翻訳結果を表示
-          // ★成功時のみ翻訳回数を消費（スキャン回数は消費しない）
+          // ★成功時のみ翻訳回数とスキャン回数を消費
           incrementTranslationCount();
+          incrementScanCount();
+          stopProgressTicker(100);
+          setProgressLabel('完了');
           
           if (onTranslationReady) {
             onTranslationReady(
@@ -214,6 +322,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         }
       } else {
         // クイズモード
+        setProgressLabel('クイズ生成をリクエスト中...');
         const quizResponse = await fetch('/api/generate-quiz', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -224,6 +333,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         });
 
         clearTimeout(timeoutId);
+        setProgressLabel('問題を組み立て中...');
 
         if (!quizResponse.ok) {
           throw new Error(`Quiz error: ${quizResponse.status}`);
@@ -235,6 +345,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         if (quizResult.quiz && quizResult.quiz.questions && quizResult.quiz.questions.length > 0) {
           // ★成功時のみスキャン回数を消費
           incrementScanCount();
+          stopProgressTicker(100);
+          setProgressLabel('完了');
 
           // スキャンした時点でクイズを履歴に保存（まだ未プレイのテンプレートとして）
           const scanQuizId = `scan_${Date.now()}`;
@@ -290,10 +402,12 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
       // ★エラー時はスキャン回数を消費しない
       setErrorMessage(message);
       setScanState('error');
+      stopProgressTicker(0);
+      setProgressLabel('');
       vibrateError();
       addToast('error', message);
     }
-  }, [checkScanLimit, incrementScanCount, addToast]);
+  }, [checkScanLimit, incrementScanCount, addToast, translationMode, scanType, onTranslationReady, saveQuizHistory, setGeneratedQuiz, setAspAdRecommendation, onQuizReady, startProgressTicker, stopProgressTicker]);
 
   // ファイル入力変更
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -337,6 +451,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
     setSelectedImage(null);
     clearGeneratedQuiz(); // ストアからもクリア
     setErrorMessage('');
+    stopProgressTicker(0);
+    setProgressLabel('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -557,7 +673,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="text-center py-12"
+              className="text-center py-12 space-y-6"
             >
               {selectedImage && (
                 <div className="w-48 h-48 mx-auto mb-6 rounded-xl overflow-hidden border-2 border-cyan-500/50">
@@ -570,7 +686,19 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
               )}
               
               {/* ロードメーター（非表示要望により削除） */}
-              
+              <div className="max-w-md mx-auto mb-6">
+                <div className="flex items-center justify-between text-sm text-cyan-100 mb-2 px-4">
+                  <span className="text-left line-clamp-2">{effectiveProgressLabel}</span>
+                  <span className="font-semibold">{displayProgress}%</span>
+                </div>
+                <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden border border-cyan-500/30">
+                  <div 
+                    className="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-500 transition-[width] duration-300 ease-out"
+                    style={{ width: `${displayProgress}%` }}
+                  />
+                </div>
+              </div>
+
               <Loader2 className="w-12 h-12 text-cyan-400 mx-auto mb-4 animate-spin" />
               <p className="text-white font-medium text-lg mb-2">
                 {scanState === 'uploading' 
@@ -579,6 +707,52 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                     ? (translationMode === 'multilang' ? '要約中...' : '英文解釈中...')
             : 'クイズ作成中...'}
               </p>
+
+              {/* 暇つぶし前置詞クイズ（英語学習モードかつロード中のみ表示） */}
+              {scanType === 'translation' && translationMode === 'english_learning' && currentPreQuiz && (
+                <div className="mt-4 max-w-xl mx-auto text-left bg-gray-800/70 border border-gray-700 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-bold text-indigo-200">⏳ ローディング中の前置詞クイズ</div>
+                    <div className="text-xs text-gray-400">{preQuizIndex + 1}/{Math.max(1, preQuiz.length)}</div>
+                  </div>
+                  <div className="text-white font-semibold leading-relaxed">{currentPreQuiz.q}</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {currentPreQuiz.options.map((opt: string, i: number) => {
+                      const isCorrect = preQuizSelected !== null && i === currentPreQuiz.a;
+                      const isSelected = preQuizSelected === i;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => handlePreQuizSelect(i)}
+                          className={`w-full px-3 py-2 rounded-lg border text-sm text-left transition-colors ${
+                            isSelected
+                              ? isCorrect
+                                ? 'bg-green-600/30 border-green-400 text-green-200'
+                                : 'bg-red-600/30 border-red-400 text-red-200'
+                              : 'bg-gray-700/60 border-gray-600 text-gray-100 hover:border-cyan-400'
+                          }`}
+                          disabled={preQuizSelected !== null}
+                        >
+                          {String.fromCharCode(65 + i)}. {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {preQuizSelected !== null && (
+                    <div className={`text-sm p-3 rounded-lg border ${preQuizSelected === currentPreQuiz.a ? 'border-green-500/50 bg-green-500/10 text-green-200' : 'border-red-500/50 bg-red-500/10 text-red-200'}`}>
+                      正解: {currentPreQuiz.options[currentPreQuiz.a]} / 解説: {currentPreQuiz.explanation}
+                    </div>
+                  )}
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handlePreQuizNext}
+                      className="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-500"
+                    >
+                      次の問題
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 

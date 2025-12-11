@@ -411,6 +411,12 @@ ${verifiedFacts}
 
     const openaiData = await openaiResponse.json();
     
+    const usage = openaiData.usage || {};
+    const promptTokens = usage.prompt_tokens ?? usage.promptTokens ?? 0;
+    const completionTokens = usage.completion_tokens ?? usage.completionTokens ?? 0;
+    const totalTokens = usage.total_tokens ?? usage.totalTokens ?? (promptTokens + completionTokens);
+    console.log(`[generate-quiz] tokens prompt:${promptTokens} completion:${completionTokens} total:${totalTokens}`);
+
     const content = openaiData.choices[0]?.message?.content;
     if (!content) throw new Error("No content");
 
@@ -418,8 +424,19 @@ ${verifiedFacts}
     try {
       json = JSON.parse(content);
     } catch (parseError) {
-      console.error("Failed to parse OpenAI response:", content);
-      throw new Error(`Failed to parse OpenAI response: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+      // フォールバック: 最初と最後の波括弧で囲まれた部分を抜き出して再パース
+      const braceMatch = content?.match(/\{[\s\S]*\}/);
+      if (braceMatch) {
+        try {
+          json = JSON.parse(braceMatch[0]);
+        } catch (err2) {
+          console.error("Failed to parse OpenAI response (fallback also failed):", content);
+          throw new Error(`Failed to parse OpenAI response: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+        }
+      } else {
+        console.error("Failed to parse OpenAI response (no JSON braces found):", content);
+        throw new Error(`Failed to parse OpenAI response: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+      }
     }
     
     // デバッグ用: OpenAIレスポンスの構造をログ出力
@@ -513,6 +530,11 @@ ${verifiedFacts}
     return NextResponse.json({
       quiz: validatedData,
       ocrText: extractedText,
+      tokenUsage: {
+        promptTokens,
+        completionTokens,
+        totalTokens,
+      },
     });
 
   } catch (error) {

@@ -25,13 +25,24 @@ const ChunkSchema = z.object({
   note: z.string().optional(),
 });
 
+const SubStructureSchema = z.object({
+  target_text: z.string().optional(),
+  target_chunk: z.string().optional(),
+  analyzed_text: z.string().optional(),
+  explanation: z.string().optional(),
+  chunks: z.array(ChunkSchema).optional(),
+});
+
 const SentenceSchema = z.object({
   sentence_id: z.number(),
   original_text: z.string(),
   chunks: z.array(ChunkSchema),
+  main_structure: z.array(ChunkSchema).optional(),
   translation: z.string(),
+  full_translation: z.string().optional(),
   vocab_list: z.array(VocabSchema).optional(),
   details: z.array(z.string()),
+  sub_structures: z.array(SubStructureSchema).optional(),
 });
 
 const ResponseSchema = z.object({
@@ -135,68 +146,35 @@ export async function POST(req: Request) {
     });
 
     const prompt = `
-あなたは伊藤和夫「ビジュアル英文解釈」のエキスパートです。
-この構文解析はAIが自動で行っています。精度は100%ではなく、特にS/Vや節の境界に誤りが含まれる場合があります。大枠の構造理解の型、直読直解の流れや呼吸をつかむ補助として利用してください。
-以下の英文を伊藤メソッドに従って解析し、指定のJSONのみを出力してください。
+あなたは伊藤和夫「ビジュアル英文解釈」のエキスパートです。入力文を句・節ごとに塊で区切り、SVOCMの役割を示してください。出力は必ず有効なJSONのみ。
 
-【JSON出力の絶対厳守ルール】
-1. **ValidなJSON**であること。末尾に不要なカンマ（trailing comma）をつけないこと。
-2. 文字列内のダブルクォーテーションは必ずエスケープすること（例: "彼は\\"悪魔\\"と言った"）。
-3. JSON以外の解説テキストは一切出力しないこと。
+【最低限のルール】
+- S / V / O / C を明確に。M は大きな塊（前置詞句・時/場所表現など）でまとめ、細切れにしない。
+- 名詞節・形容詞節・副詞節は節全体を1ブロック（role: S'/O'/C'/M'）として扱い、内部構造は details / sub_structures で補足。
+- 省略された that / which などは (that) などで明示。
+- type は noun / modifier / verb / connector、role は S,V,O,C,M,S',V',O',C',M',CONN を使用。
 
-【OCR誤字訂正】
-- 入力はOCR由来です。文脈から正しい英文へ復元してください。
-- "The1r"→"Their", 不自然なピリオドの除去など。
-
-【チャンク分割と記号ルール】
-1) 名詞的要素（S/O/C/名詞節）: type "noun", role S/O/C/S'/O'/C'、記号は【】
-2) 修飾的要素（副詞/前置詞句など）: type "modifier", role M/M'、記号は＜＞
-3) 動詞的要素: type "verb", role V/V'、記号なし
-4) 接続詞: type "connector", role CONN
-
-【節と矢印の扱い】
-- that節・wh節は「節全体」を O として1ブロックで扱う
-- details 配列には、従属節やthat節の内部構造（S' V' O'）の解説を必ず含める
-
-
-
-
-
-【構文解析の絶対ルール（上書き）】
-1. **There is 構文の例外処理**:
-   - "There is/are/was/were S" の構文において、"There" は必ず type: "modifier", role: "M" とせよ。
-   - 後ろの名詞（意味上の主語）を role: "S" または "S'" とせよ。決して "C" としてはならない。
-   
-2. **句動詞 (Phrasal Verbs) の整合性**:
-   - "stay off", "look at" などの群動詞を V と認定した場合、その対象語は必ず role: "O" (目的語) とせよ。
-   - × stay off(V) <the road>(M)
-   - ○ stay off(V) [the road](O)
-
-3. **Be動詞の補語**:
-   - Be動詞の後ろにある前置詞句（例: only for horses）が C (補語) になる場合、記号は副詞用の ＜＞ ではなく、形容詞用の ( ) または名詞用の [ ] を使用せよ。
-
-【解析の優先順位（Safe-Fail Strategy）】
-- 最優先はVの特定とSVOCの骨格維持。SとO/Cの境界を明確に。
-- 修飾語の係り先が曖昧なら、無理にmodifiesを書かず、< > や ( ) だけで示す（誤指定するより空欄を選ぶ）。
-- 節内部が複雑で自信が持てないときは、節全体を [名詞節] や <副詞節> の大きな塊として示し、内部を無理に分解しない。
-【出力JSONフォーマット】
+【JSONフォーマット】
 {
-  "clean_text": "OCR補正後の正しい英文",
+  "clean_text": "OCR補正後の英文",
   "sentences": [
     {
       "sentence_id": 1,
       "original_text": "原文",
-      "chunks": [
-        { "text": "...", "translation": "...", "type": "noun", "role": "S", "explanation": "...", "modifies": "...", "note": "..." }
-      ],
+      "main_structure": [ { "text": "...", "translation": "...", "type": "...", "role": "S" } ],
+      "chunks": [同上または互換配列],
       "translation": "和訳",
-      "vocab_list": [ { "word": "...", "meaning": "..." } ],
-      "details": [ "詳しい解説..." ]
+      "full_translation": "和訳（省略可）",
+      "vocab_list": [{ "word": "...", "meaning": "..." }],
+      "details": ["構造説明やズームインの解説（文字列）"],
+      "sub_structures": [
+        { "target_text": "...", "explanation": "...", "chunks": [ { "text": "...", "translation": "...", "type": "...", "role": "S'" } ] }
+      ]
     }
   ]
 }
 
-【解析対象の英文】
+【解析対象】
 ${cleaned}
 `;
 
@@ -225,17 +203,68 @@ ${cleaned}
       out = "";
     }
 
+    // ===== Safe JSON Parse with multiple fallbacks =====
+    const safeParse = (text: string): any => {
+      const strip = (t: string) => t.replace(/^\uFEFF/, "").trim();
+      const removeTrailingCommas = (t: string) => t.replace(/,\s*([}\]])/g, "$1");
+      const core = removeTrailingCommas(strip(text));
+      const direct = core;
+      const braceMatch = core.match(/\{[\s\S]*\}/);
+      const inner = braceMatch ? removeTrailingCommas(braceMatch[0]) : core;
+      try {
+        return JSON.parse(direct);
+      } catch (_) {
+        try {
+          return JSON.parse(inner);
+        } catch (err2) {
+          console.error("JSON Parsing Failed (safeParse)", err2);
+          throw err2;
+        }
+      }
+    };
+
     // JSONクリーニング実行
     const jsonString = cleanJsonOutput(out);
     
     let parsed: any;
     try {
-      parsed = JSON.parse(jsonString);
+      parsed = safeParse(jsonString);
     } catch (err) {
-      console.error("JSON Parsing Failed. Raw text sample:", jsonString.slice(0, 200) + "...");
-      console.error("Error details:", err);
-      // エラー時は生のテキストを返すか、エラーメッセージを返す
-      return NextResponse.json({ error: "AIの回答を解析できませんでした。もう一度お試しください。", details: String(err) }, { status: 500 });
+      try {
+        parsed = safeParse(out); // raw fallback
+      } catch (err2) {
+        console.error("JSON Parsing Failed (all fallbacks). Sample:", jsonString.slice(0, 200) + "...");
+        console.error("Error details:", err2);
+        return NextResponse.json({ error: "AIの回答を解析できませんでした。もう一度お試しください。", details: String(err2) }, { status: 500 });
+      }
+    }
+
+    // LLMが配列で返すケースに対応（先頭要素を採用）
+    if (Array.isArray(parsed)) {
+      parsed = parsed[0] ?? {};
+    }
+    // 依然としてオブジェクトでなければエラーを返す
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      console.error("Parsed JSON is not an object:", parsed);
+      return NextResponse.json({ error: "AIの回答形式が不正です。もう一度お試しください。" }, { status: 500 });
+    }
+
+    // sentences が無い場合のフォールバック（単文を想定して包む）
+    if (!Array.isArray(parsed.sentences)) {
+      const fallbackChunks = parsed.chunks || parsed.main_structure || [];
+      parsed.sentences = [
+        {
+          sentence_id: 1,
+          original_text: parsed.original_text || parsed.clean_text || cleaned || "",
+          chunks: fallbackChunks,
+          main_structure: parsed.main_structure || fallbackChunks,
+          translation: parsed.translation || parsed.full_translation || parsed.japanese_translation || parsed.translatedText || "",
+          full_translation: parsed.full_translation || parsed.translation || "",
+          vocab_list: Array.isArray(parsed.vocab_list) ? parsed.vocab_list : [],
+          details: parsed.details || [],
+          sub_structures: parsed.sub_structures || [],
+        },
+      ];
     }
 
     // Role/Typeの正規化処理（前回と同じ）
@@ -258,29 +287,48 @@ ${cleaned}
       }
     };
 
-    const normalizeType = (type: any, role: any): z.infer<typeof ChunkSchema>["type"] => {
-        if (["noun", "modifier", "verb", "connector"].includes(type)) return type;
-        if (role.startsWith("V")) return "verb";
-        if (role === "CONN") return "connector";
-        if (role.startsWith("M")) return "modifier";
-        return "noun";
+const normalizeType = (type: any, role: any): z.infer<typeof ChunkSchema>["type"] => {
+    if (["noun", "modifier", "verb", "connector"].includes(type)) return type;
+    if (String(role || "").toUpperCase().startsWith("V")) return "verb";
+    if (String(role || "").toUpperCase() === "CONN") return "connector";
+    if (String(role || "").toUpperCase().startsWith("M")) return "modifier";
+    return "noun";
+};
+
+    const normalizeChunkArray = (arr: any): z.infer<typeof ChunkSchema>[] => {
+      return Array.isArray(arr)
+        ? arr.map((c: any) => {
+            const role = normalizeRole(c?.role);
+            const type = normalizeType(c?.type, role);
+            return {
+              text: c?.text ?? "",
+              translation: c?.translation ?? c?.text ?? "",
+              type,
+              role,
+              explanation: c?.explanation ?? "",
+              modifies: c?.modifies ?? undefined,
+              note: c?.note ?? "",
+            };
+          })
+        : [];
     };
 
     if (parsed?.sentences && Array.isArray(parsed.sentences)) {
       parsed.sentences = parsed.sentences.map((s: any, idx: number) => {
-        const chunks = Array.isArray(s.chunks) ? s.chunks.map((c: any) => {
-          const role = normalizeRole(c?.role);
-          const type = normalizeType(c?.type, role);
-          return {
-            text: c?.text ?? "",
-            translation: c?.translation ?? c?.text ?? "",
-            type,
-            role,
-            explanation: c?.explanation ?? "",
-            modifies: c?.modifies ?? undefined,
-            note: c?.note ?? "",
-          };
-        }) : [];
+        const main_structure = normalizeChunkArray(s?.main_structure ?? s?.chunks);
+        const chunks = normalizeChunkArray(s?.chunks ?? s?.main_structure);
+
+        // sub_structures正規化
+        const sub_structures = Array.isArray(s?.sub_structures)
+          ? s.sub_structures.map((sub: any) => ({
+              target_text: sub?.target_text ?? sub?.target_chunk ?? "",
+              target_chunk: sub?.target_chunk ?? sub?.target_text ?? "",
+              analyzed_text: sub?.analyzed_text ?? "",
+              explanation: sub?.explanation ?? "",
+              chunks: normalizeChunkArray(sub?.chunks),
+            }))
+          : [];
+
         // detailsを文字列に正規化（LLMがオブジェクトを返す場合に備える）
         const normalizedDetails = Array.isArray(s?.details)
           ? s.details
@@ -295,13 +343,35 @@ ${cleaned}
               .filter((d: any) => typeof d === "string" && d.trim().length > 0)
           : [];
 
+        // details 先頭が空ならフォールバックで概要を作る
+        if (normalizedDetails.length === 0 && main_structure.length > 0) {
+          const sChunk = main_structure.find((c) => c.role === "S")?.text || "";
+          const vChunk = main_structure.find((c) => c.role === "V")?.text || "";
+          const ocChunk = main_structure.find((c) => c.role === "O" || c.role === "C")?.text || "";
+          const mChunks = main_structure.filter((c) => c.role?.startsWith("M")).map((c) => c.text).join(" / ");
+          normalizedDetails.unshift(
+            [
+              `Sentence: ${s?.original_text ?? ""}`,
+              `[構造解析]: ${main_structure.map((c) => `${c.text}(${c.role})`).join(" | ")}`,
+              `S: ${sChunk}`,
+              `V: ${vChunk}`,
+              `O/C: ${ocChunk}`,
+              `M: ${mChunks}`,
+              `Japanese Translation: ${s?.translation ?? s?.full_translation ?? ""}`,
+            ].join("\n")
+          );
+        }
+
         return {
           sentence_id: typeof s?.sentence_id === "number" ? s.sentence_id : idx + 1,
           original_text: s?.original_text ?? "",
+          main_structure,
           chunks,
           translation: s?.translation ?? s?.full_translation ?? "",
+          full_translation: s?.full_translation ?? s?.translation ?? "",
           vocab_list: Array.isArray(s?.vocab_list) ? s.vocab_list : [],
           details: normalizedDetails,
+          sub_structures,
         };
       });
     }

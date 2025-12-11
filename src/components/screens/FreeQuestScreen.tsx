@@ -111,7 +111,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
         if (!response.ok) throw new Error('Failed to generate quiz');
         
         const result = await response.json();
-        // APIは { quiz: ..., ocrText: ... } を返す
+        // APIは { quiz: ..., ocrText: ..., tokenUsage: ... } を返す
         const newQuiz = result.quiz;
         
         if (newQuiz && newQuiz.questions && newQuiz.questions.length > 0) {
