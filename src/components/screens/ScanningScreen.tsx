@@ -431,6 +431,14 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
     vibrateLight();
     if (generatedQuiz && scanImageUrl) {
       onQuizReady(generatedQuiz, scanImageUrl, scanOcrText, scanStructuredOCR);
+      // クイズ画面へ遷移したらスキャン画面は初期状態に戻す
+      setScanState('idle');
+      setSelectedImage(null);
+      clearGeneratedQuiz();
+      setErrorMessage('');
+      stopProgressTicker(0);
+      setProgressLabel('');
+      setAspAdRecommendation(null);
     }
   };
 

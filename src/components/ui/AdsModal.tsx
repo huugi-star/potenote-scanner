@@ -69,7 +69,7 @@ export function AdsModal({ isOpen, onClose, adType, onRewardClaimed, adRecommend
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-md bg-slate-900 border border-indigo-500/30 rounded-2xl overflow-hidden shadow-2xl relative"
+        className="w-full max-w-md max-h-[90vh] bg-slate-900 border border-indigo-500/30 rounded-2xl overflow-hidden shadow-2xl relative flex flex-col"
       >
         <div className="bg-gradient-to-r from-indigo-900 to-slate-900 p-4 flex items-center gap-3 border-b border-indigo-500/20">
           <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center border border-indigo-400/50 relative">
@@ -86,7 +86,7 @@ export function AdsModal({ isOpen, onClose, adType, onRewardClaimed, adRecommend
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 flex-1 overflow-y-auto">
           <div className="relative bg-slate-800/50 p-4 rounded-xl border border-slate-700">
             <p className="text-base text-white font-medium leading-relaxed whitespace-pre-wrap overflow-y-auto max-h-72">
               「{salesCopy}」
@@ -138,7 +138,7 @@ export function AdsModal({ isOpen, onClose, adType, onRewardClaimed, adRecommend
             </div>
           </a>
 
-          <div className="space-y-3 pt-2">
+          <div className="space-y-3 pt-2 pb-1">
                 <button
               onClick={handleSkip}
               disabled={!canClose}
