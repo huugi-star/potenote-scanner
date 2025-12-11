@@ -539,8 +539,25 @@ ${verifiedFacts}
 
   } catch (error) {
     console.error("API Error:", error);
+
+    const errorMessage = (error as any)?.message || String(error);
+    const isLimitError =
+      errorMessage.includes("429") ||
+      errorMessage.includes("Quota") ||
+      errorMessage.includes("Resource has been exhausted");
+
+    if (isLimitError) {
+      return NextResponse.json(
+        {
+          error: "LIMIT_REACHED",
+          details: "本日のAIサーバー利用上限に達しました。明日またご利用ください。",
+        },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Failed to generate quiz", details: String(error) },
+      { error: "Failed to generate quiz", details: errorMessage },
       { status: 500 }
     );
   }

@@ -159,9 +159,26 @@ JSON形式で以下の構造で出力してください：
 
     return NextResponse.json(translationResult);
   } catch (error: any) {
-    console.error("Translation API error:", error);
+    console.error("Translation API error:", error?.message || String(error));
+
+    const errorMessage = error?.message || String(error);
+    const isLimitError =
+      errorMessage.includes("429") ||
+      errorMessage.includes("Quota") ||
+      errorMessage.includes("Resource has been exhausted");
+
+    if (isLimitError) {
+      return NextResponse.json(
+        {
+          error: "LIMIT_REACHED",
+          details: "本日のAIサーバー利用上限に達しました。明日またご利用ください。",
+        },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json(
-      { error: error.message || "Translation failed" },
+      { error: "Internal Server Error", details: errorMessage },
       { status: 500 }
     );
   }

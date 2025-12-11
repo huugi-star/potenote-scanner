@@ -340,7 +340,7 @@ export const TranslationResultScreen = ({
  * 1つの文を表示するカードコンポーネント
  */
 const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { sentence: any, index: number, tipShown: boolean, setTipShown: (v: boolean) => void }) => {
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [subOpen, setSubOpen] = useState(false);
   // 詳細データがあるか判定（新しい構造と後方互換性）
   const hasDetails = (sentence.sub_structures && sentence.sub_structures.length > 0) || 
                      (sentence.structure_explanations && sentence.structure_explanations.length > 0) ||
@@ -406,51 +406,6 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
         )}
       </div>
 
-      {/* 詳しい解説（Zoom-In） */}
-      {sentence.details && sentence.details.length > 0 && (
-        <div className="border-t border-gray-700 bg-[#1e1e2e]">
-          <button
-            onClick={() => { vibrateLight(); setDetailsOpen((o) => !o); }}
-            className="w-full flex items-center justify-between p-4 bg-indigo-900/10 hover:bg-indigo-900/20 transition-colors"
-          >
-            <div className="flex items-center gap-2 text-indigo-200 font-bold text-sm">
-              <span className="text-lg">📖</span>
-              <span>詳しい解説（クリックでズームイン）</span>
-            </div>
-            <motion.div animate={{ rotate: detailsOpen ? 180 : 0 }}>
-              <ChevronDown className="w-5 h-5 text-indigo-300" />
-            </motion.div>
-          </button>
-          <AnimatePresence>
-            {detailsOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="p-4 space-y-3">
-                  {sentence.details.map((line: string, idx: number) => (
-                    <div
-                      key={idx}
-                      className="text-sm text-indigo-50 leading-relaxed bg-gradient-to-r from-indigo-900/40 to-indigo-800/40 border border-indigo-500/30 rounded-xl p-3 shadow-inner"
-                    >
-                      <div className="text-[11px] uppercase tracking-widest text-indigo-300 mb-1 font-semibold flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-300" />
-                        Zoom-In {idx + 1}
-                      </div>
-                      <div className="whitespace-pre-wrap font-mono text-[13px] text-indigo-100 leading-snug">
-                        {line}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-
       {/* 2. 自然な和訳 */}
       <div className="p-5 bg-[#24283b] border-b border-gray-700/50">
         <div className="flex items-start gap-3">
@@ -482,30 +437,49 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
       {/* 4. ズームイン解析（sub_structures） */}
       {sentence.sub_structures && sentence.sub_structures.length > 0 && (
         <div className="border-t border-gray-700 bg-[#1e1e2e]">
-          <div className="p-6 space-y-6">
-            <h4 className="text-sm font-bold text-blue-300 mb-4 flex items-center gap-2">
+          <button
+            onClick={() => { vibrateLight(); setSubOpen(o => !o); }}
+            className="w-full flex items-center justify-between px-6 py-4 bg-blue-900/10 hover:bg-blue-900/20 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-blue-200 font-bold text-sm">
               <span className="text-lg">🔍</span>
               <span>ズームイン解析（節の内部構造）</span>
-            </h4>
-            {sentence.sub_structures.map((sub: any, subIndex: number) => (
-              <div key={subIndex} className="bg-[#24283b] rounded-lg p-4 border border-gray-700">
-                <div className="mb-3">
-                  <div className="text-xs text-gray-400 mb-1">解析対象:</div>
-                  <div className="text-sm font-mono text-gray-200">{sub.target_text}</div>
-                </div>
-                {sub.explanation && (
-                  <div className="mb-3 text-sm text-gray-300 leading-relaxed">
-                    {sub.explanation}
-                  </div>
-                )}
-                <div className="flex flex-wrap items-start gap-x-2 gap-y-6 mt-4">
-                  {sub.chunks && sub.chunks.map((chunk: any, chunkIndex: number) => (
-                    <ItoChunkCard key={chunkIndex} chunk={chunk} isSub={true} />
+            </div>
+            <motion.div animate={{ rotate: subOpen ? 180 : 0 }}>
+              <ChevronDown className="w-5 h-5 text-blue-300" />
+            </motion.div>
+          </button>
+          <AnimatePresence>
+            {subOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="p-6 space-y-6">
+                  {sentence.sub_structures.map((sub: any, subIndex: number) => (
+                    <div key={subIndex} className="bg-[#24283b] rounded-lg p-4 border border-gray-700">
+                      <div className="mb-3">
+                        <div className="text-xs text-gray-400 mb-1">解析対象:</div>
+                        <div className="text-sm font-mono text-gray-200">{sub.target_text}</div>
+                      </div>
+                      {sub.explanation && (
+                        <div className="mb-3 text-sm text-gray-300 leading-relaxed">
+                          {sub.explanation}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap items-start gap-x-2 gap-y-6 mt-4">
+                        {sub.chunks && sub.chunks.map((chunk: any, chunkIndex: number) => (
+                          <ItoChunkCard key={chunkIndex} chunk={chunk} isSub={true} />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
-              </div>
-            ))}
-          </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 

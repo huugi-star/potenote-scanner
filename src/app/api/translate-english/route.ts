@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
 
-// ===== Zod Schemas =====
+// ===== Zod Schemas (緩和版) =====
 const VocabSchema = z.object({
   word: z.string(),
   meaning: z.string(),
@@ -18,8 +18,9 @@ const VocabSchema = z.object({
 const ChunkSchema = z.object({
   text: z.string(),
   translation: z.string(),
-  type: z.enum(["noun", "modifier", "verb", "connector"]),
-  role: z.enum(["S", "O", "C", "M", "V", "S'", "O'", "C'", "M'", "V'", "CONN"]),
+  // enumは使用せずstringで受け、後段で正規化
+  type: z.string(),
+  role: z.string(),
   explanation: z.string().optional(),
   modifies: z.string().optional(),
   note: z.string().optional(),
@@ -146,35 +147,72 @@ export async function POST(req: Request) {
     });
 
     const prompt = `
-あなたは伊藤和夫「ビジュアル英文解釈」のエキスパートです。入力文を句・節ごとに塊で区切り、SVOCMの役割を示してください。出力は必ず有効なJSONのみ。
+あなたは「ビジュアル英文解釈（伊藤和夫）」のエキスパートです。
+入力された英文を構造解析し、以下の厳格なJSONフォーマットのみを出力してください。
+余計な会話やMarkdownの装飾（\`\`\`json など）は不要です。
 
-【最低限のルール】
-- S / V / O / C を明確に。M は大きな塊（前置詞句・時/場所表現など）でまとめ、細切れにしない。
-- 名詞節・形容詞節・副詞節は節全体を1ブロック（role: S'/O'/C'/M'）として扱い、内部構造は details / sub_structures で補足。
-- 省略された that / which などは (that) などで明示。
-- type は noun / modifier / verb / connector、role は S,V,O,C,M,S',V',O',C',M',CONN を使用。
+【解析ルール】
+1. S / V / O / C / M / CONN の役割を割り当てる。
+2. M（修飾語句）は前置詞句や副詞節などの大きな塊でまとめ、文頭のイントロフレーズも必ず残す。
+3. 名詞節・形容詞節・副詞節は、内部構造（S' V' など）を sub_structures に記述する。
+4. **括弧（ブラケット）規則**（出力上で示すか、必ず役割に対応するtypeを設定すること）
+   - S/O/C → noun とし、表示上は【 】で囲まれる想定
+   - M      → modifier とし、表示上は＜ ＞で囲まれる想定
+   - V      → verb とし、括弧なしで表示される想定
+   - CONN   → connector とし、役割に応じて節全体の外側括弧を決める（副詞節ならM扱いで＜ ＞、名詞節ならO扱いで【 】 など）
 
-【JSONフォーマット】
+【出力JSONの例（One-shot Example）】
+入力: "Because he was sick, he could not go to school."
+出力:
 {
-  "clean_text": "OCR補正後の英文",
+  "clean_text": "Because he was sick, he could not go to school.",
   "sentences": [
     {
       "sentence_id": 1,
-      "original_text": "原文",
-      "main_structure": [ { "text": "...", "translation": "...", "type": "...", "role": "S" } ],
-      "chunks": [同上または互換配列],
-      "translation": "和訳",
-      "full_translation": "和訳（省略可）",
-      "vocab_list": [{ "word": "...", "meaning": "..." }],
-      "details": ["構造説明やズームインの解説（文字列）"],
+      "original_text": "Because he was sick, he could not go to school.",
+      "translation": "彼は病気だったので、学校へ行けなかった。",
+      "main_structure": [
+        { "text": "Because he was sick,", "translation": "彼は病気だったので", "type": "connector", "role": "M" },
+        { "text": "he", "translation": "彼は", "type": "noun", "role": "S" },
+        { "text": "could not go", "translation": "行けなかった", "type": "verb", "role": "V" },
+        { "text": "to school.", "translation": "学校へ", "type": "modifier", "role": "M" }
+      ],
+      "chunks": [],
+      "vocab_list": [{ "word": "sick", "meaning": "病気の" }],
+      "details": ["副詞節(Because...)が主節のVを修飾している構造。"],
       "sub_structures": [
-        { "target_text": "...", "explanation": "...", "chunks": [ { "text": "...", "translation": "...", "type": "...", "role": "S'" } ] }
+        {
+          "target_text": "Because he was sick,",
+          "explanation": "理由を表す副詞節",
+          "chunks": [
+             { "text": "Because", "type": "connector", "role": "CONN" },
+             { "text": "he", "type": "noun", "role": "S'" },
+             { "text": "was", "type": "verb", "role": "V'" },
+             { "text": "sick", "type": "modifier", "role": "C'" }
+          ]
+        }
       ]
     }
   ]
 }
 
-【解析対象】
+【ズームイン解析（初心者向けの図解フォーマット）】
+- sub_structures 内の each節 は、以下の「ブロック表記」で文字列を組むこと（リストではなく1つのテキストブロックでよい）。
+- 角括弧 [ ] は接続詞・関係詞に、隅付き括弧【 】はS'/O'/C'に、V'は括弧なし。
+- 関係代名詞が主語を兼ねる場合は [ S' / who ] のようにS'として扱う（決してC'にしない）。
+- 長い引用や文は【O'】としてひとかたまりにする。
+- 各行の表示順は必ず「英語→日本語訳→役割」。英語の下に英語を重ねないこと。訳が無い場合でも簡潔な日本語を入れる。
+
+ブロック例（One-shot）:
+解析対象: "that said, "A driver must..."
+(役割: 直前の a law を詳しく説明する関係代名詞節)
+> [ that ] (S' / 関係代名詞)
+> 　↓
+> said (V'：〜と書いてあった)
+> 　↓
+> 【 "A driver must..." 】 (O'：引用文)
+
+【実際の解析対象】
 ${cleaned}
 `;
 
@@ -267,33 +305,46 @@ ${cleaned}
       ];
     }
 
-    // Role/Typeの正規化処理（前回と同じ）
-    const normalizeRole = (role: any): z.infer<typeof ChunkSchema>["role"] => {
+    // Roleの正規化（強力版）
+    const normalizeRole = (role: any): string => {
       if (!role) return "M";
       const r = String(role).trim().replace(/''+/g, "'").toUpperCase();
-      switch (r) {
-        case "S": return "S";
-        case "O": return "O";
-        case "C": return "C";
-        case "M": return "M";
-        case "V": return "V";
-        case "S'": return "S'";
-        case "O'": return "O'";
-        case "C'": return "C'";
-        case "M'": return "M'";
-        case "V'": return "V'";
-        case "CONN": return "CONN";
-        default: return "M";
-      }
+
+      // 表記揺れ吸収
+      if (r === "SUBJECT" || r === "SUBJ") return "S";
+      if (r === "OBJECT" || r === "OBJ") return "O";
+      if (r === "VERB") return "V";
+      if (r === "COMPLEMENT") return "C";
+      if (r === "MODIFIER" || r === "MOD") return "M";
+      if (r === "CONNECT" || r === "CONNECTOR" || r === "CONJUNCTION") return "CONN";
+
+      // ダッシュ付き
+      if (r.startsWith("S")) return r.includes("'") ? "S'" : "S";
+      if (r.startsWith("O")) return r.includes("'") ? "O'" : "O";
+      if (r.startsWith("C")) return r.includes("'") ? "C'" : "C";
+      if (r.startsWith("V")) return r.includes("'") ? "V'" : "V";
+
+      const validRoles = ["S", "O", "C", "M", "V", "S'", "O'", "C'", "M'", "V'", "CONN"];
+      return validRoles.includes(r) ? r : "M";
     };
 
-const normalizeType = (type: any, role: any): z.infer<typeof ChunkSchema>["type"] => {
-    if (["noun", "modifier", "verb", "connector"].includes(type)) return type;
-    if (String(role || "").toUpperCase().startsWith("V")) return "verb";
-    if (String(role || "").toUpperCase() === "CONN") return "connector";
-    if (String(role || "").toUpperCase().startsWith("M")) return "modifier";
-    return "noun";
-};
+    // Typeの正規化（強力版）: 役割を最優先で型に落とす
+    const normalizeType = (type: any, role: any): string => {
+      const r = String(role || "").trim().toUpperCase();
+      // 役割優先マッピング（括弧規則に直結）
+      if (r === "S" || r === "O" || r === "C" || r === "S'" || r === "O'" || r === "C'") return "noun";
+      if (r.startsWith("M")) return "modifier";
+      if (r.startsWith("V")) return "verb";
+      if (r === "CONN") return "connector";
+
+      const t = String(type || "").trim().toLowerCase();
+      if (t.includes("noun")) return "noun";
+      if (t.includes("verb")) return "verb";
+      if (t.includes("modif") || t.includes("adj") || t.includes("adv")) return "modifier";
+      if (t.includes("conn") || t.includes("conj")) return "connector";
+
+      return "noun";
+    };
 
     const normalizeChunkArray = (arr: any): z.infer<typeof ChunkSchema>[] => {
       return Array.isArray(arr)
@@ -302,7 +353,8 @@ const normalizeType = (type: any, role: any): z.infer<typeof ChunkSchema>["type"
             const type = normalizeType(c?.type, role);
             return {
               text: c?.text ?? "",
-              translation: c?.translation ?? c?.text ?? "",
+              // ズームインでは英語重複を避けるため、訳が無ければ空文字
+              translation: c?.translation ?? c?.meaning ?? "",
               type,
               role,
               explanation: c?.explanation ?? "",
@@ -383,8 +435,25 @@ const normalizeType = (type: any, role: any): z.infer<typeof ChunkSchema>["type"
 
   } catch (e: any) {
     console.error("Server Error:", e?.message || String(e));
+
+    const errorMessage = e?.message || String(e);
+    const isLimitError =
+      errorMessage.includes("429") ||
+      errorMessage.includes("Quota") ||
+      errorMessage.includes("Resource has been exhausted");
+
+    if (isLimitError) {
+      return NextResponse.json(
+        {
+          error: "LIMIT_REACHED",
+          details: "本日のAIサーバー利用上限に達しました。明日またご利用ください。",
+        },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Internal Server Error", details: e?.message || String(e) },
+      { error: "Internal Server Error", details: errorMessage },
       { status: 500 }
     );
   }

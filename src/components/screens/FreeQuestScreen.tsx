@@ -107,6 +107,13 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
             verifiedFacts: existingQA
           }),
         });
+
+        if (response.status === 429) {
+          alert("🙏 申し訳ありません！\n\n本日のAI解析サーバーが混み合っており、1日の利用上限に達しました。\n（コスト制限のため、現在は1日限定数で運営しています）\n\n明日になるとリセットされますので、また明日お試しください！");
+          setIsGenerating(false);
+          setGeneratingId(null);
+          return;
+        }
         
         if (!response.ok) throw new Error('Failed to generate quiz');
         

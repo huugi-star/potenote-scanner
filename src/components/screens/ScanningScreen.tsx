@@ -269,6 +269,15 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
         clearTimeout(timeoutId);
         setProgressLabel('結果を解析中...');
 
+        if (translateResponse.status === 429) {
+          stopProgressTicker(0);
+          setProgressLabel('');
+          setScanState('idle');
+          vibrateError();
+          alert("🙏 申し訳ありません！\n\n本日のAI解析サーバーが混み合っており、1日の利用上限に達しました。\n（コスト制限のため、現在は1日限定数で運営しています）\n\n明日になるとリセットされますので、また明日お試しください！");
+          return;
+        }
+
         if (!translateResponse.ok) {
           const errorData = await translateResponse.json().catch(() => ({}));
           const errorMessage = errorData.details || errorData.error || `Translation error: ${translateResponse.status}`;
@@ -334,6 +343,15 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
 
         clearTimeout(timeoutId);
         setProgressLabel('問題を組み立て中...');
+
+        if (quizResponse.status === 429) {
+          stopProgressTicker(0);
+          setProgressLabel('');
+          setScanState('idle');
+          vibrateError();
+          alert("🙏 申し訳ありません！\n\n本日のAI解析サーバーが混み合っており、1日の利用上限に達しました。\n（コスト制限のため、現在は1日限定数で運営しています）\n\n明日になるとリセットされますので、また明日お試しください！");
+          return;
+        }
 
         if (!quizResponse.ok) {
           throw new Error(`Quiz error: ${quizResponse.status}`);

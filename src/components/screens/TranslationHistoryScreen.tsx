@@ -47,6 +47,20 @@ const getRoleLabel = (role: string | null): string => {
   }
 };
 
+const wrapByRole = (role: string | null | undefined, text: string) => {
+  if (!text) return '';
+  const r = (role || '').toUpperCase();
+  const isNounish = r === 'S' || r === 'O' || r === 'C' || r === "S'" || r === "O'" || r === "C'";
+  const isModifier = r.startsWith('M');
+  const isVerb = r.startsWith('V');
+  const isConn = r === 'CONN';
+  if (isNounish) return `【${text}】`;
+  if (isModifier) return `＜${text}＞`;
+  if (isConn) return `[${text}]`;
+  if (isVerb) return text;
+  return text;
+};
+
 // 文オブジェクトから表示用の原文を取得（フォールバック付き）
 const getSentenceSourceText = (sentence: any): string => {
   if (!sentence) return '';
@@ -56,7 +70,10 @@ const getSentenceSourceText = (sentence: any): string => {
   if (sentence.original) return sentence.original;
   if (sentence.text) return sentence.text;
   if (Array.isArray(sentence.chunks)) {
-    const joined = sentence.chunks.map((c: any) => c?.text ?? '').filter(Boolean).join(' ');
+    const joined = sentence.chunks
+      .map((c: any) => wrapByRole(c?.role, c?.text ?? ''))
+      .filter(Boolean)
+      .join(' ');
     if (joined.trim()) return joined.trim();
   }
   return '';
@@ -174,63 +191,6 @@ const MarkedTextParser = memo(({
 MarkedTextParser.displayName = 'MarkedTextParser';
 
 /**
- * ZoomInAccordion - ズームイン解析のアコーディオンコンポーネント
- */
-const ZoomInAccordion = memo(({ subStructures }: { subStructures: Array<{ target_chunk?: string; analyzed_text?: string }> }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="mb-4">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-3 bg-gray-800 hover:bg-gray-750 rounded-lg border border-gray-600 transition-colors"
-      >
-        <span className="text-sm font-bold text-gray-300 flex items-center gap-2">
-          <span>🔍</span>
-          <span>詳しい構造（ズームイン）</span>
-        </span>
-        <motion.div
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <ChevronDown className="w-5 h-5 text-gray-400" />
-        </motion.div>
-      </button>
-      
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="overflow-hidden"
-          >
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-600 space-y-3 mt-2">
-              {subStructures.map((subStruct: any, subIndex: number) => (
-                <div key={`substruct-${subIndex}-${subStruct.target_chunk?.substring(0, 20) || subIndex}`} className="space-y-2">
-                  <div className="text-xs text-gray-400 font-mono">
-                    {subStruct.target_chunk || ''}
-                  </div>
-                  <div className="bg-gray-700 rounded-lg p-3 border border-gray-600 overflow-x-auto">
-                    <MarkedTextParser 
-                      text={subStruct.analyzed_text || ''} 
-                      onChunkClick={() => {}}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-});
-
-ZoomInAccordion.displayName = 'ZoomInAccordion';
-
-/**
  * SentenceCard - 一文完結型のカードコンポーネント
  */
 const SentenceCard = memo(({ 
@@ -268,10 +228,7 @@ const SentenceCard = memo(({
         </div>
       </div>
 
-      {/* ズームイン解析エリア（アコーディオン） */}
-      {sentence.sub_structures && sentence.sub_structures.length > 0 && (
-        <ZoomInAccordion subStructures={sentence.sub_structures} />
-      )}
+      {/* ズームイン解析（履歴では非表示にする要望により削除） */}
 
       {/* 下段：語句・熟語リスト */}
       {sentence.vocab_list && sentence.vocab_list.length > 0 && (
