@@ -1,4 +1,16 @@
+# 依存関係
 node_modules
+
+# Next.js
 .next
+
+# 環境変数（ここを強化しました）
+.env
 .env.local
+.env.*
+
+# macOS
 .ds_store
+
+# Vercel（もし使っていれば念のため）
+.vercel
