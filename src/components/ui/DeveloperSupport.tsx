@@ -2,21 +2,20 @@
  * DeveloperSupport.tsx
  * 
  * 開発者支援コンポーネント
- * noteとAmazonほしい物リストへのリンクを提供
+ * noteへのリンクを提供
  */
 
 import React from 'react';
 
 // リンク先（後で定数ファイルに移動してもOK）
-// TODO: 実際のnote記事URLとAmazonほしい物リストURLに差し替えてください
+// TODO: 実際のnote記事URLに差し替えてください
 const NOTE_URL = "https://note.com/aoi_potenote/n/n4b5b56006637"; // ここにnote記事のURLを入れる
-const AMAZON_URL = "https://www.amazon.jp/hz/wishlist/ls/216AXTCIGKTMN?ref_=wl_share"; // ここにほしい物リストのURLを入れる
 
 export const DeveloperSupport = () => {
   return (
     <div className="mx-4 my-8 p-6 bg-white rounded-2xl border border-gray-200 shadow-sm text-center">
       {/* アイコンヘッダー */}
-      <div className="text-4xl mb-3">👨‍💻 🤝 🎁</div>
+      <div className="text-4xl mb-3">👨‍💻 🤝</div>
       
       {/* タイトル & メッセージ */}
       <h3 className="font-bold text-gray-800 text-lg mb-3">開発者を応援する</h3>
@@ -30,7 +29,7 @@ export const DeveloperSupport = () => {
       {/* アクションボタンエリア */}
       <div className="flex flex-col gap-4">
         
-        {/* 1. noteボタン (記事 & サポート) */}
+        {/* noteボタン (記事 & サポート) */}
         <div className="w-full">
           <a 
             href={NOTE_URL} 
@@ -42,21 +41,6 @@ export const DeveloperSupport = () => {
           </a>
           <p className="text-[10px] text-gray-400 mt-1.5">
             ※ 記事の「サポート」機能からご支援いただけます
-          </p>
-        </div>
-
-        {/* 2. Amazonボタン (モノ支援) */}
-        <div className="w-full">
-          <a 
-            href={AMAZON_URL} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="block w-full bg-[#FF9900] hover:opacity-90 text-white font-bold py-3 px-6 rounded-full shadow transition-all flex items-center justify-center gap-2"
-          >
-            <span>🎁 Amazonで差し入れする</span>
-          </a>
-          <p className="text-[10px] text-gray-400 mt-1.5">
-            ※ 匿名で送れる設定になっています。コーヒー1杯分でもその気持ちが嬉しいです。
           </p>
         </div>
 
