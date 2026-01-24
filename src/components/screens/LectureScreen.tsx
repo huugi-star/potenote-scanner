@@ -18,7 +18,6 @@ interface LectureScreenProps {
 
 export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) => {
   const [lectureState, setLectureState] = useState<'idle' | 'uploading' | 'generating' | 'ready' | 'error'>('idle');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [lectureScript, setLectureScript] = useState<LectureScript | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [selectedTone, setSelectedTone] = useState<CharacterTone>('normal');
@@ -36,12 +35,10 @@ export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) =>
       console.log('[LectureScreen] Loading from history:', initialHistory.id);
       setLectureScript(initialHistory.script);
       setSelectedTone(initialHistory.script.tone);
-      setSelectedImage(initialHistory.imageUrl || null);
       setLectureState('ready');
     } else {
       // 履歴がない場合は初期状態にリセット
       setLectureScript(null);
-      setSelectedImage(null);
       setLectureState('idle');
     }
   }, [initialHistory]);
@@ -97,7 +94,6 @@ export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) =>
       // 画像を圧縮
       setLectureState('uploading');
       const compressionResult = await compressForAI(file);
-      setSelectedImage(compressionResult.dataUrl);
 
       // 講義生成
       setLectureState('generating');
@@ -152,7 +148,6 @@ export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) =>
   const handleReset = useCallback(() => {
     player.stop();
     setLectureScript(null);
-    setSelectedImage(null);
     setLectureState('idle');
     setErrorMessage('');
   }, [player]);
