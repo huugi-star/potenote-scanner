@@ -91,7 +91,6 @@ export const LectureHistoryScreen = ({ onBack, onSelectLecture }: LectureHistory
   const lectureHistory = useGameStore(state => state.getLectureHistory());
   const deleteLectureHistory = useGameStore(state => state.deleteLectureHistory);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
     vibrateLight();
