@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory } from '@/types';
+import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory, LectureScript, LectureHistory } from '@/types';
 import { ALL_ITEMS, getItemById } from '@/data/items';
 import { REWARDS, DISTANCE, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
@@ -62,6 +62,9 @@ interface GameState extends UserState {
   // 翻訳履歴
   translationHistory: TranslationHistory[];
   
+  // 講義履歴
+  lectureHistory: LectureHistory[];
+  
   // スキャンタイプと翻訳結果
   scanType: 'quiz' | 'translation';
   translationMode: 'english_learning' | 'multilang' | null; // 翻訳モード
@@ -107,6 +110,11 @@ interface GameActions {
   saveTranslationHistory: (result: TranslationResult, imageUrl?: string) => void;
   getTranslationHistory: () => TranslationHistory[];
   deleteTranslationHistory: (id: string) => void;
+  
+  // 講義履歴管理
+  saveLectureHistory: (script: LectureScript, imageUrl?: string) => void;
+  getLectureHistory: () => LectureHistory[];
+  deleteLectureHistory: (id: string) => void;
   
   calculateResult: (correctCount: number, totalQuestions: number, isAdWatched: boolean) => QuizResult;
   applyQuizResult: (result: QuizResult) => void;
@@ -199,6 +207,8 @@ const initialState: GameState = {
   quizHistory: [],
   
   translationHistory: [],
+  
+  lectureHistory: [],
   
   scanType: 'quiz',
   translationMode: null,
@@ -308,6 +318,15 @@ export const useGameStore = create<GameStore>()(
                 (d) => d.data() as TranslationHistory
               );
 
+              // 講義履歴（クラウドは最新30件まで）
+              const lectureCol = collection(db, 'users', uid, 'lecture_history');
+              const lectureSnap = await getDocs(
+                query(lectureCol, orderBy('createdAt', 'desc'), fsLimit(30))
+              );
+              const cloudLectureHistory: LectureHistory[] = lectureSnap.docs.map(
+                (d) => d.data() as LectureHistory
+              );
+
               // 既存ローカル履歴とクラウド履歴をマージ（IDベースで重複除去）
               const currentState = get();
 
@@ -325,9 +344,17 @@ export const useGameStore = create<GameStore>()(
                 ),
               ];
 
+              const mergedLectureHistory: LectureHistory[] = [
+                ...cloudLectureHistory,
+                ...currentState.lectureHistory.filter(
+                  (local) => !cloudLectureHistory.some((cloud) => cloud.id === local.id)
+                ),
+              ];
+
               set({
                 quizHistory: mergedQuizHistory,
                 translationHistory: mergedTranslationHistory,
+                lectureHistory: mergedLectureHistory,
               });
             } catch (historyError) {
               console.error('Cloud history load error:', historyError);
@@ -720,6 +747,74 @@ export const useGameStore = create<GameStore>()(
         set({
           translationHistory: state.translationHistory.filter(h => h.id !== id),
         });
+      },
+      
+      // ===== Lecture History Management =====
+      
+      saveLectureHistory: (script, imageUrl) => {
+        const state = get();
+        
+        // 重複チェック: 同じ内容の講義が既に存在する場合は追加しない
+        const isDuplicate = state.lectureHistory.some(
+          (history) =>
+            history.script.sourceText === script.sourceText &&
+            history.script.tone === script.tone
+        );
+        
+        if (isDuplicate) {
+          console.log('Lecture history duplicate detected, skipping save');
+          return;
+        }
+        
+        const newHistory: LectureHistory = {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          script,
+          imageUrl,
+          createdAt: new Date().toISOString(),
+        };
+        
+        // 新しい履歴を追加し、最大保存数を超える場合は古い履歴を削除
+        const updatedHistory = [newHistory, ...state.lectureHistory];
+        const limitedHistory = updatedHistory.slice(0, LIMITS.LECTURE_HISTORY.MAX_ITEMS);
+        
+        set({
+          lectureHistory: limitedHistory,
+        });
+
+        // クラウドにも保存
+        if (db && state.uid) {
+          (async () => {
+            try {
+              const colRef = collection(db, 'users', state.uid!, 'lecture_history');
+              await setDoc(doc(colRef, newHistory.id), newHistory, { merge: true });
+            } catch (e) {
+              console.error('Cloud lecture history save error:', e);
+            }
+          })();
+        }
+      },
+      
+      getLectureHistory: () => {
+        return get().lectureHistory;
+      },
+      
+      deleteLectureHistory: (id) => {
+        const state = get();
+        set({
+          lectureHistory: state.lectureHistory.filter(h => h.id !== id),
+        });
+        
+        // クラウドからも削除
+        if (db && state.uid) {
+          (async () => {
+            try {
+              const colRef = collection(db, 'users', state.uid!, 'lecture_history');
+              await deleteDoc(doc(colRef, id));
+            } catch (e) {
+              console.error('Cloud lecture history delete error:', e);
+            }
+          })();
+        }
       },
       
       // ===== Quiz & Rewards =====
@@ -1294,6 +1389,10 @@ export const useGameStore = create<GameStore>()(
           console.log(`Cleaning up translation history: ${state.translationHistory.length} -> ${LIMITS.TRANSLATION_HISTORY.MAX_ITEMS}`);
           state.translationHistory = state.translationHistory.slice(0, LIMITS.TRANSLATION_HISTORY.MAX_ITEMS);
         }
+        if (state && state.lectureHistory && state.lectureHistory.length > LIMITS.LECTURE_HISTORY.MAX_ITEMS) {
+          console.log(`Cleaning up lecture history: ${state.lectureHistory.length} -> ${LIMITS.LECTURE_HISTORY.MAX_ITEMS}`);
+          state.lectureHistory = state.lectureHistory.slice(0, LIMITS.LECTURE_HISTORY.MAX_ITEMS);
+        }
       },
       partialize: (state) => ({
         coins: state.coins,
@@ -1321,6 +1420,7 @@ export const useGameStore = create<GameStore>()(
         hasLaunched: state.hasLaunched,
         quizHistory: state.quizHistory,
         translationHistory: state.translationHistory,
+        lectureHistory: state.lectureHistory,
         scanType: state.scanType,
         translationResult: state.translationResult,
         generatedQuiz: state.generatedQuiz,

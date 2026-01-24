@@ -335,3 +335,61 @@ export type Rarity = 'N' | 'R' | 'SR' | 'SSR';
  */
 export type EquipmentCategory = 'head' | 'body' | 'face' | 'accessory';
 
+// ===== Lecture Types =====
+
+/**
+ * キャラクターの口調タイプ
+ */
+export type CharacterTone = 'normal' | 'lazy' | 'kyoto' | 'ojousama' | 'gal' | 'sage';
+
+/**
+ * 話者タイプ
+ */
+export type SpeakerType = 'teacher' | 'student';
+
+/**
+ * 講義アイテムのタイプ
+ */
+export type LectureItemType = 
+  | 'introduction'  // 導入
+  | 'question'      // 問い
+  | 'silence'       // 沈黙
+  | 'answer'        // 答え
+  | 'explanation'   // 正解文
+  | 'review'        // 再確認
+  | 'summary'       // まとめ
+  | 'closing';      // 終了文
+
+/**
+ * 講義スクリプトの1アイテム
+ */
+export interface LectureItem {
+  id: number;
+  type: LectureItemType;
+  speaker: SpeakerType;
+  text: string;
+  speechText?: string;    // 音声読み上げ専用テキスト（漢字→ひらがな、数字→日本語読み）
+  displayBoard?: string;  // 黒板に表示するテキスト
+  keyword?: string;       // 強調表示するキーワード（answerタイプ用）
+  silenceSeconds?: number; // 沈黙時間（秒、silenceタイプ用）
+}
+
+/**
+ * 講義スクリプト（全体）
+ */
+export interface LectureScript {
+  items: LectureItem[];
+  tone: CharacterTone;
+  sourceText: string;    // 元のテキスト（デバッグ用）
+}
+
+/**
+ * 講義履歴
+ */
+export interface LectureHistory {
+  id: string;
+  script: LectureScript;
+  imageUrl?: string;      // 元の画像URL（オプション）
+  createdAt: string;      // ISO形式の日時文字列
+}
+

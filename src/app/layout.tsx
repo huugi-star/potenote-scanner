@@ -23,25 +23,6 @@ export default function RootLayout({
     <html lang="ja">
       <head />
       <body className={inter.className}>
-        {/* Google AdSense - body 内に配置して data-nscript 属性の問題を回避 */}
-        <Script
-          id="adsbygoogle-init"
-          strategy="lazyOnload"
-          dangerouslySetInnerHTML={{
-            __html: `
-              (adsbygoogle = window.adsbygoogle || []).push({
-                google_ad_client: "ca-pub-5524219244906928",
-                enable_page_level_ads: true
-              });
-            `,
-          }}
-        />
-        <Script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5524219244906928"
-          crossOrigin="anonymous"
-          strategy="lazyOnload"
-        />
         {children}
       </body>
     </html>

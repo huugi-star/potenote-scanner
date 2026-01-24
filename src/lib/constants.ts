@@ -96,6 +96,11 @@ export const LIMITS = {
   TRANSLATION_HISTORY: {
     MAX_ITEMS: 50,           // 最大保存数（localStorage容量対策）
   },
+  
+  // 講義履歴
+  LECTURE_HISTORY: {
+    MAX_ITEMS: 50,           // 最大保存数（localStorage容量対策）
+  },
 } as const;
 
 // ===== Gacha (ガチャ) =====
