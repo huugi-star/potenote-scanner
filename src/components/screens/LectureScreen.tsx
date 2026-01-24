@@ -49,7 +49,7 @@ export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) =>
     tone: selectedTone,
     playbackRate,
     repeat,
-    onItemComplete: (itemId: number) => {
+    onItemComplete: (_itemId: number) => {
       // アイテム完了時の処理（必要に応じて）
     },
     onComplete: () => {

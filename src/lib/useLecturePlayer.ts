@@ -114,8 +114,7 @@ export function useLecturePlayer({
   const isPlayingRef = useRef(false);
   const playLectureRef = useRef<((startIndex?: number) => Promise<void>) | null>(null);
   const voiceRetryCountRef = useRef(0);
-  const voiceRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const unmountStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voiceRetryTimerRef = useRef<number | null>(null);
   const playbackRateRef = useRef(playbackRate);
 
   // playbackRateの変更を追跡（次のアイテムから適用されるようにrefを更新）
@@ -146,7 +145,7 @@ export function useLecturePlayer({
 
       if (voiceRetryCountRef.current < 5) {
         voiceRetryCountRef.current += 1;
-        voiceRetryTimerRef.current = window.setTimeout(loadVoices, 400);
+        voiceRetryTimerRef.current = window.setTimeout(loadVoices, 400) as unknown as number;
         return;
       }
 
