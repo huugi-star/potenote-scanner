@@ -8,7 +8,8 @@ import { LectureChat } from '@/components/ui/LectureChat';
 import { useLecturePlayer } from '@/lib/useLecturePlayer';
 import { compressForAI, validateImageFile } from '@/lib/imageUtils';
 import { vibrateLight } from '@/lib/haptics';
-import { useGameStore } from '@/store/useGameStore';
+import { useGameStore, selectRemainingScanCount } from '@/store/useGameStore';
+import { LIMITS } from '@/lib/constants';
 import type { LectureScript, CharacterTone, LectureHistory } from '@/types';
 
 interface LectureScreenProps {
@@ -28,6 +29,12 @@ export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) =>
 
   // Store
   const saveLectureHistory = useGameStore(state => state.saveLectureHistory);
+  const isVIP = useGameStore(state => state.isVIP);
+  const remainingScans = useGameStore(selectRemainingScanCount);
+  const checkScanLimit = useGameStore(state => state.checkScanLimit);
+  const incrementScanCount = useGameStore(state => state.incrementScanCount);
+  
+  const canScan = isVIP || remainingScans > 0;
 
   // 履歴から講義を読み込む
   useEffect(() => {
@@ -83,6 +90,14 @@ export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) =>
   // 画像選択ハンドラ
   const handleImageSelect = useCallback(async (file: File) => {
     try {
+      // 制限チェック（消費はまだしない）
+      const limitCheck = checkScanLimit();
+      if (!limitCheck.canScan) {
+        setErrorMessage(limitCheck.error || 'スキャン回数の上限に達しました');
+        setLectureState('error');
+        return;
+      }
+
       // 画像検証
       const validation = validateImageFile(file);
       if (!validation.valid) {
@@ -127,6 +142,9 @@ export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) =>
       setLectureScript(script);
       setLectureState('ready');
       
+      // スキャン回数を増やす（API成功時のみ）
+      incrementScanCount();
+      
       // 講義履歴に保存
       saveLectureHistory(script, compressionResult.dataUrl);
     } catch (error: any) {
@@ -134,7 +152,7 @@ export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) =>
       setErrorMessage(error.message || '講義生成に失敗しました');
       setLectureState('error');
     }
-  }, [selectedTone]);
+  }, [selectedTone, checkScanLimit, incrementScanCount, saveLectureHistory]);
 
   // ファイル入力変更ハンドラ
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -186,6 +204,12 @@ export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) =>
               <p className="text-gray-600 mb-6">
                 参考書やノートをアップロードして、音声講義を生成します
               </p>
+              {/* スキャン残数表示 */}
+              {!isVIP && (
+                <div className="mb-4 text-sm text-gray-500">
+                  残り {remainingScans}/{LIMITS.FREE_USER.DAILY_SCAN_LIMIT} 回
+                </div>
+              )}
             </div>
 
             {/* キャラクター選択 */}
@@ -222,9 +246,19 @@ export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) =>
             <button
               onClick={() => {
                 vibrateLight();
+                if (!canScan) {
+                  setErrorMessage('スキャン回数の上限に達しました');
+                  setLectureState('error');
+                  return;
+                }
                 fileInputRef.current?.click();
               }}
-              className="px-8 py-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all"
+              disabled={!canScan}
+              className={`px-8 py-4 rounded-xl font-bold text-lg shadow-lg transition-all ${
+                canScan
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:shadow-xl'
+                  : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+              }`}
             >
               画像を選択
             </button>
