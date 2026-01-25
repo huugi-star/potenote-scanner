@@ -39,17 +39,25 @@ export function LectureChat({ items, currentItemId }: LectureChatProps) {
   }, [currentItemId]);
 
   const getBubbleColor = (item: LectureItem) => {
+    // speakerに応じて背景色を設定（先生=青、生徒=緑）
+    if (item.speaker === 'teacher') {
+      return 'bg-blue-500 text-white';
+    } else if (item.speaker === 'student') {
+      return 'bg-green-500 text-white';
+    }
+    
+    // speakerが設定されていない場合は、typeに応じて設定（後方互換性）
     switch (item.type) {
       case 'question':
         return 'bg-blue-500 text-white';
       case 'answer':
         return 'bg-green-500 text-white';
       case 'explanation':
-        return 'bg-green-500 text-white';
+        return 'bg-blue-500 text-white'; // 先生の説明は青
       case 'introduction':
       case 'summary':
       case 'closing':
-        return 'bg-gray-600 text-white';
+        return 'bg-blue-500 text-white'; // 先生の発言は青
       default:
         return 'bg-gray-500 text-white';
     }

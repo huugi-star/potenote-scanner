@@ -44,7 +44,7 @@ const formatDate = (dateString: string): string => {
 const getToneLabel = (tone: string): string => {
   const toneMap: Record<string, string> = {
     normal: '標準',
-    lazy: '気だるげ',
+    yuruhachi: 'ゆる八先生',
     kyoto: '京都弁',
     ojousama: 'お嬢様',
     gal: 'ギャル',
@@ -118,9 +118,10 @@ export const LectureHistoryScreen = ({ onBack, onSelectLecture }: LectureHistory
               vibrateLight();
               onBack();
             }}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            className="px-4 py-2 rounded-lg bg-gray-500 text-white font-medium flex items-center gap-2 hover:bg-gray-600 transition-all"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-5 h-5" />
+            トップ画面に戻る
           </button>
           <h1 className="text-2xl font-bold text-gray-800">講義履歴</h1>
         </div>
@@ -202,6 +203,20 @@ export const LectureHistoryScreen = ({ onBack, onSelectLecture }: LectureHistory
               </AnimatePresence>
             </div>
           )}
+          
+          {/* トップ画面に戻るボタン */}
+          <div className="mt-8 flex justify-center">
+            <button
+              onClick={() => {
+                vibrateLight();
+                onBack();
+              }}
+              className="px-6 py-3 rounded-lg bg-gray-500 text-white font-bold flex items-center gap-2 hover:bg-gray-600 transition-all"
+            >
+              <ChevronLeft className="w-5 h-5" />
+              トップ画面に戻る
+            </button>
+          </div>
         </div>
       </div>
     </div>

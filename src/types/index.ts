@@ -340,7 +340,7 @@ export type EquipmentCategory = 'head' | 'body' | 'face' | 'accessory';
 /**
  * キャラクターの口調タイプ
  */
-export type CharacterTone = 'normal' | 'lazy' | 'kyoto' | 'ojousama' | 'gal' | 'sage';
+export type CharacterTone = 'normal' | 'yuruhachi' | 'kyoto' | 'ojousama' | 'gal' | 'sage';
 
 /**
  * 話者タイプ

@@ -86,7 +86,7 @@ const LectureItemSchema = z.object({
 
 const LectureScriptSchema = z.object({
   items: z.array(LectureItemSchema),
-  tone: z.enum(['normal', 'lazy', 'kyoto', 'ojousama', 'gal', 'sage']),
+  tone: z.enum(['normal', 'yuruhachi', 'kyoto', 'ojousama', 'gal', 'sage']),
   sourceText: z.string(),
 });
 
@@ -159,7 +159,188 @@ export async function POST(req: Request) {
       },
     });
 
-    const systemPrompt = `あなたは学習コンテンツを「暗記ドリル（音声教材）」に変換するMemory Optimization Engineです。
+    // ゆる八先生の場合は特別なプロンプトを使用
+    const yuruhachiPrompt = `あなたは「ゆる八先生」と「ツッコミ役の生徒」で講義台本を作ります。
+
+【構造】
+1. ゆる八先生：3文（教材を正しく説明）
+2. ゆる八先生：1文（教材ワードと論理的につなげたボケ）
+3. 生徒：1文（短く穏やかなツッコミ）
+4. ゆる八先生：3文
+   - 1文目：間違いを認める
+   - 2文目：教材ワードで冗談を膨らませる
+   - 3文目：キャラの自然な締め台詞（だるい口調で要点をまとめる）
+
+【ルール】
+・だるい口調「〜だぞ」「〜だな」
+・生徒はツッコミのみ（短く穏やかに）
+・脱線は1回だけ
+・最後はキャラの自然な締め台詞で締める（「覚える1要点」という表現は使わない）
+・短文で読み上げ向き
+・ボケは教材ワードと必ず論理的につなぐ（例：教材に「江戸時代」があれば「江戸時代にスマホがあった」など）
+
+以下の内容を講義してください：
+「{{教材テキスト}}」
+
+【重要】レスポンスはJSON形式のみを返してください。説明文やコメントは一切含めないでください。
+
+【出力JSON】
+{
+  "teacher_intro": "3文を改行で区切って。教材を正しく説明する3文。",
+  "teacher_boke": "教材ワードと論理的につなげたボケ1文",
+  "student": "短く穏やかなツッコミ1文",
+  "teacher_conclusion": [
+    "間違いを認める1文目",
+    "教材ワードで冗談を膨らませる2文目",
+    "キャラの自然な締め台詞（だるい口調で要点をまとめる）3文目"
+  ]
+}`;
+
+    // きょう丸先生の場合は特別なプロンプトを使用
+    const kyotoPrompt = `あなたは「きょう丸先生（京都弁・少しうさん臭い講師）」として講義文を作ります。
+
+【目的】
+教材内容の中で「最も重要なポイント」を中心に、短い講義文を作成する。
+
+【出力構造】
+合計10文で出力する。
+
+1〜4文目：教材の重要ポイントを正しく説明する  
+5文目：少し怪しい例え・ミスリード（脱線は1回だけ）  
+6文目：ミスリードをやんわり回収する  
+7〜10文目：教材の最重要ポイントに戻って、わかりやすく締める  
+
+【話し方ルール】
+・京都弁で話す
+・理想の語尾を優先的に使う：〜やな、〜やろ、〜やで、〜いうことや
+・「や」だけで終わる文は避ける（例：「〜や。」は避ける）
+・やさしく、にやっとした口調
+・少し意味深な言い回し
+・一人称は「ぼく」
+・命令や説教は禁止
+・正解／不正解という評価表現は禁止
+・短文で読み上げやすくする
+・「どす」という語尾は禁止
+
+【禁止表現】
+・文末を「え」で終えない（例：「〜え。」は禁止）
+・「テスト」「復習」「おしまい」「講義」などのメタ発言は禁止
+・命令形（〜しなさい、覚えとき、復習して）は禁止
+
+【内容ルール】
+・教材から重要語句を2つ以上使う
+・神話・都市伝説・専門知識が必要なネタは禁止
+・誰でも分かる日常ネタか、教材ワードを使う
+・最後は必ず正しい知識で終える
+・感想文やメタ説明は禁止
+
+以下の内容を講義してください：
+「{{教材テキスト}}」
+
+【重要】レスポンスはJSON形式のみを返してください。説明文やコメントは一切含めないでください。
+
+【黒板表示ルール】
+・displayBoardフィールドには、実際に話している内容（textと同じ内容）を必ず設定してください
+・黒板には講義ログの会話内容が文字で表示されます
+・displayBoardとtextは同じ内容にしてください
+
+【出力JSON】
+{
+  "items": [
+    {
+      "id": 1,
+      "type": "introduction",
+      "speaker": "teacher",
+      "text": "[テーマ]を確認します",
+      "displayBoard": "[テーマ]を確認します"
+    },
+    {
+      "id": 2,
+      "type": "explanation",
+      "speaker": "teacher",
+      "text": "実際に話す講義内容の1文目（京都弁）",
+      "displayBoard": "実際に話す講義内容の1文目（textと同じ内容）"
+    },
+    {
+      "id": 3,
+      "type": "explanation",
+      "speaker": "teacher",
+      "text": "実際に話す講義内容の2文目",
+      "displayBoard": "実際に話す講義内容の2文目（textと同じ内容）"
+    },
+    {
+      "id": 4,
+      "type": "explanation",
+      "speaker": "teacher",
+      "text": "実際に話す講義内容の3文目",
+      "displayBoard": "実際に話す講義内容の3文目（textと同じ内容）"
+    },
+    {
+      "id": 5,
+      "type": "explanation",
+      "speaker": "teacher",
+      "text": "実際に話す講義内容の4文目",
+      "displayBoard": "実際に話す講義内容の4文目（textと同じ内容）"
+    },
+    {
+      "id": 6,
+      "type": "explanation",
+      "speaker": "teacher",
+      "text": "実際に話す怪しい例え・ミスリードの内容",
+      "displayBoard": "実際に話す怪しい例え・ミスリードの内容（textと同じ内容）"
+    },
+    {
+      "id": 7,
+      "type": "explanation",
+      "speaker": "teacher",
+      "text": "実際に話すミスリード回収の内容",
+      "displayBoard": "実際に話すミスリード回収の内容（textと同じ内容）"
+    },
+    {
+      "id": 8,
+      "type": "explanation",
+      "speaker": "teacher",
+      "text": "実際に話す最重要ポイントの7文目",
+      "displayBoard": "実際に話す最重要ポイントの7文目（textと同じ内容）"
+    },
+    {
+      "id": 9,
+      "type": "explanation",
+      "speaker": "teacher",
+      "text": "実際に話す最重要ポイントの8文目",
+      "displayBoard": "実際に話す最重要ポイントの8文目（textと同じ内容）"
+    },
+    {
+      "id": 10,
+      "type": "explanation",
+      "speaker": "teacher",
+      "text": "実際に話す最重要ポイントの9文目",
+      "displayBoard": "実際に話す最重要ポイントの9文目（textと同じ内容）"
+    },
+    {
+      "id": 11,
+      "type": "explanation",
+      "speaker": "teacher",
+      "text": "実際に話す最重要ポイントの10文目",
+      "displayBoard": "実際に話す最重要ポイントの10文目（textと同じ内容）"
+    },
+    {
+      "id": 12,
+      "type": "closing",
+      "speaker": "teacher",
+      "text": "以上です。",
+      "displayBoard": "以上です。"
+    }
+  ],
+  "tone": "kyoto",
+  "sourceText": "{{教材テキスト}}"
+}`;
+
+    const systemPrompt = tone === 'yuruhachi' 
+      ? yuruhachiPrompt.replace('{{教材テキスト}}', extractedText.replace(/"/g, '\\"'))
+      : tone === 'kyoto'
+      ? kyotoPrompt.replace('{{教材テキスト}}', extractedText.replace(/"/g, '\\"'))
+      : `あなたは学習コンテンツを「暗記ドリル（音声教材）」に変換するMemory Optimization Engineです。
 
 目的は、入力形式に依存せず、均質で周回可能な「問い → 想起 → 固定」を生成することです。
 
@@ -272,7 +453,9 @@ export async function POST(req: Request) {
   "sourceText": "${extractedText.replace(/"/g, '\\"')}"
 }`;
 
-    const userContent = `以下はOCRで読み取った教材テキストです。このテキストから暗記用コール＆レスポンス台本を作成してください。
+    const userContent = tone === 'yuruhachi'
+      ? `重要: レスポンスは有効なJSON形式のみを返してください。説明文、コメント、Markdownコードブロックは一切含めないでください。JSONオブジェクトのみを返してください。`
+      : `以下はOCRで読み取った教材テキストです。このテキストから暗記用コール＆レスポンス台本を作成してください。
 
 --- OCRテキスト開始 ---
 ${extractedText}
@@ -281,6 +464,76 @@ ${extractedText}
 上記のテキストから、Memory Optimization Engineのルールに従って講義スクリプトを生成してください。
 
 重要: レスポンスは必ず有効なJSON形式で返してください。Markdownコードブロックは使用しないでください。`;
+
+    // テーマを抽出（yuruhachi、kyoto、normalトーンの場合）
+    let lectureTitle: string | null = null;
+    if (tone === 'yuruhachi' || tone === 'kyoto' || tone === 'normal') {
+      console.log("[generate-lecture] Phase 0: Extracting lecture theme...");
+      const endingText = tone === 'yuruhachi' ? 'を確認するぞ' : 'を確認します';
+      const themePrompt = `次の教材内容から、最も重要なテーマを1つだけ抜き出してください。
+
+必ず次の形式でタイトルを出力してください。
+
+形式：
+「{テーマ}${endingText}」
+
+条件：
+・必ず「${endingText}」で終わる
+・テーマは10〜20文字程度
+・ボケや比喩は禁止
+・感想文は禁止
+・記号（！や？）は禁止
+・1行のみ出力
+・説明文は出力しない
+
+教材内容：
+「${extractedText.replace(/"/g, '\\"').substring(0, 1000)}」
+
+タイトル：`;
+
+      try {
+        const themeModel = genAI.getGenerativeModel({ 
+          model: "gemini-2.0-flash",
+        });
+        const themeResult = await themeModel.generateContent({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: themePrompt }],
+            },
+          ],
+        });
+        const themeResponse = themeResult.response.text().trim();
+        // 「を確認するぞ」または「を確認します」を含む行を抽出
+        const endingPattern = tone === 'yuruhachi' ? 'を確認するぞ' : 'を確認します';
+        // 正規表現で特殊文字をエスケープ
+        const escapedPattern = endingPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const titleMatch = themeResponse.match(new RegExp(`(.+?)\\s*${escapedPattern}`));
+        if (titleMatch) {
+          lectureTitle = titleMatch[1].trim();
+          console.log('[generate-lecture] Extracted lecture title:', lectureTitle);
+        } else {
+          // 「重要事項を確認するぞ」または「重要事項を確認します」も試す（後方互換性）
+          const fallbackPattern = tone === 'yuruhachi' ? '重要事項を確認するぞ' : '重要事項を確認します';
+          const escapedFallbackPattern = fallbackPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const titleMatch2 = themeResponse.match(new RegExp(`(.+?)\\s*${escapedFallbackPattern}`));
+          if (titleMatch2) {
+            lectureTitle = titleMatch2[1].trim();
+            console.log('[generate-lecture] Extracted lecture title (fallback):', lectureTitle);
+          } else {
+            // マッチしない場合は、最初の行をタイトル候補とする
+            const firstLine = themeResponse.split('\n')[0].trim();
+            if (firstLine.length >= 5 && firstLine.length <= 30) {
+              lectureTitle = firstLine.replace(/[！？]/g, '').replace(/\s*を確認.*$/, '').replace(/\s*重要事項を確認.*$/, '').trim();
+              console.log('[generate-lecture] Using first line as title:', lectureTitle);
+            }
+          }
+        }
+      } catch (themeError) {
+        console.error("[generate-lecture] Theme extraction error:", themeError);
+        // エラーでも続行（タイトルなしで動作）
+      }
+    }
 
     console.log("[generate-lecture] Phase 1: Generating lecture script...");
 
@@ -302,36 +555,206 @@ ${extractedText}
     // Markdownコードブロックを削除
     jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     
-    // 最初の{から最後の}までを抽出
+    // JSONの前後の不要な文字を削除（説明文など）
+    // 最初の{から最後の}までを抽出（ネストされたJSONにも対応）
     const firstBrace = jsonText.indexOf('{');
-    const lastBrace = jsonText.lastIndexOf('}');
-    
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+    if (firstBrace === -1) {
+      throw new Error('JSON object not found in response');
     }
+    
+    // ネストされたJSONを正しく抽出するため、括弧のバランスを取る
+    let braceCount = 0;
+    let lastBrace = -1;
+    for (let i = firstBrace; i < jsonText.length; i++) {
+      if (jsonText[i] === '{') {
+        braceCount++;
+      } else if (jsonText[i] === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          lastBrace = i;
+          break;
+        }
+      }
+    }
+    
+    if (lastBrace === -1 || lastBrace <= firstBrace) {
+      throw new Error('Invalid JSON structure: unmatched braces');
+    }
+    
+    jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+    
+    // さらにクリーンアップ：JSONの後に続く不要な文字を削除
+    jsonText = jsonText.trim();
 
     let validatedData: z.infer<typeof LectureScriptSchema>;
 
     try {
-      const json = JSON.parse(jsonText);
-      console.log('[generate-lecture] Parsed JSON items count:', json.items?.length);
-      console.log('[generate-lecture] Sample items:', json.items?.slice(0, 3));
-      validatedData = LectureScriptSchema.parse(json);
-      console.log('[generate-lecture] Validated data items count:', validatedData.items.length);
+      let json: any;
       
-      // 章タイトルを抽出してintroductionに追加
-      const chapterTitle = extractChapterTitle(extractedText);
-      if (chapterTitle && validatedData.items.length > 0) {
-        const firstItem = validatedData.items[0];
-        if (firstItem.type === 'introduction') {
-          const newText = `${chapterTitle} 重要事項を確認します`;
-          const newDisplayBoard = `${chapterTitle} 重要事項を確認します`;
-          validatedData.items[0] = {
-            ...firstItem,
-            text: newText,
-            displayBoard: newDisplayBoard,
-          };
-          console.log('[generate-lecture] Added chapter title to introduction:', chapterTitle);
+      // yuruhachiトーンの場合は、パースを試みる前にJSONをクリーンアップ
+      if (tone === 'yuruhachi') {
+        // JSONの後に続く不要な文字を削除（説明文など）
+        // 最後の}の後に続く文字を削除
+        const lastBraceIndex = jsonText.lastIndexOf('}');
+        if (lastBraceIndex !== -1 && lastBraceIndex < jsonText.length - 1) {
+          jsonText = jsonText.substring(0, lastBraceIndex + 1);
+        }
+        
+        // コメントや説明文を削除
+        jsonText = jsonText.replace(/\/\*[\s\S]*?\*\//g, ''); // /* */ コメント
+        jsonText = jsonText.replace(/\/\/.*$/gm, ''); // // コメント
+      }
+      
+      json = JSON.parse(jsonText);
+      
+      // ゆる八先生の場合は新しいJSON形式を既存の形式に変換
+      if (tone === 'yuruhachi' && json.teacher_intro && json.teacher_boke && json.student && json.teacher_conclusion) {
+        console.log('[generate-lecture] Converting yuruhachi format to LectureItem array');
+        
+        // teacher_introを3文に分割（改行で区切られている想定）
+        const introSentences = json.teacher_intro.split('\n').filter((s: string) => s.trim()).slice(0, 3);
+        // 3文に満たない場合は、カンマや句点で分割を試みる
+        if (introSentences.length < 3) {
+          const allSentences = json.teacher_intro.split(/[。\n]/).filter((s: string) => s.trim());
+          introSentences.length = 0;
+          introSentences.push(...allSentences.slice(0, 3));
+        }
+        
+        const items: z.infer<typeof LectureItemSchema>[] = [];
+        let itemId = 1;
+        
+        // 講義タイトルを使用（AIで抽出したもの、またはフォールバック）
+        let finalLectureTitle = lectureTitle;
+        if (!finalLectureTitle) {
+          // フォールバック：章タイトルまたは最初の行から抽出
+          const chapterTitle = extractChapterTitle(extractedText);
+          if (chapterTitle) {
+            finalLectureTitle = chapterTitle;
+          } else {
+            const lines = extractedText.split('\n').map((line: string) => line.trim()).filter((line: string) => line.length > 0);
+            if (lines.length > 0) {
+              const firstLine = lines[0];
+              if (firstLine.length >= 3 && firstLine.length <= 40 && 
+                  !firstLine.includes('。') && 
+                  !firstLine.match(/^\d+$/)) {
+                finalLectureTitle = firstLine;
+              }
+            }
+          }
+        }
+        // 講義タイトルを「を確認するぞ」で終わる形式に設定
+        const introText = finalLectureTitle ? `${finalLectureTitle}を確認するぞ` : '重要事項を確認するぞ';
+        
+        // introduction
+        items.push({
+          id: itemId++,
+          type: 'introduction',
+          speaker: 'teacher',
+          text: introText,
+          displayBoard: introText,
+        });
+        
+        // teacher_introの3文
+        for (const sentence of introSentences) {
+          if (sentence.trim()) {
+            items.push({
+              id: itemId++,
+              type: 'explanation',
+              speaker: 'teacher',
+              text: sentence.trim(),
+              displayBoard: sentence.trim(),
+            });
+          }
+        }
+        
+        // teacher_boke
+        items.push({
+          id: itemId++,
+          type: 'explanation',
+          speaker: 'teacher',
+          text: json.teacher_boke.trim(),
+          displayBoard: json.teacher_boke.trim(),
+        });
+        
+        // student
+        items.push({
+          id: itemId++,
+          type: 'answer',
+          speaker: 'student',
+          text: json.student.trim(),
+          displayBoard: json.student.trim(),
+        });
+        
+        // teacher_conclusionの3文
+        const conclusion = Array.isArray(json.teacher_conclusion) 
+          ? json.teacher_conclusion 
+          : [json.teacher_conclusion];
+        for (const sentence of conclusion.slice(0, 3)) {
+          if (sentence && sentence.trim()) {
+            items.push({
+              id: itemId++,
+              type: 'explanation',
+              speaker: 'teacher',
+              text: sentence.trim(),
+              displayBoard: sentence.trim(),
+            });
+          }
+        }
+        
+        // closing
+        items.push({
+          id: itemId++,
+          type: 'closing',
+          speaker: 'teacher',
+          text: '以上だぞ。',
+          displayBoard: '以上だぞ。',
+        });
+        
+        validatedData = {
+          items,
+          tone: 'yuruhachi',
+          sourceText: extractedText,
+        };
+        
+        console.log('[generate-lecture] Converted yuruhachi format, items count:', validatedData.items.length);
+      } else {
+        // 通常の形式
+        console.log('[generate-lecture] Parsed JSON items count:', json.items?.length);
+        console.log('[generate-lecture] Sample items:', json.items?.slice(0, 3));
+        validatedData = LectureScriptSchema.parse(json);
+        console.log('[generate-lecture] Validated data items count:', validatedData.items.length);
+        
+        // 講義タイトルを使用（AIで抽出したもの、またはフォールバック）
+        let finalLectureTitle = lectureTitle;
+        if (!finalLectureTitle) {
+          // フォールバック：章タイトルまたは最初の行から抽出
+          const chapterTitle = extractChapterTitle(extractedText);
+          if (chapterTitle) {
+            finalLectureTitle = chapterTitle;
+          } else {
+            const lines = extractedText.split('\n').map((line: string) => line.trim()).filter((line: string) => line.length > 0);
+            if (lines.length > 0) {
+              const firstLine = lines[0];
+              if (firstLine.length >= 5 && firstLine.length <= 30 && !firstLine.includes('。')) {
+                finalLectureTitle = firstLine;
+              }
+            }
+          }
+        }
+        if (finalLectureTitle && validatedData.items.length > 0) {
+          const firstItem = validatedData.items[0];
+          if (firstItem.type === 'introduction') {
+            // 標準講師の場合は「{テーマ}を確認します」の形式
+            const closingText = tone === 'yuruhachi' ? 'を確認するぞ' : 'を確認します';
+            const newText = `${finalLectureTitle}${closingText}`;
+            const newDisplayBoard = `${finalLectureTitle}${closingText}`;
+            validatedData.items[0] = {
+              ...firstItem,
+              text: newText,
+              displayBoard: newDisplayBoard,
+            };
+            console.log('[generate-lecture] Added lecture title to introduction:', finalLectureTitle);
+          }
         }
       }
     } catch (parseError) {
@@ -339,8 +762,16 @@ ${extractedText}
       console.error("[generate-lecture] JSON parse error:", errorMessage);
       console.error("[generate-lecture] Original response text:", responseText);
       console.error("[generate-lecture] Extracted JSON text:", jsonText);
+      console.error("[generate-lecture] JSON text length:", jsonText.length);
+      console.error("[generate-lecture] JSON text preview (first 500 chars):", jsonText.substring(0, 500));
+      
+      // デバッグ用：JSONテキストの最後の部分も確認
+      if (jsonText.length > 500) {
+        console.error("[generate-lecture] JSON text preview (last 500 chars):", jsonText.substring(jsonText.length - 500));
+      }
+      
       return NextResponse.json(
-        { error: `Failed to parse or validate JSON: ${errorMessage}` },
+        { error: `Failed to parse or validate JSON: ${errorMessage}. Response preview: ${responseText.substring(0, 200)}...` },
         { status: 500 }
       );
     }

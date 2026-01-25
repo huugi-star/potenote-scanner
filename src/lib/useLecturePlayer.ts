@@ -6,8 +6,8 @@ import type { LectureItem, CharacterTone } from '@/types';
  */
 const VOICE_SETTINGS: Record<CharacterTone | 'student', { pitch: number; rate: number }> = {
   normal: { pitch: 1.0, rate: 1.0 },
-  lazy: { pitch: 0.8, rate: 0.9 },
-  kyoto: { pitch: 1.2, rate: 0.85 },
+  yuruhachi: { pitch: 0.8, rate: 0.9 },
+  kyoto: { pitch: 0.9, rate: 0.75 },
   ojousama: { pitch: 1.3, rate: 1.2 },
   gal: { pitch: 1.1, rate: 1.3 },
   sage: { pitch: 0.5, rate: 0.7 },
@@ -17,8 +17,16 @@ const VOICE_SETTINGS: Record<CharacterTone | 'student', { pitch: number; rate: n
 /**
  * 高品質な日本語音声を優先順位で検索
  */
-function findBestJapaneseVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+function findBestJapaneseVoice(voices: SpeechSynthesisVoice[], tone?: CharacterTone): SpeechSynthesisVoice | null {
   if (!voices || voices.length === 0) return null;
+
+  // kyotoトーンの場合は"Ichiro"を優先的に検索
+  if (tone === 'kyoto') {
+    const ichiroVoice = voices.find(v => /Ichiro/i.test(v.name) && v.lang.startsWith('ja'));
+    if (ichiroVoice) {
+      return ichiroVoice;
+    }
+  }
 
   const priorityPatterns = [
     /Google.*日本語/i,
@@ -139,7 +147,7 @@ export function useLecturePlayer({
           clearTimeout(voiceRetryTimerRef.current);
           voiceRetryTimerRef.current = null;
         }
-        bestVoiceRef.current = findBestJapaneseVoice(voices) || voices[0];
+        bestVoiceRef.current = findBestJapaneseVoice(voices, tone) || voices[0];
         return;
       }
 
@@ -168,7 +176,7 @@ export function useLecturePlayer({
         synthesisRef.current.onvoiceschanged = null;
       }
     };
-  }, []);
+  }, [tone]);
 
   // 講義を順番再生する関数（for...ofで必ずawait）
   const playLecture = useCallback(async (startIndex: number = 0) => {
@@ -223,6 +231,16 @@ export function useLecturePlayer({
       const speakerType: CharacterTone | 'student' = item.speaker === 'teacher' ? tone : 'student';
       const settings = VOICE_SETTINGS[speakerType];
 
+      // kyotoトーンの場合は"Ichiro"ボイスを優先的に使用
+      let selectedVoice = bestVoiceRef.current;
+      if (speakerType === 'kyoto' && synthesisRef.current) {
+        const voices = synthesisRef.current.getVoices();
+        const ichiroVoice = voices.find(v => /Ichiro/i.test(v.name) && v.lang.startsWith('ja'));
+        if (ichiroVoice) {
+          selectedVoice = ichiroVoice;
+        }
+      }
+
       // speakAsyncで順番再生
       try {
         console.log('[useLecturePlayer] Calling speakAsync for item:', item.id, 'text:', speechText.substring(0, 50));
@@ -230,7 +248,7 @@ export function useLecturePlayer({
           rate: settings.rate * playbackRateRef.current,
           pitch: settings.pitch,
           lang: 'ja-JP',
-          voice: bestVoiceRef.current,
+          voice: selectedVoice,
         });
         console.log('[useLecturePlayer] Speech completed for item:', item.id);
         onItemComplete?.(item.id);

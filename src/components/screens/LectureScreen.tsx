@@ -227,8 +227,8 @@ export const LectureScreen = ({ onBack, initialHistory }: LectureScreenProps) =>
                 className="w-full p-3 rounded-lg border border-gray-300 bg-white text-gray-800 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               >
                 <option value="normal">標準</option>
-                <option value="lazy">気だるげ</option>
-                <option value="kyoto">京都弁</option>
+                <option value="yuruhachi">ゆる八先生</option>
+                <option value="kyoto">きょう丸先生</option>
                 <option value="ojousama">お嬢様</option>
                 <option value="gal">ギャル</option>
                 <option value="sage">賢者</option>
