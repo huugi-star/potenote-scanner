@@ -16,7 +16,9 @@ import {
   CheckCircle,
   Star,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  Timer,
+  Zap
 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
@@ -39,6 +41,8 @@ interface ResultScreenProps {
   isFreeQuest?: boolean;
   ocrText?: string;
   structuredOCR?: StructuredOCR;
+  mode?: 'speed_rush' | 'potato_pupil'; // クイズモード
+  speedRushTotalTime?: number; // speed rushモードでの正答の合計時間（秒）
 }
 
 // ===== Constants =====
@@ -56,6 +60,8 @@ export const ResultScreen = ({
   isFreeQuest = false,
   ocrText,
   structuredOCR,
+  mode,
+  speedRushTotalTime,
 }: ResultScreenProps) => {
   // State
   const [showAdsModal, setShowAdsModal] = useState(false);
@@ -72,12 +78,22 @@ export const ResultScreen = ({
   const applyQuizResult = useGameStore(state => state.applyQuizResult);
   const addFlag = useGameStore(state => state.addFlag);
   const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
+  const updateSpeedRushBestTime = useGameStore(state => state.updateSpeedRushBestTime);
+  const getSpeedRushBestTime = useGameStore(state => state.getSpeedRushBestTime);
 
   // Toast
   const { addToast } = useToast();
 
   const isPerfect = correctCount === totalQuestions;
   const scorePercentage = (correctCount / totalQuestions) * 100;
+  
+  // Speed Rushベストタイムを取得（表示用）
+  const bestTime = useMemo(() => {
+    if (mode === 'speed_rush' && result) {
+      return getSpeedRushBestTime(result.quizId);
+    }
+    return undefined;
+  }, [mode, result, getSpeedRushBestTime]);
 
   // アフィリエイト表示判定（3回に1回）
   const shouldShowAffiliate = useMemo(() => {
@@ -109,6 +125,11 @@ export const ResultScreen = ({
     }
     
     setResult(quizResult);
+    
+    // Speed Rushモードで正答の合計時間がある場合、ベストタイムを更新
+    if (mode === 'speed_rush' && speedRushTotalTime !== undefined) {
+      updateSpeedRushBestTime(quizResult.quizId, speedRushTotalTime);
+    }
     
     if (isFreeQuest) {
       // フリークエスト: コインと距離のみ付与
@@ -143,7 +164,7 @@ export const ResultScreen = ({
     }
     
     hasAppliedResult.current = true;
-  }, []); // 空の依存配列で初回のみ実行
+  }, [mode, speedRushTotalTime, updateSpeedRushBestTime, isFreeQuest, correctCount, totalQuestions, adWatched, calculateResult, applyQuizResult, addFlag, saveQuizHistory, quiz, ocrText, structuredOCR, totalDistance]); // 依存配列を更新
 
   // 広告視聴で2倍にする場合の追加コイン
   const handleAdRewardClaimed = () => {
@@ -311,6 +332,56 @@ export const ResultScreen = ({
               +{result.earnedDistance.toFixed(1)} km
             </span>
           </div>
+
+          {/* Speed Rushタイム（speed rushモードの場合のみ表示） */}
+          {mode === 'speed_rush' && speedRushTotalTime !== undefined && (
+            <>
+              <div className="flex items-center justify-between py-3 border-b border-gray-700">
+                <div className="flex items-center gap-3">
+                  <Zap className="w-6 h-6 text-cyan-400" />
+                  <span className="text-gray-300">正答の合計時間</span>
+                </div>
+                <span className="text-xl font-bold text-cyan-400">
+                  {speedRushTotalTime.toFixed(2)} 秒
+                </span>
+              </div>
+              {(() => {
+                // ベストタイムが存在し、今回のタイムがそれより速い場合、または今回がベストタイムと等しい場合
+                const isNewRecord = bestTime === undefined || speedRushTotalTime < bestTime;
+                const isBestTime = bestTime !== undefined && speedRushTotalTime === bestTime;
+                const previousBest = bestTime !== undefined && speedRushTotalTime !== bestTime ? bestTime : undefined;
+                
+                return (
+                  <div className="mt-3 space-y-2 text-sm">
+                    {isNewRecord && speedRushTotalTime < (bestTime || Infinity) && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/20 rounded-lg border border-yellow-500/30">
+                        <Crown className="w-4 h-4 text-yellow-400" />
+                        <span className="text-yellow-400 font-bold">新記録！</span>
+                      </div>
+                    )}
+                    {previousBest !== undefined && (
+                      <div className="flex items-center justify-between text-gray-400">
+                        <span className="flex items-center gap-2">
+                          <Timer className="w-4 h-4" />
+                          前回のベストタイム
+                        </span>
+                        <span>{previousBest.toFixed(1)} 秒</span>
+                      </div>
+                    )}
+                    {isBestTime && (
+                      <div className="flex items-center justify-between text-gray-400">
+                        <span className="flex items-center gap-2">
+                          <Crown className="w-4 h-4 text-yellow-400" />
+                          ベストタイム
+                        </span>
+                        <span className="text-yellow-400 font-bold">{bestTime.toFixed(2)} 秒</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          )}
 
           {/* ボーナス詳細 */}
           <div className="mt-4 space-y-2 text-sm text-gray-400">

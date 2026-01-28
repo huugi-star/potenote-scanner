@@ -64,6 +64,7 @@ interface QuizSession {
   imageUrl: string;
   mode: QuizMode;
   correctCount: number;
+  speedRushTotalTime?: number; // speed rushモードでの正答の合計時間（秒）
   isFreeQuest?: boolean;
   ocrText?: string;
   structuredOCR?: StructuredOCR;
@@ -671,9 +672,9 @@ const AppContent = () => {
   }, [quizSession]);
 
   // クイズ完了
-  const handleQuizComplete = useCallback((correctCount: number) => {
+  const handleQuizComplete = useCallback((correctCount: number, _totalQuestions: number, speedRushTotalTime?: number) => {
     if (quizSession) {
-      setQuizSession({ ...quizSession, correctCount });
+      setQuizSession({ ...quizSession, correctCount, speedRushTotalTime });
       setPhase('result');
     }
   }, [quizSession]);
@@ -795,6 +796,8 @@ const AppContent = () => {
               isFreeQuest={quizSession.isFreeQuest}
               ocrText={quizSession.ocrText}
               structuredOCR={quizSession.structuredOCR}
+              mode={quizSession.mode}
+              speedRushTotalTime={quizSession.speedRushTotalTime}
             />
           </motion.div>
         )}

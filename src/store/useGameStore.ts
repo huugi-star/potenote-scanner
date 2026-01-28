@@ -79,6 +79,9 @@ interface GameState extends UserState {
   
   // スキャン時に保存したクイズの quizId（重複防止用）
   lastScanQuizId: string | null;
+  
+  // Speed Rushモードのベストタイム（クイズIDをキーとして保存）
+  speedRushBestTimes: Record<string, number>; // { quizId: bestTimeInSeconds }
 }
 
 interface GameActions {
@@ -125,6 +128,10 @@ interface GameActions {
   deleteQuizHistory: (historyId: string) => Promise<void>;
   updateQuizHistoryUsedIndices: (historyId: string, newIndices: number[]) => void;
   addQuestionsToHistory: (historyId: string, newQuestions: QuizHistory['quiz']['questions']) => void;
+  
+  // Speed Rushベストタイム管理
+  updateSpeedRushBestTime: (quizId: string, totalTime: number) => void;
+  getSpeedRushBestTime: (quizId: string) => number | undefined;
   
   pullGacha: (useTicket?: boolean) => GachaResult | { error: string };
   pullGachaTen: () => GachaResult[] | { error: string };
@@ -221,6 +228,8 @@ const initialState: GameState = {
   scanStructuredOCR: undefined,
   
   lastScanQuizId: null,
+  
+  speedRushBestTimes: {},
 };
 
 // ===== Store Implementation =====
@@ -1026,6 +1035,27 @@ export const useGameStore = create<GameStore>()(
           };
         });
         set({ quizHistory: updated });
+      },
+      
+      // Speed Rushベストタイム管理
+      updateSpeedRushBestTime: (quizId: string, totalTime: number) => {
+        const state = get();
+        const currentBest = state.speedRushBestTimes[quizId];
+        
+        // ベストタイムが未設定、または今回のタイムがより速い場合のみ更新
+        if (currentBest === undefined || totalTime < currentBest) {
+          set({
+            speedRushBestTimes: {
+              ...state.speedRushBestTimes,
+              [quizId]: totalTime,
+            },
+          });
+        }
+      },
+      
+      getSpeedRushBestTime: (quizId: string) => {
+        const state = get();
+        return state.speedRushBestTimes[quizId];
       },
       
       // ===== Gacha =====

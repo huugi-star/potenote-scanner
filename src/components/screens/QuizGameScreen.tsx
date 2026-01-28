@@ -21,7 +21,7 @@ export type QuizMode = 'speed_rush' | 'potato_pupil';
 interface QuizGameScreenProps {
   quiz: QuizRaw;
   mode: QuizMode;
-  onComplete: (correctCount: number, totalQuestions: number) => void;
+  onComplete: (correctCount: number, totalQuestions: number, speedRushTotalTime?: number) => void;
 }
 
 interface QuizState {
@@ -31,6 +31,8 @@ interface QuizState {
   showResult: boolean;
   timeLeft: number;
   answers: (number | null)[];
+  questionStartTime: number; // 現在の問題の開始時刻（speed rush用）
+  correctAnswerTimes: number[]; // 正解した問題の回答時間（秒）の配列（speed rush用）
 }
 
 // ===== Constants =====
@@ -444,11 +446,23 @@ export const QuizGameScreen = ({
     showResult: false,
     timeLeft: TIME_LIMIT,
     answers: [],
+    questionStartTime: Date.now(),
+    correctAnswerTimes: [],
   });
 
   const currentQuestion = quiz.questions[state.currentIndex];
   const isCorrect = state.selectedAnswer === currentQuestion?.a;
   const isLastQuestion = state.currentIndex === quiz.questions.length - 1;
+
+  // 問題開始時刻を記録（Speed Rushモードのみ）
+  useEffect(() => {
+    if (mode === 'speed_rush') {
+      setState(prev => ({
+        ...prev,
+        questionStartTime: Date.now(),
+      }));
+    }
+  }, [mode, state.currentIndex]);
 
   // タイマー（Speed Rushモードのみ）
   useEffect(() => {
@@ -482,14 +496,25 @@ export const QuizGameScreen = ({
       vibrateError();
     }
     
+    // Speed Rushモードで正解した場合、実際の経過時間をミリ秒単位で正確に記録
+    let answerTime: number | undefined = undefined;
+    if (mode === 'speed_rush' && correct) {
+      const elapsedMs = Date.now() - state.questionStartTime;
+      // ミリ秒を秒に変換（小数点以下も正確に保持）
+      answerTime = elapsedMs / 1000;
+    }
+    
     setState(prev => ({
       ...prev,
       selectedAnswer: answerIndex,
       showResult: true,
       correctCount: correct ? prev.correctCount + 1 : prev.correctCount,
       answers: [...prev.answers, answerIndex],
+      correctAnswerTimes: answerTime !== undefined 
+        ? [...prev.correctAnswerTimes, answerTime]
+        : prev.correctAnswerTimes,
     }));
-  }, [state.showResult, currentQuestion]);
+  }, [state.showResult, currentQuestion, mode, state.questionStartTime]);
 
   // 次の問題へ / 完了（ボタンクリック時）
   const handleNext = useCallback(() => {
@@ -503,7 +528,12 @@ export const QuizGameScreen = ({
         confettiPerfect();
       }
       
-      onComplete(finalCorrectCount, quiz.questions.length);
+      // Speed Rushモードの場合、正解した問題の合計時間を計算
+      const speedRushTotalTime = mode === 'speed_rush' && state.correctAnswerTimes.length > 0
+        ? state.correctAnswerTimes.reduce((sum, time) => sum + time, 0)
+        : undefined;
+      
+      onComplete(finalCorrectCount, quiz.questions.length, speedRushTotalTime);
     } else {
       setState(prev => ({
         ...prev,
@@ -511,9 +541,10 @@ export const QuizGameScreen = ({
         selectedAnswer: null,
         showResult: false,
         timeLeft: TIME_LIMIT,
+        questionStartTime: Date.now(), // 次の問題の開始時刻を記録
       }));
     }
-  }, [isLastQuestion, state.correctCount, quiz.questions.length, onComplete]);
+  }, [isLastQuestion, state.correctCount, state.correctAnswerTimes, quiz.questions.length, mode, onComplete]);
 
   if (!currentQuestion) return null;
 

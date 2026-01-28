@@ -84,7 +84,7 @@ export const LIMITS = {
   QUIZ: {
     QUESTIONS_PER_QUIZ: 5,   // 1クイズあたりの問題数
     OPTIONS_PER_QUESTION: 4, // 1問あたりの選択肢数
-    TIME_LIMIT_SECONDS: 30,  // 1問あたりの制限時間
+    TIME_LIMIT_SECONDS: 15,  // 1問あたりの制限時間（Speed Rushモード）
   },
   
   // インベントリ
