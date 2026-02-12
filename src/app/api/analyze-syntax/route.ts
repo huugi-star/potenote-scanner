@@ -71,10 +71,7 @@ export async function POST(req: Request) {
 
     // ここは「サーバーエラー」として500に統一（権限不足もここに入る）
     return NextResponse.json(
-      {
-        error: "Failed to analyze syntax",
-        details: e?.message ?? "unknown error",
-      },
+      { error: "Failed to analyze syntax" },
       { status: 500 }
     );
   }

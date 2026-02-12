@@ -798,7 +798,7 @@ ${extractedText}
       }
       
       return NextResponse.json(
-        { error: `Failed to parse or validate JSON: ${errorMessage}. Response preview: ${responseText.substring(0, 200)}...` },
+        { error: "講義データの生成に失敗しました。もう一度お試しください。" },
         { status: 500 }
       );
     }
@@ -888,7 +888,7 @@ ${JSON.stringify(speechTextItems, null, 2)}
   } catch (error: any) {
     console.error("[generate-lecture] Error:", error);
     return NextResponse.json(
-      { error: error.message || "Internal server error" },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

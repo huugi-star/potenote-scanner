@@ -557,7 +557,7 @@ ${verifiedFacts}
     }
 
     return NextResponse.json(
-      { error: "Failed to generate quiz", details: errorMessage },
+      { error: "Failed to generate quiz" },
       { status: 500 }
     );
   }

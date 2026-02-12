@@ -178,7 +178,7 @@ JSON形式で以下の構造で出力してください：
     }
 
     return NextResponse.json(
-      { error: "Internal Server Error", details: errorMessage },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }

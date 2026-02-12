@@ -246,7 +246,17 @@ export async function POST(req: Request) {
     }
 
     const { image, text } = await req.json();
-    let extractedText: string | undefined = text;
+    let extractedText: string | undefined = typeof text === "string" ? text : undefined;
+
+    // 入力サイズ制限（DoS防止）
+    const MAX_TEXT_LEN = 10000;
+    const MAX_IMAGE_BASE64 = 10 * 1024 * 1024; // 10MB
+    if (extractedText && extractedText.length > MAX_TEXT_LEN) {
+      return NextResponse.json({ error: "テキストが長すぎます。10,000文字以内にしてください。" }, { status: 400 });
+    }
+    if (image && typeof image === "string" && image.length > MAX_IMAGE_BASE64) {
+      return NextResponse.json({ error: "画像が大きすぎます。" }, { status: 400 });
+    }
 
     // OCR処理
     if (!extractedText && image) {
@@ -353,7 +363,7 @@ export async function POST(req: Request) {
     } catch (err2) {
       console.error("JSON Parsing Failed (incl. repair). Sample:", out.slice(0, 200) + "...");
       console.error("Error details:", err2);
-      return NextResponse.json({ error: "AIの回答を解析できませんでした。もう一度お試しください。", details: String(err2) }, { status: 500 });
+      return NextResponse.json({ error: "AIの回答を解析できませんでした。もう一度お試しください。" }, { status: 500 });
     }
 
     // LLMが配列で返すケースに対応（先頭要素を採用）
@@ -549,7 +559,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { error: "Internal Server Error", details: errorMessage },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }
