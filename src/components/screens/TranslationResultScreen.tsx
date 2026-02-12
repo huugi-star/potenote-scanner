@@ -229,7 +229,7 @@ export const TranslationResultScreen = ({
         {isMultilangMode ? (
           <MultilangTranslationView result={result} />
         ) : result.sentences && result.sentences.length > 0 ? (
-          <div className="space-y-10">
+          <div className="space-y-6 md:space-y-10">
             {result.sentences.map((sentence, index) => (
               <VisualSentenceCard 
                 key={index} 
@@ -363,7 +363,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
       className="bg-[#24283b] rounded-2xl border border-gray-700 overflow-hidden shadow-xl"
     >
       {/* 1. ビジュアル解析エリア（メイン） */}
-      <div className="p-6 bg-[#1f2335] border-b border-gray-700">
+      <div className="p-4 md:p-6 bg-[#1f2335] border-b border-gray-700">
         <div className="mb-4 flex items-center gap-2">
           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-700 text-gray-300">
             Sentence {index + 1}
@@ -382,7 +382,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
         {/* ここに3段構成のチャンク表示を配置 */}
         {sentence.main_structure ? (
           // main_structureデータがある場合（新しい構造）
-          <div className="flex flex-wrap justify-start items-baseline gap-3">
+          <div className="flex flex-wrap justify-start items-baseline gap-2 md:gap-6">
             {sentence.main_structure.map((chunk: any, i: number) => (
               <ItoChunkCard 
                 key={i} 
@@ -393,7 +393,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
           </div>
         ) : sentence.chunks ? (
           // chunksデータがある場合（後方互換性）
-          <div className="flex flex-wrap justify-start items-baseline gap-3">
+          <div className="flex flex-wrap justify-start items-baseline gap-2 md:gap-6">
             {sentence.chunks.map((chunk: any, i: number) => (
               <ItoChunkCard 
                 key={i} 
@@ -412,7 +412,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
       <div className="border-t border-gray-700 bg-[#1e1e2e]">
         <button
           onClick={() => { vibrateLight(); setTranslationOpen(o => !o); }}
-          className="w-full flex items-center justify-between px-6 py-4 bg-green-900/10 hover:bg-green-900/20 transition-colors"
+          className="w-full flex items-center justify-between px-4 md:px-6 py-3 md:py-4 bg-green-900/10 hover:bg-green-900/20 transition-colors"
         >
           <div className="flex items-center gap-2 text-green-200 font-bold text-sm">
             <span className="text-lg">📝</span>
@@ -430,8 +430,8 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="px-6 py-4 bg-[#24283b]">
-                <p className="text-lg text-gray-100 leading-relaxed font-medium">
+              <div className="px-4 md:px-6 py-3 md:py-4 bg-[#24283b]">
+                <p className="text-base md:text-lg text-gray-100 leading-relaxed font-medium">
                   {sentence.full_translation || sentence.translation}
                 </p>
               </div>
@@ -444,7 +444,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
       <div className="border-t border-gray-700 bg-[#1e1e2e]">
         <button
           onClick={() => { vibrateLight(); setVocabOpen(o => !o); }}
-          className="w-full flex items-center justify-between px-6 py-4 bg-yellow-900/10 hover:bg-yellow-900/20 transition-colors"
+          className="w-full flex items-center justify-between px-4 md:px-6 py-3 md:py-4 bg-yellow-900/10 hover:bg-yellow-900/20 transition-colors"
         >
           <div className="flex items-center gap-2 text-yellow-200 font-bold text-sm">
             <span className="text-lg">📚</span>
@@ -462,7 +462,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="px-6 py-4 bg-[#24283b]">
+              <div className="px-4 md:px-6 py-3 md:py-4 bg-[#24283b]">
                 {sentence.vocab_list && sentence.vocab_list.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {sentence.vocab_list.map((vocab: any, i: number) => (
@@ -486,7 +486,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
         <div className="border-t border-gray-700 bg-[#1e1e2e]">
           <button
             onClick={() => { vibrateLight(); setSubOpen(o => !o); }}
-            className="w-full flex items-center justify-between px-6 py-4 bg-blue-900/10 hover:bg-blue-900/20 transition-colors"
+            className="w-full flex items-center justify-between px-4 md:px-6 py-3 md:py-4 bg-blue-900/10 hover:bg-blue-900/20 transition-colors"
           >
             <div className="flex items-center gap-2 text-blue-200 font-bold text-sm">
               <span className="text-lg">🔍</span>
@@ -504,9 +504,9 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <div className="p-6 space-y-6">
+                <div className="p-4 md:p-6 space-y-4 md:space-y-6">
                   {sentence.sub_structures.map((sub: any, subIndex: number) => (
-                    <div key={subIndex} className="bg-[#24283b] rounded-lg p-4 border border-gray-700">
+                    <div key={subIndex} className="bg-[#24283b] rounded-lg p-3 md:p-4 border border-gray-700">
                       <div className="mb-3">
                         <div className="text-xs text-gray-400 mb-1">解析対象:</div>
                         <div className="text-sm font-mono text-gray-200">{sub.target_text}</div>
@@ -516,7 +516,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
                           {sub.explanation}
                         </div>
                       )}
-                      <div className="flex flex-wrap justify-start items-baseline gap-3 mt-4">
+                      <div className="flex flex-wrap justify-start items-baseline gap-2 md:gap-6 mt-4">
                         {sub.chunks && sub.chunks.map((chunk: any, chunkIndex: number) => (
                           <ItoChunkCard key={chunkIndex} chunk={chunk} isSub={true} />
                         ))}
@@ -695,7 +695,7 @@ const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boole
       className={`flex flex-col items-start shrink-0 w-fit max-w-full group text-left ${hasTranslation ? "cursor-pointer touch-manipulation" : "cursor-default"}`}
     >
       {/* 1段目：英文 (ブラケット付き) - 短いチャンクは改行禁止、長いチャンクのみ改行許可 */}
-      <div className={`text-xl px-2 py-1 border-b-2 ${borderColor} ${textColor} text-left ${isLongChunk ? "whitespace-normal break-words min-w-0" : "whitespace-nowrap"}`}>
+      <div className={`text-base md:text-xl px-2 py-1 border-b-2 ${borderColor} ${textColor} text-left ${isLongChunk ? "whitespace-normal break-words min-w-0" : "whitespace-nowrap"}`}>
         <span className="opacity-60 mr-1">{leftB}</span>
         {chunk.text}
         <span className="opacity-60 ml-1">{rightB}</span>
@@ -703,17 +703,17 @@ const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boole
 
       {/* 2段目：直訳 (タップで表示) */}
       {showTranslation && (
-        <div className="mt-2 text-sm text-gray-300 font-medium max-w-[220px] text-left whitespace-normal break-words">
+        <div className="mt-2 text-xs md:text-sm text-gray-300 font-medium max-w-[220px] text-left whitespace-normal break-words">
           {cleanTranslation}
         </div>
       )}
       {hasTranslation && !showTranslation && (
-        <div className="mt-2 text-xs text-gray-500 text-left">タップで直訳を表示</div>
+        <div className="mt-2 text-[10px] md:text-xs text-gray-500 text-left">タップで直訳を表示</div>
       )}
 
-      {/* 3段目：文法役割 (S/V/O...) - 中央配置 */}
-      <div className="mt-1 flex flex-col items-center min-h-[24px] self-center">
-        <div className={`text-xs font-bold ${roleColor} uppercase`}>
+      {/* 3段目：文法役割 (S/V/O...) - 中央配置、スマホでは小さくPCでは読みやすく */}
+      <div className="mt-1 flex flex-col items-center min-h-[20px] md:min-h-[24px] self-center">
+        <div className={`text-[10px] md:text-sm font-bold ${roleColor} uppercase`}>
           {chunk.role}
         </div>
       </div>
@@ -751,7 +751,7 @@ const VisualChunk = memo(({
     <div className="flex flex-col items-center shrink-0 w-fit max-w-full group">
       {/* 1段目: 英文カード - 短いチャンクは改行禁止、長いチャンクのみ改行許可 */}
       <div className={`
-        relative px-3 py-2 rounded-lg text-lg font-bold font-mono text-left shadow-md transition-transform group-hover:scale-105
+        relative px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-base md:text-lg font-bold font-mono text-left shadow-md transition-transform group-hover:scale-105
         ${isLongChunk ? "whitespace-normal break-words min-w-0" : "whitespace-nowrap"}
         ${isPunctuationOnly ? 'bg-transparent border-transparent' : `${colorClasses.bg} ${colorClasses.text} ${colorClasses.border}`} border-b-4
       `}>
@@ -760,7 +760,7 @@ const VisualChunk = memo(({
 
       {/* 2段目: 直訳（句読点の場合は非表示） */}
       {!isPunctuationOnly && (
-        <div className="mt-2 text-sm text-gray-300 font-medium text-left leading-tight px-1 whitespace-normal break-words">
+        <div className="mt-2 text-xs md:text-sm text-gray-300 font-medium text-left leading-tight px-1 whitespace-normal break-words">
           {translation || '...'}
         </div>
       )}
@@ -770,9 +770,9 @@ const VisualChunk = memo(({
         <div className="mt-1 flex flex-col items-center">
           {/* 線 */}
           <div className={`w-0.5 h-2 ${colorClasses.lineBg}`}></div>
-          {/* 丸ラベル */}
+          {/* 丸ラベル - スマホでは小さくPCでは読みやすく */}
           <div className={`
-            px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap
+            px-2 py-0.5 rounded-full text-[10px] md:text-sm font-bold uppercase tracking-wider whitespace-nowrap
             ${colorClasses.labelBg} ${colorClasses.labelText}
           `}>
             {label}
@@ -942,7 +942,7 @@ const NestedStructureParser = ({ text }: { text: string }) => {
   }
 
   return (
-    <div className="flex flex-wrap justify-start items-baseline gap-3">
+    <div className="flex flex-wrap justify-start items-baseline gap-2 md:gap-6">
       {chunks.map((chunk, i) => (
         <VisualChunk 
           key={i} 
