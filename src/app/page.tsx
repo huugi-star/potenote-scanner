@@ -243,7 +243,7 @@ const HomeScreen = ({
           whileTap={{ scale: 0.98 }}
         >
           <Scan className="w-7 h-7" />
-          スキャンして学ぶ（クイズ）
+          参考書をクイズにする
         </motion.button>
 
         {/* 音声講義ボタン */}
@@ -266,11 +266,11 @@ const HomeScreen = ({
             vibrateLight();
             onNavigate('translation_mode_select');
           }}
-          className="w-full mt-3 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600/80 to-emerald-500/80 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20"
-          whileHover={{ scale: 1.01 }}
+          className="w-full mt-3 py-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25"
+          whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >
-          <Languages className="w-4 h-4" />
+          <Languages className="w-7 h-7" />
           スキャンして英語学習・翻訳
         </motion.button>
 
