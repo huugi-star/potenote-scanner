@@ -294,6 +294,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "テキストが提供されていません" }, { status: 400 });
     }
 
+    // OCR由来のテキストも含め長さチェック（暴走防止）
+    if (extractedText.length > MAX_TEXT_LEN) {
+      return NextResponse.json({ error: "テキストが長すぎます。10,000文字以内にしてください。" }, { status: 400 });
+    }
+
     const cleaned = cleanOCRText(extractedText);
 
     // ===== Step 1: Cloud Natural Language APIで構文解析 =====

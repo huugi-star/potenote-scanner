@@ -36,6 +36,14 @@ export async function POST(req: Request) {
 
   const text = typeof body.text === "string" ? body.text.trim() : "";
 
+  const MAX_TEXT_LEN = 10000;
+  if (text.length > MAX_TEXT_LEN) {
+    return NextResponse.json(
+      { error: "Text exceeds 10,000 characters" },
+      { status: 400 }
+    );
+  }
+
   if (!text) {
     return NextResponse.json(
       { error: "Missing 'text' (string)" },
