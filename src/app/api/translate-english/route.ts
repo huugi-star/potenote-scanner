@@ -249,7 +249,7 @@ export async function POST(req: Request) {
     let extractedText: string | undefined = typeof text === "string" ? text : undefined;
 
     // 入力サイズ制限（DoS防止）
-    const MAX_TEXT_LEN = 10000;
+    const MAX_TEXT_LEN = 12000;
     const MAX_IMAGE_BASE64 = 10 * 1024 * 1024; // 10MB
     if (extractedText && extractedText.length > MAX_TEXT_LEN) {
       return NextResponse.json({ error: "テキストが長すぎます。10,000文字以内にしてください。" }, { status: 400 });

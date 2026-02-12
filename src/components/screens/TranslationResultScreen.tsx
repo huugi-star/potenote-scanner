@@ -382,7 +382,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
         {/* ここに3段構成のチャンク表示を配置 */}
         {sentence.main_structure ? (
           // main_structureデータがある場合（新しい構造）
-          <div className="flex flex-wrap items-start gap-x-2 gap-y-8">
+          <div className="flex flex-wrap justify-start items-baseline gap-3">
             {sentence.main_structure.map((chunk: any, i: number) => (
               <ItoChunkCard 
                 key={i} 
@@ -393,7 +393,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
           </div>
         ) : sentence.chunks ? (
           // chunksデータがある場合（後方互換性）
-          <div className="flex flex-wrap items-start gap-x-2 gap-y-8">
+          <div className="flex flex-wrap justify-start items-baseline gap-3">
             {sentence.chunks.map((chunk: any, i: number) => (
               <ItoChunkCard 
                 key={i} 
@@ -516,7 +516,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
                           {sub.explanation}
                         </div>
                       )}
-                      <div className="flex flex-wrap items-start gap-x-2 gap-y-6 mt-4">
+                      <div className="flex flex-wrap justify-start items-baseline gap-3 mt-4">
                         {sub.chunks && sub.chunks.map((chunk: any, chunkIndex: number) => (
                           <ItoChunkCard key={chunkIndex} chunk={chunk} isSub={true} />
                         ))}
@@ -685,15 +685,17 @@ const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boole
 
   const cleanTranslation = (chunk.translation || "").replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu, "");
   const hasTranslation = cleanTranslation.length > 0;
+  // 長い節のみ改行許可（短いS/V/Oは絶対に改行しない）
+  const isLongChunk = (chunk.text || "").length > 40;
 
   return (
     <button
       type="button"
       onClick={() => hasTranslation && (vibrateLight(), setShowTranslation((v) => !v))}
-      className={`flex flex-col items-center group max-w-[260px] text-left ${hasTranslation ? "cursor-pointer touch-manipulation" : "cursor-default"}`}
+      className={`flex flex-col items-start shrink-0 w-fit max-w-full group text-left ${hasTranslation ? "cursor-pointer touch-manipulation" : "cursor-default"}`}
     >
-      {/* 1段目：英文 (ブラケット付き) */}
-      <div className={`text-xl px-2 py-1 border-b-2 ${borderColor} ${textColor} whitespace-pre-wrap break-words text-center`}>
+      {/* 1段目：英文 (ブラケット付き) - 短いチャンクは改行禁止、長いチャンクのみ改行許可 */}
+      <div className={`text-xl px-2 py-1 border-b-2 ${borderColor} ${textColor} text-left ${isLongChunk ? "whitespace-normal break-words min-w-0" : "whitespace-nowrap"}`}>
         <span className="opacity-60 mr-1">{leftB}</span>
         {chunk.text}
         <span className="opacity-60 ml-1">{rightB}</span>
@@ -701,16 +703,16 @@ const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boole
 
       {/* 2段目：直訳 (タップで表示) */}
       {showTranslation && (
-        <div className="mt-2 text-sm text-gray-300 font-medium max-w-[220px] text-center whitespace-pre-wrap break-words">
+        <div className="mt-2 text-sm text-gray-300 font-medium max-w-[220px] text-left whitespace-normal break-words">
           {cleanTranslation}
         </div>
       )}
       {hasTranslation && !showTranslation && (
-        <div className="mt-2 text-xs text-gray-500">タップで直訳を表示</div>
+        <div className="mt-2 text-xs text-gray-500 text-left">タップで直訳を表示</div>
       )}
 
-      {/* 3段目：文法役割 (S/V/O...) */}
-      <div className="mt-1 flex flex-col items-center min-h-[24px]">
+      {/* 3段目：文法役割 (S/V/O...) - 中央配置 */}
+      <div className="mt-1 flex flex-col items-center min-h-[24px] self-center">
         <div className={`text-xs font-bold ${roleColor} uppercase`}>
           {chunk.role}
         </div>
@@ -736,6 +738,8 @@ const VisualChunk = memo(({
 }) => {
   // 句読点のみの場合は解説を表示しない
   const isPunctuationOnly = /^[.,;:!?'"()\[\]{}<>\-—–\s]+$/.test(text.trim());
+  // 長い節のみ改行許可（短いS/V/Oは絶対に改行しない）
+  const isLongChunk = text.length > 40;
   
   // 色とラベルの決定
   const { colorClasses, label, description } = getChunkStyle(role, symbol, isNested);
@@ -744,10 +748,11 @@ const VisualChunk = memo(({
   const displayText = formatTextWithSymbol(text, symbol, role);
 
   return (
-    <div className="flex flex-col items-center group max-w-[280px]">
-      {/* 1段目: 英文カード */}
+    <div className="flex flex-col items-center shrink-0 w-fit max-w-full group">
+      {/* 1段目: 英文カード - 短いチャンクは改行禁止、長いチャンクのみ改行許可 */}
       <div className={`
-        relative px-3 py-2 rounded-lg text-lg font-bold font-mono text-center shadow-md transition-transform group-hover:scale-105
+        relative px-3 py-2 rounded-lg text-lg font-bold font-mono text-left shadow-md transition-transform group-hover:scale-105
+        ${isLongChunk ? "whitespace-normal break-words min-w-0" : "whitespace-nowrap"}
         ${isPunctuationOnly ? 'bg-transparent border-transparent' : `${colorClasses.bg} ${colorClasses.text} ${colorClasses.border}`} border-b-4
       `}>
         {displayText}
@@ -755,12 +760,12 @@ const VisualChunk = memo(({
 
       {/* 2段目: 直訳（句読点の場合は非表示） */}
       {!isPunctuationOnly && (
-        <div className="mt-2 text-sm text-gray-300 font-medium text-center leading-tight px-1">
+        <div className="mt-2 text-sm text-gray-300 font-medium text-left leading-tight px-1 whitespace-normal break-words">
           {translation || '...'}
         </div>
       )}
 
-      {/* 3段目: 役割ラベル（句読点の場合は非表示） */}
+      {/* 3段目: 役割ラベル（句読点の場合は非表示） - 中央配置 */}
       {!isPunctuationOnly && role && (
         <div className="mt-1 flex flex-col items-center">
           {/* 線 */}
@@ -937,7 +942,7 @@ const NestedStructureParser = ({ text }: { text: string }) => {
   }
 
   return (
-    <div className="flex flex-wrap items-start gap-x-2 gap-y-6">
+    <div className="flex flex-wrap justify-start items-baseline gap-3">
       {chunks.map((chunk, i) => (
         <VisualChunk 
           key={i} 
