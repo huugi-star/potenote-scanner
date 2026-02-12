@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { jsonrepair } from "jsonrepair";
 import { z } from "zod";
 
 const GOOGLE_VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
@@ -34,6 +35,12 @@ const SubStructureSchema = z.object({
   chunks: z.array(ChunkSchema).optional(),
 });
 
+const StructureExplanationSchema = z.object({
+  target_text: z.string(),
+  explanation: z.string(),
+  difficulty_level: z.enum(["easy", "medium", "hard"]).optional(),
+});
+
 const SentenceSchema = z.object({
   sentence_id: z.number(),
   original_text: z.string(),
@@ -44,12 +51,122 @@ const SentenceSchema = z.object({
   vocab_list: z.array(VocabSchema).optional(),
   details: z.array(z.string()),
   sub_structures: z.array(SubStructureSchema).optional(),
+  structure_explanations: z.array(StructureExplanationSchema).optional(),
+  advanced_grammar_explanation: z.string().optional(),
 });
 
 const ResponseSchema = z.object({
   clean_text: z.string(),
   sentences: z.array(SentenceSchema),
+  splitNotice: z.string().optional(),
 });
+
+// ===== Types for Syntax Analysis =====
+type SyntaxToken = {
+  text: string;
+  beginOffset: number;
+  pos: { tag: string | null };
+  dep: {
+    headTokenIndex: number | null;
+    label: string | null;
+  };
+  lemma: string | null;
+};
+
+type SyntaxAnalysisResult = {
+  language: string | null;
+  tokens: SyntaxToken[];
+};
+
+/** NL tokens から 1KB 未満の構造サマリを生成。Gemini にはこれのみ渡す（tokens は絶対に渡さない） */
+function buildStructureSummary(tokens: SyntaxToken[]): string {
+  if (!tokens || tokens.length === 0) return "{}";
+  const idxToText = (i: number) => (tokens[i]?.text ?? "").trim() || `t${i}`;
+  const label = (t: SyntaxToken) => (t.dep?.label ?? "").toUpperCase();
+  const headIdx = (t: SyntaxToken) => t.dep?.headTokenIndex ?? -1;
+
+  const root: string[] = [];
+  const subjects: string[] = [];
+  const objects: string[] = [];
+  const negation: string[] = [];
+  const modifiers: string[] = [];
+
+  tokens.forEach((t) => {
+    const lab = label(t);
+    const txt = (t.text ?? "").trim();
+    if (!txt) return;
+    if (lab === "ROOT") root.push(txt);
+    if (lab === "NSUBJ" || lab === "NSUBJPASS") subjects.push(txt);
+    if (lab === "OBJ" || lab === "DOBJ" || lab === "IOBJ") objects.push(txt);
+    if (lab === "NEG") negation.push(txt);
+    if (lab === "AMOD" || lab === "ADVMOD") {
+      const h = headIdx(t);
+      const headTxt = h >= 0 ? idxToText(h) : "";
+      if (headTxt) modifiers.push(`${txt}->${headTxt}`);
+    }
+  });
+
+  const out: Record<string, unknown> = {
+    root: root.length ? root[0] : null,
+    subjects: subjects.length ? subjects : undefined,
+    objects: objects.length ? objects : undefined,
+    neg: negation.length ? negation : undefined,
+    mods: modifiers.length ? modifiers.slice(0, 12) : undefined, // 爆発防止で上限
+  };
+  // 空のキーを削除して短く
+  Object.keys(out).forEach((k) => {
+    if (out[k] === undefined || (Array.isArray(out[k]) && (out[k] as unknown[]).length === 0)) delete out[k];
+  });
+  let s = JSON.stringify(out);
+  if (s.length > 1000) s = JSON.stringify({ root: out.root, subjects: (out.subjects as string[])?.slice(0, 3), objects: (out.objects as string[])?.slice(0, 2), mods: (out.mods as string[])?.slice(0, 5) });
+  return s;
+}
+
+/** 構文解析結果がある場合: 説明のみ生成用プロンプト。構造サマリのみ渡す（tokens は絶対に入れない） */
+function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
+  return (
+    "あなたは「ビジュアル英文解釈（伊藤和夫）」のエキスパートです。\n" +
+    "**重要**: 以下の構造サマリ（root/subjects/objects/mods）を参考にしつつ、説明のみを生成してください。\n\n" +
+    "【構造サマリ（参考）】\n" +
+    structureSummary +
+    "\n\n【あなたの役割】\n" +
+    "1. **入力された英文の全文を必ず解析すること。途中で切れず、すべての文を sentences に含めること。**\n" +
+    "2. 上記の構造サマリを参考に S/V/O/M の構成を把握する\n" +
+    "3. 英文をチャンクに分け、各チャンクに日本語訳と役割を割り当てる\n" +
+    "4. 構造（root/subjects/objects）はサマリを尊重する\n" +
+    "5. 和訳と解説のみを生成する\n" +
+    "6. **details は必ず1つ以上出力すること**（文の構造の概要説明。例: \"副詞節が主節のVを修飾している\"）\n" +
+    "7. **名詞節・形容詞節・副詞節などの複雑な節がある場合、sub_structures に必ず記述すること**\n" +
+    "8. **vocab_list には重要単語・イディオム・熟語を必ず含めること**（語彙学習に役立つものを3〜8個選び、{ \"word\": \"英語\", \"meaning\": \"日本語の意味\" } 形式で出力）\n\n" +
+    "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN\" }] }\n\n" +
+    "【出力JSONフォーマット】\n" +
+    '{"clean_text":"<CLEANED>","sentences":[{"sentence_id":1,"original_text":"<CLEANED>","translation":"和訳","main_structure":[{"text":"","translation":"","type":"noun|verb|modifier|connector","role":"S|V|O|C|M|CONN"}],"chunks":[],"vocab_list":[],"details":["構造の概要説明をここに"],"sub_structures":[{"target_text":"節の文字列","explanation":"解説","chunks":[{"text":"","translation":"","type":"noun","role":"S"}]}]}]}\n\n' +
+    "【実際の解析対象】\n" +
+    cleaned
+  ).replace(/<CLEANED>/g, cleaned);
+}
+
+/** フォールバック: 従来のGemini単独解析用プロンプト */
+function buildFallbackPrompt(cleaned: string): string {
+  return (
+    "あなたは「ビジュアル英文解釈（伊藤和夫）」のエキスパートです。\n" +
+    "入力された英文を構造解析し、以下の厳格なJSONフォーマットのみを出力してください。\n" +
+    "余計な会話やMarkdownの装飾は不要です。\n\n" +
+    "【解析ルール】\n" +
+    "1. **入力された英文の全文を必ず解析すること。途中で切れず、すべての文を sentences に含めること。**\n" +
+    "2. S / V / O / C / M / CONN の役割を割り当てる。\n" +
+    "3. M（修飾語句）は前置詞句や副詞節などの大きな塊でまとめ、文頭のイントロフレーズも必ず残す。\n" +
+    "4. **名詞節・形容詞節・副詞節がある場合、sub_structures に必ず内部構造を記述する。** target_text, explanation, chunks を含めること。\n" +
+    "5. S/O/C → noun、M → modifier、V → verb、CONN → connector のtypeを設定すること。\n" +
+    "6. **details は必ず1つ以上出力すること**（文の構造の概要説明）。\n" +
+    "7. **vocab_list には重要単語・イディオム・熟語を必ず含めること**（語彙学習に役立つものを3〜8個選び、{ \"word\": \"英語\", \"meaning\": \"日本語の意味\" } 形式で出力）\n\n" +
+    "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN\" }] }\n\n" +
+    "【出力JSONの例】\n" +
+    '{"clean_text":"Because he was sick, he could not go to school.","sentences":[{"sentence_id":1,"original_text":"Because he was sick, he could not go to school.","translation":"彼は病気だったので、学校へ行けなかった。","main_structure":[{"text":"Because he was sick,","translation":"彼は病気だったので","type":"connector","role":"M"},{"text":"he","translation":"彼は","type":"noun","role":"S"},{"text":"could not go","translation":"行けなかった","type":"verb","role":"V"},{"text":"to school.","translation":"学校へ","type":"modifier","role":"M"}],"chunks":[],"vocab_list":[{"word":"sick","meaning":"病気の"},{"word":"could not go","meaning":"行けなかった（イディオム）"},{"word":"because","meaning":"～なので、～だから"}],"details":["副詞節(Because...)が主節のVを修飾している構造。"],"sub_structures":[{"target_text":"Because he was sick","explanation":"Because が導く副詞節。主節の述語 could not go を修飾し、理由を表す。","chunks":[{"text":"Because","translation":"なぜなら","type":"connector","role":"CONN"},{"text":"he","translation":"彼は","type":"noun","role":"S"},{"text":"was sick","translation":"病気だった","type":"verb","role":"V"}]}]}]}\n\n' +
+    "【実際の解析対象】\n" +
+    cleaned
+  );
+}
 
 // ===== Helpers =====
 const cleanOCRText = (text: string): string => {
@@ -74,7 +191,7 @@ const cleanOCRText = (text: string): string => {
 // ★修正: 強力なJSONクリーニング関数
 const cleanJsonOutput = (text: string): string => {
   if (!text) return "";
-  
+
   // 1. Markdownの ```json ... ``` を削除
   let cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
 
@@ -86,10 +203,39 @@ const cleanJsonOutput = (text: string): string => {
   }
 
   // 3. よくある構文エラーの修正
-  // 末尾のカンマ削除:  , }  ->  }   や   , ]  ->  ]
-  cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
-  
+  cleaned = cleaned.replace(/,\s*([}\]])/g, "$1");
   return cleaned;
+};
+
+/** 切り詰め・不正JSONを修復してパース。jsonrepair で復元を試みる */
+const safeParseWithRepair = (text: string): any => {
+  const strip = (t: string) => t.replace(/^\uFEFF/, "").trim();
+  const base = strip(text);
+  const cleaned = cleanJsonOutput(base);
+
+  const tryParse = (s: string): any => {
+    try {
+      return JSON.parse(s);
+    } catch {
+      throw new Error("Parse failed");
+    }
+  };
+
+  try {
+    return tryParse(cleaned);
+  } catch {
+    try {
+      return tryParse(base);
+    } catch {
+      try {
+        const repaired = jsonrepair(cleaned);
+        return JSON.parse(repaired);
+      } catch (err) {
+        console.error("JSON repair failed:", err);
+        throw err;
+      }
+    }
+  }
 };
 
 // ===== Main =====
@@ -140,98 +286,57 @@ export async function POST(req: Request) {
 
     const cleaned = cleanOCRText(extractedText);
 
-    // Geminiモデル設定（Gemini 2.0 Flash / Lite / 1.5 Flash-8B などお好きなものに）
+    // ===== Step 1: Cloud Natural Language APIで構文解析 =====
+    let syntaxStructure: string | null = null;
+    let useSyntaxAnalysis = false;
+    try {
+      const baseUrl = process.env.VERCEL_URL
+        ? "https://" + process.env.VERCEL_URL
+        : (process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000");
+      const syntaxRes = await fetch(baseUrl + "/api/analyze-syntax", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: cleaned }),
+      });
+      if (syntaxRes.ok) {
+        const syntaxResult: SyntaxAnalysisResult = await syntaxRes.json();
+        if (syntaxResult.tokens && syntaxResult.tokens.length > 0) {
+          syntaxStructure = buildStructureSummary(syntaxResult.tokens);
+          useSyntaxAnalysis = true;
+          console.log("[translate-english] Using NL structure summary (chars:", syntaxStructure.length, ")");
+        }
+      }
+    } catch (e: unknown) {
+      console.warn("[translate-english] Syntax analysis failed, falling back to Gemini-only:", (e as Error)?.message);
+    }
+
+    // Geminiモデル設定（全文解析のため十分な出力を確保）
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash", 
-      generationConfig: { responseMimeType: "application/json" },
+      model: "gemini-2.5-flash-lite",
+      generationConfig: {
+        responseMimeType: "application/json",
+        maxOutputTokens: 8192,
+      },
     });
 
-    const prompt = `
-あなたは「ビジュアル英文解釈（伊藤和夫）」のエキスパートです。
-入力された英文を構造解析し、以下の厳格なJSONフォーマットのみを出力してください。
-余計な会話やMarkdownの装飾（\`\`\`json など）は不要です。
-
-【解析ルール】
-1. S / V / O / C / M / CONN の役割を割り当てる。
-2. M（修飾語句）は前置詞句や副詞節などの大きな塊でまとめ、文頭のイントロフレーズも必ず残す。
-3. 名詞節・形容詞節・副詞節は、内部構造（S' V' など）を sub_structures に記述する。
-4. **括弧（ブラケット）規則**（出力上で示すか、必ず役割に対応するtypeを設定すること）
-   - S/O/C → noun とし、表示上は【 】で囲まれる想定
-   - M      → modifier とし、表示上は＜ ＞で囲まれる想定
-   - V      → verb とし、括弧なしで表示される想定
-   - CONN   → connector とし、役割に応じて節全体の外側括弧を決める（副詞節ならM扱いで＜ ＞、名詞節ならO扱いで【 】 など）
-
-【出力JSONの例（One-shot Example）】
-入力: "Because he was sick, he could not go to school."
-出力:
-{
-  "clean_text": "Because he was sick, he could not go to school.",
-  "sentences": [
-    {
-      "sentence_id": 1,
-      "original_text": "Because he was sick, he could not go to school.",
-      "translation": "彼は病気だったので、学校へ行けなかった。",
-      "main_structure": [
-        { "text": "Because he was sick,", "translation": "彼は病気だったので", "type": "connector", "role": "M" },
-        { "text": "he", "translation": "彼は", "type": "noun", "role": "S" },
-        { "text": "could not go", "translation": "行けなかった", "type": "verb", "role": "V" },
-        { "text": "to school.", "translation": "学校へ", "type": "modifier", "role": "M" }
-      ],
-      "chunks": [],
-      "vocab_list": [{ "word": "sick", "meaning": "病気の" }],
-      "details": ["副詞節(Because...)が主節のVを修飾している構造。"],
-      "sub_structures": [
-        {
-          "target_text": "Because he was sick,",
-          "explanation": "理由を表す副詞節",
-          "chunks": [
-             { "text": "Because", "type": "connector", "role": "CONN" },
-             { "text": "he", "type": "noun", "role": "S'" },
-             { "text": "was", "type": "verb", "role": "V'" },
-             { "text": "sick", "type": "modifier", "role": "C'" }
-          ]
-        }
-      ]
-    }
-  ]
-}
-
-【ズームイン解析（初心者向けの図解フォーマット）】
-- sub_structures 内の each節 は、以下の「ブロック表記」で文字列を組むこと（リストではなく1つのテキストブロックでよい）。
-- 角括弧 [ ] は接続詞・関係詞に、隅付き括弧【 】はS'/O'/C'に、V'は括弧なし。
-- 関係代名詞が主語を兼ねる場合は [ S' / who ] のようにS'として扱う（決してC'にしない）。
-- 長い引用や文は【O'】としてひとかたまりにする。
-- 各行の表示順は必ず「英語→日本語訳→役割」。英語の下に英語を重ねないこと。訳が無い場合でも簡潔な日本語を入れる。
-
-ブロック例（One-shot）:
-解析対象: "that said, "A driver must..."
-(役割: 直前の a law を詳しく説明する関係代名詞節)
-> [ that ] (S' / 関係代名詞)
-> 　↓
-> said (V'：〜と書いてあった)
-> 　↓
-> 【 "A driver must..." 】 (O'：引用文)
-
-【実際の解析対象】
-${cleaned}
-`;
+    const prompt = useSyntaxAnalysis && syntaxStructure ? buildSyntaxPrompt(syntaxStructure, cleaned) : buildFallbackPrompt(cleaned);
+    const promptCharCount = prompt.length;
 
     const apiResult = await model.generateContent(prompt);
     const response = apiResult.response;
 
-    // トークン使用量とコストのログ出力（レシート）
+    // トークン使用量とコストのログ出力（爆発検知用）
     const usage = response.usageMetadata;
     if (usage) {
-        const inputTokens = usage.promptTokenCount || 0;
-        const outputTokens = usage.candidatesTokenCount || 0;
-        // Gemini 2.0 Flash 概算レート ($1=150円)
-        const totalCost = (inputTokens * 0.0000225) + (outputTokens * 0.00009);
-        
-        console.log("🧾 ============ レシート ============");
-        console.log(`📥 Input : ${inputTokens} tokens`);
-        console.log(`📤 Output: ${outputTokens} tokens`);
-        console.log(`💰 Cost  : 約 ${totalCost.toFixed(4)} 円`);
-        console.log("===================================");
+      const inputTokens = usage.promptTokenCount || 0;
+      const outputTokens = usage.candidatesTokenCount ?? 0;
+      const totalCost = (inputTokens * 0.0000225) + (outputTokens * 0.00009);
+      console.log("🧾 ============ レシート ============");
+      console.log(`📥 Gemini入力: ${promptCharCount} 文字 (${inputTokens} tokens)`);
+      console.log(`📤 出力トークン: ${outputTokens} tokens`);
+      console.log(`💰 Cost  : 約 ${totalCost.toFixed(4)} 円`);
+      if (outputTokens > 7500) console.warn("⚠️ 出力トークンが上限に近いです。");
+      console.log("===================================");
     }
 
     let out: string;
@@ -241,40 +346,14 @@ ${cleaned}
       out = "";
     }
 
-    // ===== Safe JSON Parse with multiple fallbacks =====
-    const safeParse = (text: string): any => {
-      const strip = (t: string) => t.replace(/^\uFEFF/, "").trim();
-      const removeTrailingCommas = (t: string) => t.replace(/,\s*([}\]])/g, "$1");
-      const core = removeTrailingCommas(strip(text));
-      const direct = core;
-      const braceMatch = core.match(/\{[\s\S]*\}/);
-      const inner = braceMatch ? removeTrailingCommas(braceMatch[0]) : core;
-      try {
-        return JSON.parse(direct);
-      } catch (_) {
-        try {
-          return JSON.parse(inner);
-        } catch (err2) {
-          console.error("JSON Parsing Failed (safeParse)", err2);
-          throw err2;
-        }
-      }
-    };
-
-    // JSONクリーニング実行
-    const jsonString = cleanJsonOutput(out);
-    
+    // JSONクリーニング実行（jsonrepair で切り詰め・不正JSONを修復）
     let parsed: any;
     try {
-      parsed = safeParse(jsonString);
-    } catch (err) {
-      try {
-        parsed = safeParse(out); // raw fallback
-      } catch (err2) {
-        console.error("JSON Parsing Failed (all fallbacks). Sample:", jsonString.slice(0, 200) + "...");
-        console.error("Error details:", err2);
-        return NextResponse.json({ error: "AIの回答を解析できませんでした。もう一度お試しください。", details: String(err2) }, { status: 500 });
-      }
+      parsed = safeParseWithRepair(out);
+    } catch (err2) {
+      console.error("JSON Parsing Failed (incl. repair). Sample:", out.slice(0, 200) + "...");
+      console.error("Error details:", err2);
+      return NextResponse.json({ error: "AIの回答を解析できませんでした。もう一度お試しください。", details: String(err2) }, { status: 500 });
     }
 
     // LLMが配列で返すケースに対応（先頭要素を採用）
@@ -414,6 +493,21 @@ ${cleaned}
           );
         }
 
+        // details を structure_explanations にマッピング（ズームイン解析用）
+        const structure_explanations = Array.isArray(s?.structure_explanations) && s.structure_explanations.length > 0
+          ? s.structure_explanations
+          : normalizedDetails.map((d: string) => ({ target_text: s?.original_text ?? "", explanation: d }));
+
+        // vocab_list 正規化（meaning が undefined の場合は definition/translation をフォールバック、なければ空文字）
+        const vocab_list = Array.isArray(s?.vocab_list)
+          ? s.vocab_list
+              .map((v: any) => ({
+                word: String(v?.word ?? "").trim(),
+                meaning: String(v?.meaning ?? v?.definition ?? v?.translation ?? "").trim(),
+              }))
+              .filter((item: { word: string; meaning: string }) => item.word.length > 0)
+          : [];
+
         return {
           sentence_id: typeof s?.sentence_id === "number" ? s.sentence_id : idx + 1,
           original_text: s?.original_text ?? "",
@@ -421,9 +515,11 @@ ${cleaned}
           chunks,
           translation: s?.translation ?? s?.full_translation ?? "",
           full_translation: s?.full_translation ?? s?.translation ?? "",
-          vocab_list: Array.isArray(s?.vocab_list) ? s.vocab_list : [],
+          vocab_list,
           details: normalizedDetails,
           sub_structures,
+          structure_explanations,
+          advanced_grammar_explanation: s?.advanced_grammar_explanation ?? (normalizedDetails[0] || null),
         };
       });
     }

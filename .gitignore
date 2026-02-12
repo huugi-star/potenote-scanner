@@ -9,6 +9,9 @@ node_modules
 .env.local
 .env.*
 
+# Google Cloud認証情報
+keys/
+
 # macOS
 .ds_store
 

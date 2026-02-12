@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Share2, Volume2 } from 'lucide-react';
+import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Share2, Volume2, Languages } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 import { auth } from '@/lib/firebase';
@@ -112,7 +112,7 @@ const HomeScreen = ({
   const totalDistance = useGameStore(state => state.journey.totalDistance);
   const totalQuizzes = useGameStore(state => state.totalQuizzes);
   const quizHistoryCount = useGameStore(state => state.quizHistory.length);
-  // const translationHistoryCount = useGameStore(state => state.translationHistory.length); // 一時的に非表示
+  const translationHistoryCount = useGameStore(state => state.translationHistory.length);
   const lectureHistoryCount = useGameStore(state => state.lectureHistory.length);
   const equipment = useGameStore(state => state.equipment);
   // const [showShop, setShowShop] = useState(false); // 一時的に非表示
@@ -260,8 +260,8 @@ const HomeScreen = ({
           音声講義を聞く
         </motion.button>
 
-        {/* スキャン翻訳ボタン（一時的に非表示） */}
-        {/* <motion.button
+        {/* スキャン翻訳ボタン */}
+        <motion.button
           onClick={() => {
             vibrateLight();
             onNavigate('translation_mode_select');
@@ -272,7 +272,7 @@ const HomeScreen = ({
         >
           <Languages className="w-4 h-4" />
           スキャンして英語学習・翻訳
-        </motion.button> */}
+        </motion.button>
 
         {/* フリークエスト */}
         {quizHistoryCount > 0 && (
@@ -345,8 +345,8 @@ const HomeScreen = ({
           </motion.button>
         </div>
 
-        {/* 翻訳履歴ボタン（一時的に非表示） */}
-        {/* {translationHistoryCount > 0 && (
+        {/* 翻訳履歴ボタン */}
+        {translationHistoryCount > 0 && (
           <motion.button
             onClick={() => {
               vibrateLight();
@@ -364,7 +364,7 @@ const HomeScreen = ({
               {translationHistoryCount}
             </span>
           </motion.button>
-        )} */}
+        )}
 
         {/* 開発者支援セクション */}
         <DeveloperSupport />

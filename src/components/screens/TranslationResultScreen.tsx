@@ -341,6 +341,8 @@ export const TranslationResultScreen = ({
  */
 const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { sentence: any, index: number, tipShown: boolean, setTipShown: (v: boolean) => void }) => {
   const [subOpen, setSubOpen] = useState(false);
+  const [translationOpen, setTranslationOpen] = useState(false);
+  const [vocabOpen, setVocabOpen] = useState(false);
   // 詳細データがあるか判定（新しい構造と後方互換性）
   const hasDetails = (sentence.sub_structures && sentence.sub_structures.length > 0) || 
                      (sentence.structure_explanations && sentence.structure_explanations.length > 0) ||
@@ -406,33 +408,78 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
         )}
       </div>
 
-      {/* 2. 自然な和訳 */}
-      <div className="p-5 bg-[#24283b] border-b border-gray-700/50">
-        <div className="flex items-start gap-3">
-          <span className="text-sm px-2 py-1 rounded bg-gray-700 text-gray-200">訳</span>
-          <p className="text-lg text-gray-100 leading-relaxed font-medium">
-            {sentence.full_translation || sentence.translation}
-          </p>
-        </div>
+      {/* 2. 自然な和訳（折りたたみ・タップで開く） */}
+      <div className="border-t border-gray-700 bg-[#1e1e2e]">
+        <button
+          onClick={() => { vibrateLight(); setTranslationOpen(o => !o); }}
+          className="w-full flex items-center justify-between px-6 py-4 bg-green-900/10 hover:bg-green-900/20 transition-colors"
+        >
+          <div className="flex items-center gap-2 text-green-200 font-bold text-sm">
+            <span className="text-lg">📝</span>
+            <span>訳</span>
+          </div>
+          <motion.div animate={{ rotate: translationOpen ? 180 : 0 }}>
+            <ChevronDown className="w-5 h-5 text-green-300" />
+          </motion.div>
+        </button>
+        <AnimatePresence>
+          {translationOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="px-6 py-4 bg-[#24283b]">
+                <p className="text-lg text-gray-100 leading-relaxed font-medium">
+                  {sentence.full_translation || sentence.translation}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* 3. 重要語句 */}
-      {sentence.vocab_list && sentence.vocab_list.length > 0 && (
-        <div className="px-6 py-4 bg-[#24283b]">
-          <h4 className="text-xs font-bold text-yellow-500 mb-3 flex items-center gap-2 uppercase tracking-wider">
+      {/* 3. 重要語句（折りたたみ・タップで開く） */}
+      <div className="border-t border-gray-700 bg-[#1e1e2e]">
+        <button
+          onClick={() => { vibrateLight(); setVocabOpen(o => !o); }}
+          className="w-full flex items-center justify-between px-6 py-4 bg-yellow-900/10 hover:bg-yellow-900/20 transition-colors"
+        >
+          <div className="flex items-center gap-2 text-yellow-200 font-bold text-sm">
+            <span className="text-lg">📚</span>
             <span>Vocabulary</span>
-            <div className="h-px flex-1 bg-yellow-500/20"></div>
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {sentence.vocab_list.map((vocab: any, i: number) => (
-              <div key={i} className="inline-flex items-center gap-2 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
-                <span className="text-yellow-200 font-bold text-sm">{vocab.word}</span>
-                <span className="text-gray-400 text-xs border-l border-gray-600 pl-2">{vocab.meaning}</span>
-              </div>
-            ))}
           </div>
-        </div>
-      )}
+          <motion.div animate={{ rotate: vocabOpen ? 180 : 0 }}>
+            <ChevronDown className="w-5 h-5 text-yellow-300" />
+          </motion.div>
+        </button>
+        <AnimatePresence>
+          {vocabOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="px-6 py-4 bg-[#24283b]">
+                {sentence.vocab_list && sentence.vocab_list.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {sentence.vocab_list.map((vocab: any, i: number) => (
+                      <div key={i} className="inline-flex items-center gap-2 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
+                        <span className="text-yellow-200 font-bold text-sm">{vocab.word}</span>
+                        <span className="text-gray-400 text-xs border-l border-gray-600 pl-2">{vocab.meaning}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">語句なし</p>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* 4. ズームイン解析（sub_structures） */}
       {sentence.sub_structures && sentence.sub_structures.length > 0 && (
@@ -585,11 +632,12 @@ ${fullText}
  * 2. 直訳（日本語）
  * 3. 役割解説（S/V/O...）
  */
-// 共通チャンク表示コンポーネント（3段構成の徹底）
+// 共通チャンク表示コンポーネント（3段構成の徹底）。タップで直訳を表示
 const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boolean }) => {
+  const [showTranslation, setShowTranslation] = useState(false);
   // bracketTypeまたはtypeから判定（後方互換性）
   const bracketType = chunk.bracketType || chunk.type || "other";
-  
+
   // ブラケットの決定
   let leftB = "", rightB = "";
   let textColor = "text-gray-200";
@@ -600,7 +648,7 @@ const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boole
   switch (bracketType) {
     case "noun": // S, O, C, s', o', c'
       leftB = "【"; rightB = "】";
-      textColor = isSub ? "text-blue-200" : "text-white"; 
+      textColor = isSub ? "text-blue-200" : "text-white";
       borderColor = isSub ? "border-blue-400" : "border-blue-500"; // 名詞は青系
       roleColor = isSub ? "text-blue-200" : "text-blue-300";
       break;
@@ -636,10 +684,13 @@ const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boole
   }
 
   const cleanTranslation = (chunk.translation || "").replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu, "");
+  const hasTranslation = cleanTranslation.length > 0;
 
   return (
-    <div 
-      className="flex flex-col items-center group max-w-[260px]"
+    <button
+      type="button"
+      onClick={() => hasTranslation && (vibrateLight(), setShowTranslation((v) => !v))}
+      className={`flex flex-col items-center group max-w-[260px] text-left ${hasTranslation ? "cursor-pointer touch-manipulation" : "cursor-default"}`}
     >
       {/* 1段目：英文 (ブラケット付き) */}
       <div className={`text-xl px-2 py-1 border-b-2 ${borderColor} ${textColor} whitespace-pre-wrap break-words text-center`}>
@@ -648,18 +699,23 @@ const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boole
         <span className="opacity-60 ml-1">{rightB}</span>
       </div>
 
-      {/* 2段目：直訳 (直読直解) */}
-      <div className="mt-2 text-sm text-gray-300 font-medium max-w-[220px] text-center whitespace-pre-wrap break-words">
-        {cleanTranslation}
-      </div>
+      {/* 2段目：直訳 (タップで表示) */}
+      {showTranslation && (
+        <div className="mt-2 text-sm text-gray-300 font-medium max-w-[220px] text-center whitespace-pre-wrap break-words">
+          {cleanTranslation}
+        </div>
+      )}
+      {hasTranslation && !showTranslation && (
+        <div className="mt-2 text-xs text-gray-500">タップで直訳を表示</div>
+      )}
 
-      {/* 3段目：文法役割 (S/V/O...) + Gemini解説エリア */}
+      {/* 3段目：文法役割 (S/V/O...) */}
       <div className="mt-1 flex flex-col items-center min-h-[24px]">
         <div className={`text-xs font-bold ${roleColor} uppercase`}>
           {chunk.role}
         </div>
       </div>
-    </div>
+    </button>
   );
 });
 
