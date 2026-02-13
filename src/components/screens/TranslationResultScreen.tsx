@@ -711,11 +711,13 @@ const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boole
         <div className="mt-2 text-[10px] md:text-xs text-gray-500 text-left">タップで直訳を表示</div>
       )}
 
-      {/* 3段目：文法役割 (S/V/O...) - 中央配置、スマホでは小さくPCでは読みやすく */}
+      {/* 3段目：文法役割 (S/V/O...) - CONJ/CONNは空欄表示（接続詞は文要素に含めない） */}
       <div className="mt-1 flex flex-col items-center min-h-[20px] md:min-h-[24px] self-center">
-        <div className={`text-[10px] md:text-sm font-bold ${roleColor} uppercase`}>
-          {chunk.role}
-        </div>
+        {chunk.role !== "CONJ" && chunk.role !== "CONN" && (
+          <div className={`text-[10px] md:text-sm font-bold ${roleColor} uppercase`}>
+            {chunk.role}
+          </div>
+        )}
       </div>
     </button>
   );
@@ -765,8 +767,8 @@ const VisualChunk = memo(({
         </div>
       )}
 
-      {/* 3段目: 役割ラベル（句読点の場合は非表示） - 中央配置 */}
-      {!isPunctuationOnly && role && (
+      {/* 3段目: 役割ラベル（句読点・CONJ/CONNの場合は非表示） - 中央配置 */}
+      {!isPunctuationOnly && role && role !== "CONJ" && role !== "CONN" && (
         <div className="mt-1 flex flex-col items-center">
           {/* 線 */}
           <div className={`w-0.5 h-2 ${colorClasses.lineBg}`}></div>
@@ -1001,16 +1003,16 @@ const getChunkStyle = (role: string | null = '', symbol?: string, isNested?: boo
   let label = '';
   let description = '';
 
-  // 接続詞・関係詞の特別扱い
-  if (r === 'CONN' || r === 'REL') {
+  // 接続詞(CONJ/CONN)・関係詞(REL)の特別扱い - UIではラベルを空欄表示（文要素に含めない）
+  if (r === 'CONN' || r === 'CONJ' || r === 'REL') {
     style = {
       bg: 'bg-yellow-900/40', text: 'text-yellow-200', border: 'border-yellow-600',
       lineBg: 'bg-yellow-600', labelBg: 'bg-yellow-600', labelText: 'text-yellow-950'
     };
-    label = '接続詞';
-    if (symbol === '[]') description = '名詞節';
-    if (symbol === '<>') description = '副詞節';
-    if (symbol === '()') description = '形容詞節';
+    label = ''; // CONJ/CONNは空欄表示
+    if (r === 'REL' && symbol === '[]') description = '名詞節';
+    if (r === 'REL' && symbol === '<>') description = '副詞節';
+    if (r === 'REL' && symbol === '()') description = '形容詞節';
     return { colorClasses: style, label, description };
   }
 

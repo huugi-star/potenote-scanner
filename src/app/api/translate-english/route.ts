@@ -138,9 +138,10 @@ function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
     "6. **details は必ず1つ以上出力すること**（文の構造の概要説明。例: \"副詞節が主節のVを修飾している\"）\n" +
     "7. **名詞節・形容詞節・副詞節などの複雑な節がある場合、sub_structures に必ず記述すること**\n" +
     "8. **vocab_list には重要単語・イディオム・熟語を必ず含めること**（語彙学習に役立つものを3〜8個選び、{ \"word\": \"英語\", \"meaning\": \"日本語の意味\" } 形式で出力）\n\n" +
-    "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN\" }] }\n\n" +
+    "【重要】and/or/but などの等位接続詞は S/V/O/C/M に含めず、role: \"CONJ\"、type: \"connector\" とすること。補語(C)として誤認しないこと。\n\n" +
+    "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ\" }] }\n\n" +
     "【出力JSONフォーマット】\n" +
-    '{"clean_text":"<CLEANED>","sentences":[{"sentence_id":1,"original_text":"<CLEANED>","translation":"和訳","main_structure":[{"text":"","translation":"","type":"noun|verb|modifier|connector","role":"S|V|O|C|M|CONN"}],"chunks":[],"vocab_list":[],"details":["構造の概要説明をここに"],"sub_structures":[{"target_text":"節の文字列","explanation":"解説","chunks":[{"text":"","translation":"","type":"noun","role":"S"}]}]}]}\n\n' +
+    '{"clean_text":"<CLEANED>","sentences":[{"sentence_id":1,"original_text":"<CLEANED>","translation":"和訳","main_structure":[{"text":"","translation":"","type":"noun|verb|modifier|connector","role":"S|V|O|C|M|CONN|CONJ"}],"chunks":[],"vocab_list":[],"details":["構造の概要説明をここに"],"sub_structures":[{"target_text":"節の文字列","explanation":"解説","chunks":[{"text":"","translation":"","type":"noun","role":"S"}]}]}]}\n\n' +
     "【実際の解析対象】\n" +
     cleaned
   ).replace(/<CLEANED>/g, cleaned);
@@ -154,13 +155,13 @@ function buildFallbackPrompt(cleaned: string): string {
     "余計な会話やMarkdownの装飾は不要です。\n\n" +
     "【解析ルール】\n" +
     "1. **入力された英文の全文を必ず解析すること。途中で切れず、すべての文を sentences に含めること。**\n" +
-    "2. S / V / O / C / M / CONN の役割を割り当てる。\n" +
+    "2. S / V / O / C / M / CONN / CONJ の役割を割り当てる。**and/or/but などの等位接続詞は S/V/O/C/M に含めず、必ず role: \"CONJ\"、type: \"connector\" とすること。補語(C)として誤認しないこと。**\n" +
     "3. M（修飾語句）は前置詞句や副詞節などの大きな塊でまとめ、文頭のイントロフレーズも必ず残す。\n" +
     "4. **名詞節・形容詞節・副詞節がある場合、sub_structures に必ず内部構造を記述する。** target_text, explanation, chunks を含めること。\n" +
-    "5. S/O/C → noun、M → modifier、V → verb、CONN → connector のtypeを設定すること。\n" +
+    "5. S/O/C → noun、M → modifier、V → verb、CONN/CONJ → connector のtypeを設定すること。\n" +
     "6. **details は必ず1つ以上出力すること**（文の構造の概要説明）。\n" +
     "7. **vocab_list には重要単語・イディオム・熟語を必ず含めること**（語彙学習に役立つものを3〜8個選び、{ \"word\": \"英語\", \"meaning\": \"日本語の意味\" } 形式で出力）\n\n" +
-    "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN\" }] }\n\n" +
+    "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ\" }] }\n\n" +
     "【出力JSONの例】\n" +
     '{"clean_text":"Because he was sick, he could not go to school.","sentences":[{"sentence_id":1,"original_text":"Because he was sick, he could not go to school.","translation":"彼は病気だったので、学校へ行けなかった。","main_structure":[{"text":"Because he was sick,","translation":"彼は病気だったので","type":"connector","role":"M"},{"text":"he","translation":"彼は","type":"noun","role":"S"},{"text":"could not go","translation":"行けなかった","type":"verb","role":"V"},{"text":"to school.","translation":"学校へ","type":"modifier","role":"M"}],"chunks":[],"vocab_list":[{"word":"sick","meaning":"病気の"},{"word":"could not go","meaning":"行けなかった（イディオム）"},{"word":"because","meaning":"～なので、～だから"}],"details":["副詞節(Because...)が主節のVを修飾している構造。"],"sub_structures":[{"target_text":"Because he was sick","explanation":"Because が導く副詞節。主節の述語 could not go を修飾し、理由を表す。","chunks":[{"text":"Because","translation":"なぜなら","type":"connector","role":"CONN"},{"text":"he","translation":"彼は","type":"noun","role":"S"},{"text":"was sick","translation":"病気だった","type":"verb","role":"V"}]}]}]}\n\n' +
     "【実際の解析対象】\n" +
@@ -410,15 +411,17 @@ export async function POST(req: Request) {
       if (r === "VERB") return "V";
       if (r === "COMPLEMENT") return "C";
       if (r === "MODIFIER" || r === "MOD") return "M";
-      if (r === "CONNECT" || r === "CONNECTOR" || r === "CONJUNCTION") return "CONN";
+      // 等位接続詞(and/or/but) → CONJ、従属接続詞(because/when等) → CONN
+      if (r === "CONJ" || r === "CONJUNCTION") return "CONJ";
+      if (r === "CONNECT" || r === "CONNECTOR") return "CONN";
 
-      // ダッシュ付き
+      // ダッシュ付き（C'は補語の従属なので CONJ と区別）
       if (r.startsWith("S")) return r.includes("'") ? "S'" : "S";
       if (r.startsWith("O")) return r.includes("'") ? "O'" : "O";
-      if (r.startsWith("C")) return r.includes("'") ? "C'" : "C";
+      if (r === "C" || r === "C'") return r; // C, C' は補語。CONJ と混同しない
       if (r.startsWith("V")) return r.includes("'") ? "V'" : "V";
 
-      const validRoles = ["S", "O", "C", "M", "V", "S'", "O'", "C'", "M'", "V'", "CONN"];
+      const validRoles = ["S", "O", "C", "M", "V", "S'", "O'", "C'", "M'", "V'", "CONN", "CONJ"];
       return validRoles.includes(r) ? r : "M";
     };
 
@@ -429,7 +432,7 @@ export async function POST(req: Request) {
       if (r === "S" || r === "O" || r === "C" || r === "S'" || r === "O'" || r === "C'") return "noun";
       if (r.startsWith("M")) return "modifier";
       if (r.startsWith("V")) return "verb";
-      if (r === "CONN") return "connector";
+      if (r === "CONN" || r === "CONJ") return "connector";
 
       const t = String(type || "").trim().toLowerCase();
       if (t.includes("noun")) return "noun";
