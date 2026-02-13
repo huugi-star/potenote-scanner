@@ -125,6 +125,12 @@ export interface TranslationResult {
     term: string;
     explanation: string;
   }>;
+
+  // カバレッジチェック: 元英文にあり解析結果に含まれていない単語（欠落の可能性）
+  missing_tokens?: string[];
+
+  // 全文（スキャン・後処理後の完全な英文。欠落防止用）
+  clean_text?: string;
 }
 
 /**

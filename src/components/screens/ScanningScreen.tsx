@@ -315,6 +315,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                 textType: translateResult.textType,
                 tone: translateResult.tone,
                 technicalTerms: translateResult.technicalTerms,
+                // カバレッジチェック: 欠落の可能性がある単語
+                missing_tokens: translateResult.missing_tokens,
+                // 全文（スキャン結果の完全なテキスト）
+                clean_text: translateResult.clean_text,
               },
               compressed.dataUrl
             );

@@ -33,6 +33,7 @@ export const TranslationResultScreen = ({
   const [tipShown, setTipShown] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [symbolsOpen, setSymbolsOpen] = useState(false);
+  const [fullTextOpen, setFullTextOpen] = useState(false);
   const saveTranslationHistory = useGameStore(state => state.saveTranslationHistory);
   const addCoins = useGameStore(state => state.addCoins);
   const affiliateMode = useGameStore(state => state.englishLearningMode);
@@ -77,12 +78,13 @@ export const TranslationResultScreen = ({
   // 多言語モードかどうかを判定
   const isMultilangMode = !result.sentences && result.translatedText && result.originalText;
   const fullEnglishText = useMemo(() => {
+    if (result.clean_text && result.clean_text.trim()) return result.clean_text.trim();
     if (!result.sentences || result.sentences.length === 0) return '';
     return result.sentences
       .map((s: any) => s.marked_text ?? s.original_text ?? s.originalText ?? s.original ?? s.text ?? '')
       .filter(Boolean)
-      .join(' ');
-  }, [result.sentences]);
+      .join('\n\n');
+  }, [result.sentences, result.clean_text]);
 
   // アフィリエイト推薦（モードと英文量で判定、毎回ランダム2件）
   const affiliatePick = useMemo(() => {
@@ -150,6 +152,49 @@ export const TranslationResultScreen = ({
             </p>
           </div>
         </header>
+
+        {/* 全文表示（スキャンした英文の完全なテキスト） */}
+        {!isMultilangMode && fullEnglishText && (
+          <div className="border border-indigo-500/30 bg-indigo-900/10 rounded-xl overflow-hidden">
+            <button
+              onClick={() => { vibrateLight(); setFullTextOpen(o => !o); }}
+              className="w-full flex items-center justify-between px-4 py-3 text-left text-indigo-100 font-semibold"
+            >
+              <span>📄 スキャンした英文（全文）</span>
+              <motion.div animate={{ rotate: fullTextOpen ? 180 : 0 }}>
+                <ChevronDown className="w-5 h-5 text-indigo-200" />
+              </motion.div>
+            </button>
+            <AnimatePresence>
+              {fullTextOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-4 pb-4">
+                    <p className="text-gray-100 leading-relaxed whitespace-pre-wrap font-mono text-sm">
+                      {fullEnglishText}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* カバレッジ警告: 元英文の単語が解析結果に含まれていない場合 */}
+        {result.missing_tokens && result.missing_tokens.length > 0 && (
+          <div className="rounded-xl border border-amber-500/50 bg-amber-900/20 px-4 py-3">
+            <p className="text-amber-200 font-bold text-sm mb-1">⚠️ 解析結果に含まれていない単語があります</p>
+            <p className="text-amber-200/90 text-xs mb-2">元の英文にあった以下の単語が、構造解析のチャンクに含まれていません。OCRや後処理で欠落している可能性があります。</p>
+            <p className="text-amber-300 font-mono text-xs break-words">
+              {result.missing_tokens.slice(0, 20).join(", ")}
+              {result.missing_tokens.length > 20 && ` …他${result.missing_tokens.length - 20}語`}
+            </p>
+          </div>
+        )}
 
         {/* 英文解釈モード用 注意書き＆記号の読み方 */}
         {!isMultilangMode && (
@@ -403,8 +448,10 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
             ))}
           </div>
         ) : (
-          // chunksがない場合は marked_text から簡易パース
-          <LegacyParser text={sentence.marked_text} />
+          // chunksがない場合は original_text / marked_text をそのまま表示
+          <p className="text-gray-100 leading-relaxed whitespace-pre-wrap">
+            {originalSentence || sentence.marked_text || '（解析データなし）'}
+          </p>
         )}
       </div>
 
@@ -956,15 +1003,6 @@ const NestedStructureParser = ({ text }: { text: string }) => {
       ))}
     </div>
   );
-};
-
-/**
- * LegacyParser
- * chunksデータがない場合のフォールバック（marked_textから表示）
- */
-const LegacyParser = ({ text }: { text: string }) => {
-  // NestedStructureParserと同じロジックでとりあえず表示
-  return <NestedStructureParser text={text} />;
 };
 
 /**
