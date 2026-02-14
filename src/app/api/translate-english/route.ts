@@ -137,7 +137,7 @@ function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
     "5. 構造（root/subjects/objects）はサマリを尊重する\n" +
     "6. 和訳と解説のみを生成する\n" +
     "7. **details は必ず1つ以上出力すること**（文の構造の概要説明。例: \"副詞節が主節のVを修飾している\"）\n" +
-    "8. **名詞節・形容詞節・副詞節などの複雑な節がある場合、sub_structures に必ず記述すること**\n" +
+    "8. **名詞節・形容詞節・副詞節などの複雑な節がある場合、sub_structures に必ず記述すること。main_structure にもその節の全文をチャンクとして含めること（ズームイン対象も main_structure で表示する）。**\n" +
     "9. **vocab_list には重要単語・イディオム・熟語を必ず含めること**（語彙学習に役立つものを3〜8個選び、{ \"word\": \"英語\", \"meaning\": \"日本語の意味\" } 形式で出力）\n\n" +
     "【重要】and/or/but などの等位接続詞は S/V/O/C/M に含めず、role: \"CONJ\"、type: \"connector\" とすること。補語(C)として誤認しないこと。\n\n" +
     "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ\" }] }\n\n" +
@@ -159,7 +159,7 @@ function buildFallbackPrompt(cleaned: string): string {
     "2. **文頭・修飾語句・接続詞・句読点など、一字一句省略せず、入力の全文を main_structure のチャンクで網羅すること。省略は厳禁。**\n" +
     "3. S / V / O / C / M / CONN / CONJ の役割を割り当てる。**and/or/but などの等位接続詞は S/V/O/C/M に含めず、必ず role: \"CONJ\"、type: \"connector\" とすること。補語(C)として誤認しないこと。**\n" +
     "4. M（修飾語句）は前置詞句や副詞節などの大きな塊でまとめ、文頭のイントロフレーズ・副詞節・前置詞句も必ず省略せず残す。\n" +
-    "5. **名詞節・形容詞節・副詞節がある場合、sub_structures に必ず内部構造を記述する。** target_text, explanation, chunks を含めること。節内の語も省略しないこと。\n" +
+    "5. **名詞節・形容詞節・副詞節がある場合、sub_structures に必ず内部構造を記述する。** target_text, explanation, chunks を含めること。節内の語も省略しないこと。**main_structure には sub_structures の target_text に相当する全文チャンクを必ず含めること。**\n" +
     "6. S/O/C → noun、M → modifier、V → verb、CONN/CONJ → connector のtypeを設定すること。\n" +
     "7. **details は必ず1つ以上出力すること**（文の構造の概要説明）。\n" +
     "8. **vocab_list には重要単語・イディオム・熟語を必ず含めること**（語彙学習に役立つものを3〜8個選び、{ \"word\": \"英語\", \"meaning\": \"日本語の意味\" } 形式で出力）\n\n" +
@@ -494,9 +494,42 @@ export async function POST(req: Request) {
       parsed.sentences = synced;
     }
 
+    /** main_structure に sub_structures の target_text が抜けている場合、追加・展開して全文を網羅 */
+    const ensureFullMainStructure = (orig: string, main: any[], subs: any[]): any[] => {
+      if (!orig || subs.length === 0) return main;
+      let result = main.map((c: any) => ({ ...c }));
+      for (const sub of subs) {
+        const t = (sub?.target_text ?? sub?.target_chunk ?? "").trim();
+        if (!t) continue;
+        const pos = orig.indexOf(t);
+        if (pos === -1) continue;
+        const tNorm = t.replace(/\s+/g, "");
+        const coveredNorm = result.map((c: any) => (c?.text ?? "").trim().replace(/\s+/g, "")).join("");
+        if (coveredNorm.includes(tNorm)) continue;
+        const subChunk = { text: t, translation: "", type: "noun" as const, role: "O" as const };
+        const expandIdx = result.findIndex((c: any) => {
+          const ct = (c?.text ?? "").trim().replace(/\s+/g, "");
+          return ct && tNorm.includes(ct);
+        });
+        if (expandIdx >= 0) {
+          result[expandIdx] = { ...result[expandIdx], text: t };
+        } else {
+          const withPos = result.map((c: any) => {
+            const txt = (c?.text ?? "").trim();
+            const p = orig.indexOf(txt);
+            return { chunk: c, pos: p >= 0 ? p : orig.length };
+          });
+          withPos.push({ chunk: subChunk, pos });
+          withPos.sort((a, b) => a.pos - b.pos);
+          result = withPos.map((x) => x.chunk);
+        }
+      }
+      return result;
+    };
+
     if (parsed?.sentences && Array.isArray(parsed.sentences)) {
       parsed.sentences = parsed.sentences.map((s: any, idx: number) => {
-        const main_structure = normalizeChunkArray(s?.main_structure ?? s?.chunks);
+        let main_structure = normalizeChunkArray(s?.main_structure ?? s?.chunks);
         const chunks = normalizeChunkArray(s?.chunks ?? s?.main_structure);
 
         // sub_structures正規化
@@ -509,6 +542,10 @@ export async function POST(req: Request) {
               chunks: normalizeChunkArray(sub?.chunks),
             }))
           : [];
+
+        // main_structure にズームインの target_text が抜けている場合は補完
+        const orig = (s?.original_text ?? "").trim();
+        main_structure = ensureFullMainStructure(orig, main_structure, sub_structures);
 
         // detailsを文字列に正規化（LLMがオブジェクトを返す場合に備える）
         const normalizedDetails = Array.isArray(s?.details)
