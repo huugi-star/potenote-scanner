@@ -514,7 +514,7 @@ const VisualSentenceCard = memo(({ sentence, index, tipShown, setTipShown }: { s
                   <div className="flex flex-wrap gap-2">
                     {sentence.vocab_list.map((vocab: any, i: number) => (
                       <div key={i} className="inline-flex items-center gap-2 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
-                        <span className="text-yellow-200 font-bold text-sm">{vocab.word}</span>
+                        <span className="text-slate-300 font-semibold text-sm">{vocab.word}</span>
                         <span className="text-gray-400 text-xs border-l border-gray-600 pl-2">{vocab.meaning}</span>
                       </div>
                     ))}
@@ -699,11 +699,11 @@ const ItoChunkCard = memo(({ chunk, isSub = false }: { chunk: any; isSub?: boole
       borderColor = isSub ? "border-blue-400" : "border-blue-500"; // 名詞は青系
       roleColor = isSub ? "text-blue-200" : "text-blue-300";
       break;
-    case "modifier": // M, m'
+    case "modifier": // M, m' - main_structureと同じ色（ズームインも統一）
       leftB = "＜"; rightB = "＞";
-      textColor = isSub ? "text-yellow-200" : "text-gray-300";
-      borderColor = isSub ? "border-yellow-500" : "border-yellow-600"; // 修飾は黄色系
-      roleColor = isSub ? "text-yellow-200" : "text-yellow-500";
+      textColor = "text-gray-300";
+      borderColor = "border-yellow-600";
+      roleColor = "text-yellow-500";
       break;
     case "verb": // V, v'
       leftB = ""; rightB = "";

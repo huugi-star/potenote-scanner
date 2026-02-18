@@ -122,7 +122,7 @@ function buildStructureSummary(tokens: SyntaxToken[]): string {
   return s;
 }
 
-/** 構文解析結果がある場合: 説明のみ生成用プロンプト。構造サマリのみ渡す（tokens は絶対に入れない） */
+/** 構文解析結果がある場合: 説明のみ生成用プロンプト */
 function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
   return (
     "あなたは「ビジュアル英文解釈（伊藤和夫）」のエキスパートです。\n" +
@@ -145,7 +145,14 @@ function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
     "- 名詞句を修飾する要素（that節/関係詞節/分詞句/名詞に係る前置詞句）は、文全体のMとして外に出さず、【】の内部に＜＞として入れ子にする。例: \"The man ＜who lives next door＞\"、\"the fact ＜that he is honest＞\"。\n" +
     "- 動詞を修飾する要素（副詞句・前置詞句など）は、動詞の外側に＜＞で置く。例: \"went ＜to school＞\"。\n" +
     "- 動詞(V)はそのまま表示する（括弧で囲まない）。\n\n" +
-    "【It + be + 名詞/副詞句 + that節】が来たら: It = 形式主語(S)、beの後ろ = C（焦点）、that節 = 内容。例: \"It is the book that I want\" → It(S) is(V) the book(C) that I want(内容)。\n\n" +
+    "【It を含む構文の扱い（最重要）】\n" +
+    "1. **基本ルール**: 文頭の It / be / that が実質的な意味内容を持たない場合は、role:\"FRAME\"（文の枠組み）として出力し、S/V/O/C には含めない。\n" +
+    "2. **強調構文 (It is A that B)**: It, is, that は role:\"FRAME\"。中身の A, B で本来の S/V/O/C を決定する。\n" +
+    "3. **仮主語**: It が内容を持たない仮主語の場合、It = role:\"S_formal\"、to不定詞句 / that節 = role:\"S_real\" とする。\n" +
+    "4. **【特効薬】It is not until ... that ... 構文**: \n" +
+    "   - \"It was not until ...\" 全体を「時を表す副詞節」の枠組みとして扱う。\n" +
+    "   - until節の中身（例: the experiment was repeated...）は role:\"M\" (副詞節) とする。\n" +
+    "   - that 以下の文（例: the researchers realized...）が主節の S / V となる。\n\n" +
     "【重要】and/or/but などの等位接続詞は S/V/O/C/M に含めず、role: \"CONJ\"、type: \"connector\" とすること。補語(C)として誤認しないこと。\n\n" +
     "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ\" }] }\n\n" +
     "【出力JSONフォーマット】\n" +
@@ -171,7 +178,14 @@ function buildFallbackPrompt(cleaned: string): string {
     "7. S/O/C → noun、M → modifier、V → verb、CONN/CONJ → connector のtypeを設定すること。\n" +
     "8. **details は必ず1つ以上出力すること**（文の構造の概要説明）。\n" +
     "9. **vocab_list には重要単語・イディオム・熟語を必ず含めること**（語彙学習に役立つものを3〜8個選び、{ \"word\": \"英語\", \"meaning\": \"日本語の意味\" } 形式で出力）\n\n" +
-    "【It + be + 名詞/副詞句 + that節】が来たら: It = 形式主語(S)、beの後ろ = C（焦点）、that節 = 内容。例: \"It is the book that I want\" → It(S) is(V) the book(C) that I want(内容)。\n\n" +
+    "【It を含む構文の扱い（最重要）】\n" +
+    "1. **基本ルール**: 文頭の It / be / that が実質的な意味内容を持たない場合は、role:\"FRAME\"（文の枠組み）として出力し、S/V/O/C には含めない。\n" +
+    "2. **強調構文 (It is A that B)**: It, is, that は role:\"FRAME\"。中身の A, B で本来の S/V/O/C を決定する。\n" +
+    "3. **仮主語**: It が内容を持たない仮主語の場合、It = role:\"S_formal\"、to不定詞句 / that節 = role:\"S_real\" とする。\n" +
+    "4. **【特効薬】It is not until ... that ... 構文**: \n" +
+    "   - \"It was not until ...\" 全体を「時を表す副詞節」の枠組みとして扱う。\n" +
+    "   - until節の中身（例: the experiment was repeated...）は role:\"M\" (副詞節) とする。\n" +
+    "   - that 以下の文（例: the researchers realized...）が主節の S / V となる。\n\n" +
     "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ\" }] }\n\n" +
     "【出力JSONの例】\n" +
     '{"clean_text":"Because he was sick, he could not go to school.","sentences":[{"sentence_id":1,"original_text":"Because he was sick, he could not go to school.","translation":"彼は病気だったので、学校へ行けなかった。","main_structure":[{"text":"Because he was sick,","translation":"彼は病気だったので","type":"connector","role":"M"},{"text":"he","translation":"彼は","type":"noun","role":"S"},{"text":"could not go","translation":"行けなかった","type":"verb","role":"V"},{"text":"to school.","translation":"学校へ","type":"modifier","role":"M"}],"chunks":[],"vocab_list":[{"word":"sick","meaning":"病気の"},{"word":"could not go","meaning":"行けなかった（イディオム）"},{"word":"because","meaning":"～なので、～だから"}],"details":["副詞節(Because...)が主節のVを修飾している構造。"],"sub_structures":[{"target_text":"Because he was sick","explanation":"Because が導く副詞節。主節の述語 could not go を修飾し、理由を表す。","chunks":[{"text":"Because","translation":"なぜなら","type":"connector","role":"CONN"},{"text":"he","translation":"彼は","type":"noun","role":"S"},{"text":"was sick","translation":"病気だった","type":"verb","role":"V"}]}]}]}\n\n' +
@@ -344,6 +358,7 @@ export async function POST(req: Request) {
       generationConfig: {
         responseMimeType: "application/json",
         maxOutputTokens: 10000,
+        temperature: 0, // ★これを追加しないと毎回結果が変わります
       },
     });
 
