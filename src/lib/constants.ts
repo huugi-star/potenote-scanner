@@ -96,6 +96,10 @@ export const LIMITS = {
   TRANSLATION_HISTORY: {
     MAX_ITEMS: 50,           // 最大保存数（localStorage容量対策）
   },
+  WORD_COLLECTION_SCANS: {
+    MAX_ITEMS: 50,           // 単コレ冒険ログの最大件数
+    ACTIVE_ENEMIES_MAX: 21,  // 1冒険あたりの戦闘対象上限
+  },
   
   // 講義履歴
   LECTURE_HISTORY: {

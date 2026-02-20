@@ -133,6 +133,55 @@ export interface TranslationResult {
   clean_text?: string;
 }
 
+/** 単コレ専用スキャンAPIの結果（Syntax解析・lemma統合・例文付き） */
+export interface WordCollectionScanResult {
+  clean_text: string;
+  words: Array<{
+    word: string;           // lemma（図鑑の基本単語）
+    meaning?: string;       // 意味（activeEnemies のみ Gemini で生成）
+    pos?: string;           // 品詞（Natural Language API の tag をそのまま）
+    surfaceVariants?: string[];  // 出現した形（went, goes, going など）
+    exampleSentence?: string;     // その単語が出た1文
+  }>;
+}
+
+/**
+ * 単コレの敵（1単語）
+ */
+export interface WordEnemy {
+  word: string;       // lemma（正規化済み）
+  meaning?: string;  // 意味（4択の正解用）
+  pos?: string;       // 品詞ヒント（Natural Language API の tag）
+  surfaceVariants?: string[];  // 出現形一覧（図鑑表示用）
+  exampleSentence?: string;    // 例文（図鑑表示用）
+  hp: number;         // 3=未討伐, 0=捕獲
+  asked: boolean;    // 出題済みか（asked=false を優先して出題）
+  wrongCount: number; // 不正解回数（wrongCount高い順で出題）
+}
+
+/**
+ * 単コレのスキャン（冒険ログ1件）
+ */
+export interface WordCollectionScan {
+  id: string;
+  title: string;       // 例: スキャン1：自動車の歴史
+  createdAt: string;   // ISO日付
+  imageUrl?: string;
+  words: WordEnemy[];  // 発見した単語（全件保存・取りこぼしゼロ）
+  activeEnemyWords?: string[];  // 今回の冒険の戦闘対象（最大21体）
+  activeEnemyTotal?: number;    // 当初のアクティブ分母（表示用に固定）
+  defeatedCount?: number;       // この冒険での撃破カウント（正解で増える）
+  lastAdventureSnapshot?: {
+    timestamp: string;
+    capturedCount: number;
+    defeatedCount: number;
+    remainingCount: number;
+    total: number;
+    capturedWords: WordEnemy[];
+    defeatedWords: WordEnemy[];
+  };
+}
+
 /**
  * 翻訳履歴
  */

@@ -56,6 +56,93 @@ body {
   animation: float 3s ease-in-out infinite;
 }
 
+/* 単コレ戦闘用 */
+@keyframes word-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes word-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+@keyframes word-flash {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(2); }
+}
+
+@keyframes word-split-left {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-6px); }
+}
+
+@keyframes word-split-right {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(6px); }
+}
+
+.animate-word-split-left {
+  animation: word-split-left 0.25s ease-out forwards;
+}
+
+.animate-word-split-right {
+  animation: word-split-right 0.25s ease-out forwards;
+}
+
+/* 捕獲演出（1秒）：0.15sフラッシュ→0.25s吸い込み開始→0.25s縮小→0.35s封印完了 */
+@keyframes word-seal {
+  0% { transform: scale(1) translate(0, 0); opacity: 1; filter: brightness(1); }
+  15% { filter: brightness(2); }
+  15.01% { filter: brightness(1); }
+  40% { transform: scale(0.7) translate(0, 12px); opacity: 1; }
+  65% { transform: scale(0.35) translate(0, 28px); opacity: 0.6; }
+  100% { transform: scale(0.15) translate(0, 40px); opacity: 0; }
+}
+
+@keyframes word-seal-glow {
+  0%, 100% { opacity: 0; }
+  15% { opacity: 0.6; box-shadow: 0 0 25px rgba(251, 191, 36, 0.5); }
+  40% { opacity: 0.4; }
+  65% { opacity: 0.2; }
+  100% { opacity: 0; }
+}
+
+@keyframes capture-card-fly {
+  0% { transform: scale(0.5) translate(0, 0); opacity: 0; }
+  15% { opacity: 0; }
+  20% { transform: scale(0.7) translate(0, 0); opacity: 0.6; }
+  65% { transform: scale(0.6) translate(30px, 25px); opacity: 0.9; }
+  100% { transform: scale(0.4) translate(45px, 35px); opacity: 1; }
+}
+
+.animate-word-seal {
+  animation: word-seal 1s ease-out forwards;
+}
+
+.animate-word-seal-glow {
+  animation: word-seal-glow 1s ease-out forwards;
+}
+
+.animate-capture-card-fly {
+  animation: capture-card-fly 1s ease-out forwards;
+}
+
+.animate-word-float {
+  animation: word-float 2.5s ease-in-out infinite;
+}
+
+.animate-word-shake {
+  animation: word-shake 0.3s ease-out;
+}
+
+.animate-word-flash {
+  animation: word-flash 0.2s ease-out;
+}
+
 .animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
 }

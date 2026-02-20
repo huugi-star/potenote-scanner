@@ -7,8 +7,9 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Share2, Volume2, Languages } from 'lucide-react';
+import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Share2, Volume2, Languages, Sword } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 import { auth } from '@/lib/firebase';
@@ -231,6 +232,21 @@ const HomeScreen = ({
           </div>
         </div>
 
+        {/* 単コレボタン */}
+        <Link href="/word-collection" onClick={() => vibrateLight()}>
+          <motion.div
+            className="w-full py-5 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold text-xl flex flex-col items-center justify-center gap-1 shadow-lg shadow-amber-500/25"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <div className="flex items-center gap-3">
+              <Sword className="w-7 h-7" />
+              単コレで冒険する
+            </div>
+            <span className="text-sm font-medium text-amber-100/90">単語を討伐・捕獲</span>
+          </motion.div>
+        </Link>
+
         {/* メインアクション */}
         <motion.button
           onClick={() => {
@@ -238,7 +254,7 @@ const HomeScreen = ({
             useGameStore.getState().setScanType('quiz');
             onNavigate('scanning');
           }}
-          className="w-full py-5 rounded-2xl bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-cyan-500/25"
+          className="w-full mt-3 py-5 rounded-2xl bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-cyan-500/25"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >

@@ -6,9 +6,10 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory, LectureScript, LectureHistory } from '@/types';
+import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult } from '@/types';
 import { ALL_ITEMS, getItemById } from '@/data/items';
 import { REWARDS, DISTANCE, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
+import { extractWords } from '@/lib/wordExtraction';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
 import { db, auth } from '@/lib/firebase';
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, orderBy, limit as fsLimit } from 'firebase/firestore';
@@ -61,7 +62,13 @@ interface GameState extends UserState {
   
   // 翻訳履歴
   translationHistory: TranslationHistory[];
-  
+
+  // 単コレ冒険ログ
+  wordCollectionScans: WordCollectionScan[];
+
+  // ワード図鑑：発見順（問題として初出した順）
+  wordDexOrder: string[];
+
   // 講義履歴
   lectureHistory: LectureHistory[];
   
@@ -113,7 +120,26 @@ interface GameActions {
   saveTranslationHistory: (result: TranslationResult, imageUrl?: string) => void;
   getTranslationHistory: () => TranslationHistory[];
   deleteTranslationHistory: (id: string) => void;
-  
+
+  // 単コレ冒険ログ管理
+  // 戻り値: 追加されたスキャンの id（失敗時は undefined）
+  saveWordCollectionScan: (result: TranslationResult | WordCollectionScanResult, imageUrl?: string) => string | undefined;
+  getWordCollectionScans: () => WordCollectionScan[];
+  getWordCollectionScanById: (id: string) => WordCollectionScan | undefined;
+  updateWordEnemyState: (scanId: string, word: string, updates: Partial<Pick<WordEnemy, 'hp' | 'asked' | 'wrongCount'>>) => void;
+  refillActiveEnemies: (scanId: string) => void;
+  saveAdventureSnapshot: (scanId: string, snapshot: {
+    timestamp: string;
+    capturedCount: number;
+    defeatedCount: number;
+    remainingCount: number;
+    total: number;
+    capturedWords: WordEnemy[];
+    defeatedWords: WordEnemy[];
+  }) => void;
+  registerWordDexWords: (words: string[]) => void;
+  getWordDexOrder: () => string[];
+
   // 講義履歴管理
   saveLectureHistory: (script: LectureScript, imageUrl?: string) => void;
   getLectureHistory: () => LectureHistory[];
@@ -214,7 +240,9 @@ const initialState: GameState = {
   quizHistory: [],
   
   translationHistory: [],
-  
+  wordCollectionScans: [],
+  wordDexOrder: [],
+
   lectureHistory: [],
   
   scanType: 'quiz',
@@ -258,7 +286,14 @@ export const useGameStore = create<GameStore>()(
             // ログインボーナスチェック前に lastLoginDate を保存（上書きを防ぐため）
             const currentLastLoginDate = state.lastLoginDate;
             const today = getTodayString();
-            
+
+            // DEBUG: snapshot presence before merging cloud state
+            try {
+              console.log('[setUserId] BEFORE merge: local scans snapshot flags ->', state.wordCollectionScans.map(s => ({ id: s.id, hasSnap: !!s.lastAdventureSnapshot })));
+            } catch (e) {
+              /* ignore */
+            }
+
             set({
               // ユーザー状態系（努力の結晶のみ）
               uid,
@@ -304,8 +339,25 @@ export const useGameStore = create<GameStore>()(
               scanOcrText: state.scanOcrText,
               scanStructuredOCR: state.scanStructuredOCR,
 
+              // Preserve local-only word-collection data to avoid overwriting progress
+              wordCollectionScans: state.wordCollectionScans,
+              wordDexOrder: state.wordDexOrder,
+
               // 履歴はこの後サブコレクションから読み込む
             });
+
+            // DEBUG: verify snapshot presence after merge
+            try {
+              const after = get();
+              console.log('[setUserId] AFTER merge: local scans snapshot flags ->', (after.wordCollectionScans || []).map(s => ({ id: s.id, hasSnap: !!s.lastAdventureSnapshot })));
+              const prevHad = state.wordCollectionScans.some(s => !!s.lastAdventureSnapshot);
+              const nextHas = (after.wordCollectionScans || []).some(s => !!s.lastAdventureSnapshot);
+              if (prevHad && !nextHas) {
+                console.warn('[setUserId] WARNING: snapshot existed before merge but missing after merge');
+              }
+            } catch (e) {
+              /* ignore */
+            }
 
             // ===== 履歴サブコレクションの読み込み =====
             try {
@@ -734,6 +786,9 @@ export const useGameStore = create<GameStore>()(
           translationHistory: limitedHistory,
         });
 
+        // 単コレ：英文解釈モードのスキャンから単語を抽出して登録
+        get().saveWordCollectionScan(result, imageUrl);
+
         // クラウドにも保存（テキストのみなので軽量）
         if (db && state.uid) {
           (async () => {
@@ -757,7 +812,257 @@ export const useGameStore = create<GameStore>()(
           translationHistory: state.translationHistory.filter(h => h.id !== id),
         });
       },
+
+      // ===== Word Collection (単コレ) Management =====
+
+      saveWordCollectionScan: (result, imageUrl) => {
+        const state = get();
+        const ACTIVE_MAX = LIMITS.WORD_COLLECTION_SCANS.ACTIVE_ENEMIES_MAX ?? 21;
+
+        const isWordCollectionResult = 'words' in result && Array.isArray((result as WordCollectionScanResult).words);
+        let words: WordEnemy[];
+        let text: string;
+
+        if (isWordCollectionResult) {
+          const wcResult = result as WordCollectionScanResult;
+          text = wcResult.clean_text || '';
+          words = wcResult.words.map((w) => ({
+            word: String(w.word ?? '').trim().toLowerCase(),
+            meaning: (w.meaning && String(w.meaning).trim()) || undefined,
+            pos: w.pos ? String(w.pos).toLowerCase() : undefined,
+            surfaceVariants: Array.isArray(w.surfaceVariants) ? w.surfaceVariants : undefined,
+            exampleSentence: w.exampleSentence && String(w.exampleSentence).trim() ? String(w.exampleSentence).trim() : undefined,
+            hp: 3,
+            asked: false,
+            wrongCount: 0,
+          })).filter((w) => w.word);
+        } else {
+          const trResult = result as TranslationResult;
+          text =
+            trResult.clean_text ||
+            trResult.originalText ||
+            (trResult.sentences
+              ?.map((s: any) => s.original_text || s.marked_text || s.originalText || '')
+              .filter(Boolean)
+              .join(' ') || '');
+          if (!text.trim()) return;
+
+          const vocabMap = new Map<string, string>();
+          for (const s of trResult.sentences || []) {
+            for (const v of s.vocab_list || []) {
+              const w = String(v?.word ?? '').trim().toLowerCase();
+              const m = String(v?.meaning ?? '').trim();
+              if (w && m && !vocabMap.has(w)) vocabMap.set(w, m);
+            }
+          }
+
+          const wordsRaw = extractWords(text);
+          if (wordsRaw.length === 0) return;
+
+          words = wordsRaw.map((w) => ({
+            word: w,
+            meaning: vocabMap.get(w) || undefined,
+            hp: 3,
+            asked: false,
+            wrongCount: 0,
+          }));
+        }
+
+        if (words.length === 0) return;
+
+        const shortTitle = text.slice(0, 25).trim() + (text.length > 25 ? '…' : '') || new Date().toLocaleDateString('ja-JP');
+        const scanNum = state.wordCollectionScans.length + 1;
+        const title = `スキャン${scanNum}：${shortTitle}`;
+
+        const sortedForActive = [...words]
+          .filter((w) => w.meaning?.trim())
+          .sort((a, b) => {
+            if (a.asked !== b.asked) return a.asked ? 1 : -1;
+            if ((a.wrongCount ?? 0) !== (b.wrongCount ?? 0)) return (b.wrongCount ?? 0) - (a.wrongCount ?? 0);
+            return Math.random() - 0.5;
+          });
+        const initialActive = sortedForActive
+          .filter((w) => w.hp > 0)
+          .slice(0, ACTIVE_MAX)
+          .map((w) => w.word);
+
+        const newScan: WordCollectionScan = {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          title,
+          createdAt: new Date().toISOString(),
+          imageUrl,
+          words,
+          activeEnemyWords: initialActive.length > 0 ? initialActive : undefined,
+          activeEnemyTotal: initialActive.length,
+        };
+
+        const updated = [newScan, ...state.wordCollectionScans];
+        const limited = updated.slice(0, LIMITS.WORD_COLLECTION_SCANS.MAX_ITEMS);
+
+        set({ wordCollectionScans: limited });
+        return newScan.id;
+      },
+
+      getWordCollectionScans: () => get().wordCollectionScans,
+
+      getWordCollectionScanById: (id) => {
+        return get().wordCollectionScans.find((s) => s.id === id);
+      },
+
+      updateWordEnemyState: (scanId, word, updates) => {
+        const state = get();
+        const scan = state.wordCollectionScans.find((s) => s.id === scanId);
+        if (!scan) return;
+        const hasTarget = scan.words.some((w) => w.word === word);
+        if (!hasTarget) return;
+        // 同じ lemma が複数行あるケースでも状態が分裂しないよう、同一単語は一括更新する
+        const updatedWords = scan.words.map((w) =>
+          w.word === word ? { ...w, ...updates } : w
+        );
+        // compute defeated increment: how many HP points were reduced (usually 1)
+        // (previously computed defeatedDelta here; now rely on hp state for display)
+        // NOTE:
+        // Do not remove a word from activeEnemyWords when it's captured (hp === 0).
+        // activeEnemyWords represents the fixed set selected for this adventure (the denominator).
+        // Only update the words array (hp/asked/etc.). activeEnemyWords is preserved so
+        // the UI can consistently display the original adventure total.
+        const activeEnemyWords = scan.activeEnemyWords ?? [];
+        set({
+          wordCollectionScans: state.wordCollectionScans.map((s) =>
+            s.id === scanId
+              ? {
+                  ...s,
+                  words: updatedWords,
+                  activeEnemyWords: activeEnemyWords.length > 0 ? activeEnemyWords : undefined,
+                }
+              : s
+          ),
+        });
+        // Immediately persist the updated words to localStorage to avoid race conditions
+        try {
+          const key = 'potenote-scanner-v2';
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && Array.isArray(parsed.wordCollectionScans)) {
+              parsed.wordCollectionScans = parsed.wordCollectionScans.map((s: any) =>
+                s.id === scanId
+                  ? { ...s, words: updatedWords, activeEnemyWords: activeEnemyWords.length > 0 ? activeEnemyWords : undefined, lastAdventureSnapshot: s.lastAdventureSnapshot }
+                  : s
+              );
+              localStorage.setItem(key, JSON.stringify(parsed));
+              console.log('[updateWordEnemyState] persisted updated words to localStorage for', scanId);
+            }
+          }
+        } catch (e) {
+          console.warn('[updateWordEnemyState] failed to persist directly', e);
+        }
+      },
+
+      refillActiveEnemies: (scanId) => {
+        const state = get();
+        const scan = state.wordCollectionScans.find((s) => s.id === scanId);
+        if (!scan) return;
+        const ACTIVE_MAX = LIMITS.WORD_COLLECTION_SCANS.ACTIVE_ENEMIES_MAX ?? 21;
+        const currentActive = scan.activeEnemyWords ?? [];
+        const activeSet = new Set(currentActive);
+
+        // ===== 修正箇所 =====
+        // 現在セットされている単語のデータを取得
+        const currentWordsData = currentActive
+          .map((w) => scan.words.find((x) => x.word === w))
+          .filter((w) => w !== undefined);
+
+        // 現在のアクティブ単語が「すべて捕獲済み（hp === 0）」かどうか判定
+        const isAllCaptured = currentWordsData.length > 0 && currentWordsData.every((w) => w!.hp === 0);
+
+        let remaining: string[];
+        if (isAllCaptured) {
+          // すべて捕獲した場合は、次の新しい21体のためにリストをリセット（次の冒険へ）
+          remaining = [];
+        } else {
+          // まだ進行中の場合は、捕獲済みの単語（hp === 0）も捨てずにそのまま残す！
+          remaining = currentWordsData.map((w) => w!.word);
+        }
+        // ====================
+
+        const reserve = scan.words
+          .filter((w) => w.hp > 0 && w.meaning?.trim() && !activeSet.has(w.word))
+          .sort((a, b) => {
+            if (a.asked !== b.asked) return a.asked ? 1 : -1;
+            if ((a.wrongCount ?? 0) !== (b.wrongCount ?? 0)) return (b.wrongCount ?? 0) - (a.wrongCount ?? 0);
+            return Math.random() - 0.5;
+          });
+          
+        const toAdd = reserve.slice(0, ACTIVE_MAX - remaining.length).map((w) => w.word);
+        const newActive = [...remaining, ...toAdd];
+        // Debug: log snapshot presence before updating active list
+        try {
+          const target = state.wordCollectionScans.find((x) => x.id === scanId);
+          console.log('[refillActiveEnemies] before update:', { scanId, hadSnapshot: !!target?.lastAdventureSnapshot, lastSnapshot: target?.lastAdventureSnapshot });
+        } catch (e) {}
+
+        set({
+          wordCollectionScans: state.wordCollectionScans.map((s) =>
+            s.id === scanId
+              ? { ...s, activeEnemyWords: newActive.length > 0 ? newActive : undefined, lastAdventureSnapshot: s.lastAdventureSnapshot }
+              : s
+          ),
+        });
+
+        // Debug: verify snapshot preserved after update
+        try {
+          const after = get().wordCollectionScans.find((x) => x.id === scanId);
+          console.log('[refillActiveEnemies] after update:', { scanId, hasSnapshot: !!after?.lastAdventureSnapshot, lastSnapshot: after?.lastAdventureSnapshot });
+        } catch (e) {}
+      },
       
+      // Save an adventure snapshot at the end of a quest so the log screen can display
+      // what happened at the time of completion without being affected by later state changes.
+      saveAdventureSnapshot: (scanId: string, snapshot: { timestamp: string; capturedCount: number; defeatedCount: number; remainingCount: number; total: number; capturedWords: WordEnemy[]; defeatedWords: WordEnemy[] }) => {
+        const state = get();
+        console.log('[saveAdventureSnapshot] saving snapshot for', scanId, snapshot);
+        set({
+          wordCollectionScans: state.wordCollectionScans.map((s) =>
+            s.id === scanId ? { ...s, lastAdventureSnapshot: snapshot } : s
+          ),
+        });
+        // Ensure persisted storage is updated immediately to avoid race with HMR/refresh.
+        try {
+          const key = 'potenote-scanner-v2';
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && Array.isArray(parsed.wordCollectionScans)) {
+              parsed.wordCollectionScans = parsed.wordCollectionScans.map((s: any) =>
+                s.id === scanId ? { ...s, lastAdventureSnapshot: snapshot } : s
+              );
+              localStorage.setItem(key, JSON.stringify(parsed));
+              console.log('[saveAdventureSnapshot] persisted snapshot to localStorage');
+            }
+          }
+        } catch (e) {
+          console.warn('[saveAdventureSnapshot] failed to persist directly', e);
+        }
+      },
+
+      registerWordDexWords: (words) => {
+        const state = get();
+        const order = [...state.wordDexOrder];
+        const seen = new Set(order);
+        let changed = false;
+        for (const w of words) {
+          if (w && !seen.has(w)) {
+            seen.add(w);
+            order.push(w);
+            changed = true;
+          }
+        }
+        if (changed) set({ wordDexOrder: order });
+      },
+
+      getWordDexOrder: () => get().wordDexOrder,
+
       // ===== Lecture History Management =====
       
       saveLectureHistory: (script, imageUrl) => {
@@ -1423,6 +1728,13 @@ export const useGameStore = create<GameStore>()(
           console.log(`Cleaning up lecture history: ${state.lectureHistory.length} -> ${LIMITS.LECTURE_HISTORY.MAX_ITEMS}`);
           state.lectureHistory = state.lectureHistory.slice(0, LIMITS.LECTURE_HISTORY.MAX_ITEMS);
         }
+        // NOTE:
+        // 過去の「hp:1 -> hp:3」マイグレーションは現在の仕様ではHP巻き戻りの原因になるため無効化。
+        // 以後は保存された hp をそのまま信頼して復元する。
+        if (state && !Array.isArray(state.wordDexOrder)) {
+          state.wordDexOrder = [];
+          useGameStore.setState({ wordDexOrder: [] });
+        }
       },
       partialize: (state) => ({
         coins: state.coins,
@@ -1450,6 +1762,8 @@ export const useGameStore = create<GameStore>()(
         hasLaunched: state.hasLaunched,
         quizHistory: state.quizHistory,
         translationHistory: state.translationHistory,
+        wordCollectionScans: state.wordCollectionScans,
+        wordDexOrder: state.wordDexOrder,
         lectureHistory: state.lectureHistory,
         scanType: state.scanType,
         translationResult: state.translationResult,
