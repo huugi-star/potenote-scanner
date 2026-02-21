@@ -345,7 +345,7 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
             {noUndefeated
               ? 'クエストクリアです。'
               : undefeatedCount > 0
-                ? '未討伐の単語に意味が登録されていません。'
+                ? 'クエストクリア'
                 : 'vocab_list に意味が登録された単語が必要です。'}
           </p>
           <button
