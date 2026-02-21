@@ -30,6 +30,7 @@ function WordCollectionContent() {
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
   const [questMode, setQuestMode] = useState<'explore' | 'retry'>('explore');
   const [battleResult, setBattleResult] = useState<BattleResultData | null>(null);
+  const [retryPriorityWords, setRetryPriorityWords] = useState<string[]>([]);
   useToast(); // hook initialization (addToast not used here)
   const wordCollectionScans = useGameStore((s) => s.wordCollectionScans);
   const wordDexOrder = useGameStore((s) => s.wordDexOrder);
@@ -80,6 +81,7 @@ function WordCollectionContent() {
     refillActiveEnemies(id);
     setSelectedScanId(id);
     setQuestMode('explore');
+    setRetryPriorityWords([]);
     setView('quest');
   };
 
@@ -87,6 +89,7 @@ function WordCollectionContent() {
     vibrateLight();
     setSelectedScanId(id);
     setQuestMode('retry');
+    setRetryPriorityWords([]);
     setView('quest');
   };
 
@@ -213,6 +216,7 @@ function WordCollectionContent() {
       <WordCollectionQuestScreen
         scan={selectedScan}
         questMode={questMode}
+        retryPriorityWords={questMode === 'retry' ? retryPriorityWords : []}
         onComplete={(result) => {
           // Save an immutable adventure snapshot using latest store state
           // (HP=0 を捕獲として集計し、分母は固定値を維持)
@@ -258,6 +262,7 @@ function WordCollectionContent() {
             console.log('[onContinue] selectedScan before refill:', { id: selectedScanId, hasSnapshot: !!s?.lastAdventureSnapshot, lastSnapshot: s?.lastAdventureSnapshot });
           } catch (e) {}
           refillActiveEnemies(selectedScanId);
+          setRetryPriorityWords([]);
           setView('quest');
           setBattleResult(null);
         }}
@@ -265,12 +270,14 @@ function WordCollectionContent() {
           // 同じスキャンで再チャレンジ（retry モード）
           setSelectedScanId(selectedScanId);
           setQuestMode('retry');
+          setRetryPriorityWords(battleResult.askedWords ?? []);
           setView('quest');
           setBattleResult(null);
         }}
         onBack={() => {
           setView('list');
           setSelectedScanId(null);
+          setRetryPriorityWords([]);
           setBattleResult(null);
         }}
       />

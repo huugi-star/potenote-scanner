@@ -30,19 +30,27 @@ export interface BattleResultData {
   defeatedCount: number;
   misses: number;
   missedWords: MissedWord[];   // 取り逃がした単語（ミスした単語）
+  askedWords: string[]; // この戦闘で実際に出題された単語（再チャレンジ優先用）
 }
 
 interface WordCollectionQuestScreenProps {
   scan: WordCollectionScan;
   questMode: QuestMode;
+  retryPriorityWords?: string[];
   onComplete: (result: BattleResultData) => void;
   onBack: () => void;
 }
 
 // ===== Selection Logic =====
 
-function selectQuestions(scan: WordCollectionScan, questMode: QuestMode, dexWords: string[]): WordEnemy[] {
+function selectQuestions(
+  scan: WordCollectionScan,
+  questMode: QuestMode,
+  dexWords: string[],
+  retryPriorityWords: string[] = []
+): WordEnemy[] {
   const dexSet = new Set(dexWords);
+  const priorityMap = new Map<string, number>(retryPriorityWords.map((w, i) => [w, i]));
   const withMeaning = scan.words.filter((w) => w.meaning && w.meaning.trim());
   if (withMeaning.length === 0) return [];
 
@@ -71,6 +79,12 @@ function selectQuestions(scan: WordCollectionScan, questMode: QuestMode, dexWord
       if (a.hp !== b.hp) return b.hp - a.hp;
       if ((a.wrongCount ?? 0) !== (b.wrongCount ?? 0)) return (b.wrongCount ?? 0) - (a.wrongCount ?? 0);
     } else {
+      const aPriority = priorityMap.get(a.word);
+      const bPriority = priorityMap.get(b.word);
+      const aInPriority = aPriority !== undefined;
+      const bInPriority = bPriority !== undefined;
+      if (aInPriority !== bInPriority) return aInPriority ? -1 : 1;
+      if (aInPriority && bInPriority && aPriority !== bPriority) return (aPriority as number) - (bPriority as number);
       if (a.hp !== b.hp) return a.hp - b.hp;
       if (a.asked !== b.asked) return a.asked ? 1 : -1;
       if ((a.wrongCount ?? 0) !== (b.wrongCount ?? 0)) return (b.wrongCount ?? 0) - (a.wrongCount ?? 0);
@@ -120,14 +134,20 @@ function buildChoices(correct: WordEnemy, allWithMeaning: WordEnemy[]): string[]
 
 // ===== Main Component =====
 
-export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack }: WordCollectionQuestScreenProps) => {
+export const WordCollectionQuestScreen = ({
+  scan,
+  questMode,
+  retryPriorityWords = [],
+  onComplete,
+  onBack,
+}: WordCollectionQuestScreenProps) => {
   const updateWordEnemyState = useGameStore((s) => s.updateWordEnemyState);
   const registerWordDexWords = useGameStore((s) => s.registerWordDexWords);
   const wordDexOrder = useGameStore((s) => s.wordDexOrder);
 
   // 選択肢は問題ごとに初期化時に固定（ストア更新で再生成されないようにする）
   const [questionsWithChoices] = useState(() => {
-    const qs = selectQuestions(scan, questMode, wordDexOrder);
+    const qs = selectQuestions(scan, questMode, wordDexOrder, retryPriorityWords);
     const allWithMeaning = scan.words.filter((w) => w.meaning?.trim()) as Array<WordEnemy & { meaning: string }>;
     return qs.map((q) => {
       const choices = buildChoices(q, allWithMeaning);
@@ -249,6 +269,7 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
         defeatedCount,
         misses: missCount,
         missedWords,
+        askedWords: questionsWithChoices.map((q) => q.word.word),
       });
       return;
     }
@@ -709,14 +730,14 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
                           width: '2.4rem',
                           height: '3.8rem',
                           // 投擲中は前面、封印待機中は単語の背面へ
-                          zIndex: sealPhase === 'throw' ? 30 : 1,
+                          zIndex: sealPhase === 'throw' ? 30 : -1,
                         }}
                         initial={{ x: 0, y: 0, rotateZ: 0, rotateY: 0, opacity: 1, scale: 0.9 }}
                         animate={
                           sealPhase === 'throw'
                             ? { 
                                 // 直撃（中央付近）へ向かう放物線
-                                x: ['0px', '-90px', '-145px'], 
+                                x: ['0px', '-90px', '-105px'], 
                                 y: ['0px', '-185px', '-145px'], 
                                 rotateZ: [0, 1080], 
                                 rotateY: [0, 70], 
@@ -724,10 +745,10 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
                               }
                             : sealPhase === 'stick'
                             // 直撃後、単語の中央（背面）で正面向きに静止
-                            ? { x: '-145px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: [1.06, 1] }
+                            ? { x: '-120px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: [1.06, 1] }
                             : sealPhase === 'seal'
-                            ? { x: '-145px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: 1 }
-                            : { x: '-145px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: 1 }
+                            ? { x: '-120px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: 1 }
+                            : { x: '-120px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: 1 }
                         }
                         transition={{ duration: sealPhase === 'throw' ? 0.52 : sealPhase === 'stick' ? 0.12 : sealPhase === 'seal' ? 0.25 : 0.01, ease: 'easeOut' }}
                       >
