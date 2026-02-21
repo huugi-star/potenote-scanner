@@ -6,6 +6,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import fs from 'fs';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { LanguageServiceClient } from '@google-cloud/language';
 import { jsonrepair } from 'jsonrepair';
@@ -251,6 +252,20 @@ ${wordList}
 
 export async function POST(req: Request) {
   try {
+    // Vercel: allow provisioning service-account JSON via env var for ADC.
+    // Set process.env.GOOGLE_APPLICATION_CREDENTIALS to a /tmp file if GOOGLE_CREDENTIALS_JSON is provided.
+    if (process.env.GOOGLE_CREDENTIALS_JSON && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      try {
+        const credPath = '/tmp/gcp-sa.json';
+        await fs.promises.writeFile(credPath, process.env.GOOGLE_CREDENTIALS_JSON, { encoding: 'utf8' });
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = credPath;
+        // eslint-disable-next-line no-console
+        console.info('[word-collection-scan] wrote GOOGLE_CREDENTIALS_JSON to', credPath);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[word-collection-scan] failed to write GOOGLE_CREDENTIALS_JSON to /tmp', e);
+      }
+    }
     if (!process.env.GOOGLE_GEMINI_API_KEY) {
       return NextResponse.json({ error: 'GOOGLE_GEMINI_API_KEY is not configured' }, { status: 500 });
     }
