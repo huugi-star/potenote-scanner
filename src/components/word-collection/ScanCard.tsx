@@ -112,7 +112,7 @@ export const ScanCard = memo(({ data, onExplore, onRetry }: ScanCardProps) => {
 
       {/* 安心の一文 */}
       <p className="text-[10px] text-gray-500">
-        スキャン内容は保存済み。冒険は21体ずつ進みます
+        冒険は基本20体ずつ進みます
       </p>
 
       {/* 下段：アクションボタン */}
@@ -126,15 +126,17 @@ export const ScanCard = memo(({ data, onExplore, onRetry }: ScanCardProps) => {
         >
           続きを探索する
         </button>
-        <button
-          onClick={() => {
-            vibrateLight();
-            onRetry(data.id);
-          }}
-          className="w-full py-2.5 rounded-xl border border-gray-600 text-gray-400 font-medium text-sm hover:bg-gray-700/40 hover:text-gray-300 transition-colors"
-        >
-          再戦する
-        </button>
+        {!isComplete && (
+          <button
+            onClick={() => {
+              vibrateLight();
+              onRetry(data.id);
+            }}
+            className="w-full py-2.5 rounded-xl border border-gray-600 text-gray-400 font-medium text-sm hover:bg-gray-700/40 hover:text-gray-300 transition-colors"
+          >
+            再戦する
+          </button>
+        )}
       </div>
     </div>
   );

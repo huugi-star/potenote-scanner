@@ -55,8 +55,8 @@ function selectQuestions(scan: WordCollectionScan, questMode: QuestMode): WordEn
   if (questMode === 'explore') {
     pool = activeWords.filter((w) => w.hp > 0);
   } else {
-    const captured = activeWords.filter((w) => w.hp === 0);
-    pool = captured.length >= QUESTIONS_PER_ROUND ? captured : activeWords;
+    // 再戦でも捕獲済み（hp===0）は出題しない
+    pool = activeWords.filter((w) => w.hp > 0);
   }
 
   if (pool.length === 0) return [];
@@ -131,11 +131,15 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
     });
   });
 
+  // 図鑑登録タイミング（以前の仕様）：出題候補になった時点で登録
+  useEffect(() => {
+    registerWordDexWords(questionsWithChoices.map((q) => q.word.word));
+  }, [questionsWithChoices, registerWordDexWords]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(TIME_LIMIT_SEC);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
-  const [correctCount, setCorrectCount] = useState(0);
   const [defeatedCount, setDefeatedCount] = useState(0);
   const [capturedWords, setCapturedWords] = useState<WordEnemy[]>([]);
   const [defeatedWords, setDefeatedWords] = useState<WordEnemy[]>([]);
@@ -143,9 +147,6 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
   const [missCount, setMissCount] = useState(0);
   const [battleLog, setBattleLog] = useState<{ text: string; key: number } | null>(null);
 
-  useEffect(() => {
-    registerWordDexWords(questionsWithChoices.map((q) => q.word.word));
-  }, [questionsWithChoices, registerWordDexWords]);
   const [cardThrow, setCardThrow] = useState<{ isCorrect: boolean; key: number } | null>(null);
   const [hitType, setHitType] = useState<'shake' | 'split' | 'seal' | null>(null);
   const [sealArrived, setSealArrived] = useState(false);
@@ -186,7 +187,6 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
 
       if (isCorrect) {
         vibrateSuccess();
-        setCorrectCount((c) => c + 1);
         // 成功時は撃破カウントを増やす（捕獲時も数値として残す）
         setDefeatedCount((d) => d + 1);
         const newHp = Math.max(0, currentWord!.hp - 1);
@@ -271,23 +271,24 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
   // 時間切れ = 不正解
   useEffect(() => {
     if (timeLeft === 0 && !showResult && selectedAnswer === null) {
+      if (!currentWord) return;
       setSelectedAnswer(-1);
       setShowResult(true);
       setMissCount((m) => m + 1);
       setMissedWords((prev) => {
-        const idx = prev.findIndex((x) => x.word.word === currentWord!.word);
+        const idx = prev.findIndex((x) => x.word.word === currentWord.word);
         if (idx >= 0) {
           const next = [...prev];
           next[idx] = { ...next[idx], missCount: next[idx].missCount + 1 };
           return next;
         }
-        return [...prev, { word: { ...currentWord! }, missCount: 1 }];
+        return [...prev, { word: { ...currentWord }, missCount: 1 }];
       });
       setBattleLog({ text: 'はじかれた…', key: Date.now() });
       vibrateError();
-      updateWordEnemyState(scan.id, currentWord!.word, {
+      updateWordEnemyState(scan.id, currentWord.word, {
         asked: true,
-        wrongCount: (currentWord!.wrongCount ?? 0) + 1,
+        wrongCount: (currentWord.wrongCount ?? 0) + 1,
       });
     }
   }, [timeLeft, showResult, selectedAnswer, scan.id, currentWord, updateWordEnemyState]);
@@ -337,7 +338,7 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
           </p>
           <p className="text-gray-500 text-sm mb-6">
             {noUndefeated
-              ? '再戦で捕獲済み単語を復習できます。'
+              ? 'クエストクリアです。'
               : undefeatedCount > 0
                 ? '未討伐の単語に意味が登録されていません。'
                 : 'vocab_list に意味が登録された単語が必要です。'}
@@ -470,6 +471,13 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
           100% { transform: scale(0.2); opacity: 0; filter: blur(0); }
         }
         .animate-absorb { animation: absorbOut 0.56s ease-in forwards; transform-origin: center; }
+        /* 封印時：単語が札（右側）へ吸い込まれる */
+        @keyframes absorbToCard {
+          0% { transform: translateX(0) translateY(0) scale(1); opacity: 1; filter: blur(0); }
+          45% { transform: translateX(20px) translateY(-3px) scale(0.75); opacity: 0.9; filter: blur(0); }
+          100% { transform: translateX(42px) translateY(-6px) scale(0.18); opacity: 0; filter: blur(0.6px); }
+        }
+        .animate-absorb-to-card { animation: absorbToCard 0.56s ease-in forwards; transform-origin: center; }
         /* Seal rings color tweak */
         .seal-ring { stroke: rgba(120,200,255,0.95); }
       `}</style>
@@ -636,7 +644,7 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
                           </span>
                         </div>
                       ) : (
-                        <p className={`text-2xl font-bold text-white tracking-wider drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] enemy-word ${sealArrived ? 'animate-absorb' : ''}`}>
+                        <p className={`text-2xl font-bold text-white tracking-wider drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] enemy-word ${sealArrived && hitType === 'seal' ? 'animate-absorb-to-card' : ''}`}>
                           {currentWord?.word}
                         </p>
                       )}
@@ -649,6 +657,31 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
               {hitType === 'seal' && currentWord && (
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                   <div className="absolute w-20 h-20 rounded-full bg-amber-400/30 animate-word-seal-glow" />
+                  {sealPhase === 'seal' && (
+                    <motion.svg className="absolute" width="180" height="180" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <motion.circle
+                        cx="50"
+                        cy="50"
+                        r="22"
+                        stroke="rgba(120,200,255,0.9)"
+                        strokeWidth="1.8"
+                        initial={{ scale: 0.65, opacity: 0.95 }}
+                        animate={{ scale: 1.1, opacity: 0.45 }}
+                        transition={{ duration: 0.25, ease: 'easeOut' }}
+                      />
+                      <motion.circle
+                        cx="50"
+                        cy="50"
+                        r="30"
+                        stroke="rgba(120,200,255,0.7)"
+                        strokeWidth="1.2"
+                        strokeDasharray="4 4"
+                        initial={{ scale: 0.65, opacity: 0.7 }}
+                        animate={{ scale: 1.12, opacity: 0.3 }}
+                        transition={{ duration: 0.3, ease: 'easeOut' }}
+                      />
+                    </motion.svg>
+                  )}
                 </div>
               )}
 
@@ -665,47 +698,35 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
                       /* Seal-card throw animation (from bottom-right to center) */
                       <motion.div
                         className="absolute seal-throw"
-                        style={{ right: '8%', bottom: '12%' }}
+                        style={{
+                          right: '8%',
+                          bottom: '12%',
+                          width: '2.4rem',
+                          height: '3.8rem',
+                          // 投擲中は前面、封印待機中は単語の背面へ
+                          zIndex: sealPhase === 'throw' ? 30 : 1,
+                        }}
                         initial={{ x: 0, y: 0, rotateZ: 0, rotateY: 0, opacity: 1, scale: 0.9 }}
                         animate={
                           sealPhase === 'throw'
                             ? { 
-                                // 中間地点を経由して、最終的に -160px, -200px (単語の横) で止まる放物線
-                                x: ['0px', '-80px', '-160px'], 
-                                y: ['0px', '-180px', '-140px'], 
-                                rotateZ: [0, 720], 
+                                // 直撃（中央付近）へ向かう放物線
+                                x: ['0px', '-90px', '-145px'], 
+                                y: ['0px', '-185px', '-145px'], 
+                                rotateZ: [0, 1080], 
                                 rotateY: [0, 70], 
                                 scale: [0.9, 1.05] 
                               }
                             : sealPhase === 'stick'
-                            ? { x: '-160px', y: '-140px', rotateZ: 720, rotateY: 0, scale: [1.06, 1] }
+                            // 直撃後、単語の中央（背面）で正面向きに静止
+                            ? { x: '-145px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: [1.06, 1] }
                             : sealPhase === 'seal'
-                            ? { x: '-160px', y: '-140px', rotateZ: 720, rotateY: 0, scale: 1 }
-                            : { x: '-160px', y: '-140px', rotateZ: 720, rotateY: 0, scale: 1 }
+                            ? { x: '-145px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: 1 }
+                            : { x: '-145px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: 1 }
                         }
                         transition={{ duration: sealPhase === 'throw' ? 0.52 : sealPhase === 'stick' ? 0.12 : sealPhase === 'seal' ? 0.25 : 0.01, ease: 'easeOut' }}
                       >
-                        <div className="seal-card">
-                          <div className="seal-border-top" />
-                          <div className="seal-center">
-                            <img src="/cards/seal-card.svg" className="seal-symbol" alt="seal" />
-                          </div>
-                          <div className="seal-border-bottom" />
-                        </div>
-                      {sealPhase === 'seal' && (
-                        <motion.svg className="absolute inset-0 m-auto" width="160" height="160" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <motion.circle cx="50" cy="50" r="28" stroke="rgba(120,200,255,0.9)" strokeWidth="1.8"
-                            initial={{ scale: 1.25, opacity: 0.9 }}
-                            animate={{ scale: 1.0, opacity: 0.6 }}
-                            transition={{ duration: 0.35, ease: 'easeInOut' }}
-                          />
-                          <motion.circle cx="50" cy="50" r="34" stroke="rgba(120,200,255,0.7)" strokeWidth="1.2" strokeDasharray="4 4"
-                            initial={{ scale: 1.25, opacity: 0.6 }}
-                            animate={{ scale: 1.0, opacity: 0.4 }}
-                            transition={{ duration: 0.45, ease: 'easeInOut' }}
-                          />
-                        </motion.svg>
-                      )}
+                        <img src="/cards/seal-card.svg" className="small-seal-symbol" alt="seal" />
                       </motion.div>
                     ) : (
                       /* default small card toss for non-seal cases */
@@ -715,10 +736,18 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
                         initial={{ x: 0, y: 0, rotateZ: 0, opacity: 1, scale: 0.9 }}
                         animate={
                           cardThrow.isCorrect
-                            ? { x: ['0px', '-120px', '-40px'], y: ['0px', '-140px', '-20px'], rotateZ: [0, 240, 180], opacity: [1, 1, 0], scale: [0.9, 1, 0.5] }
+                            // 撃破時は単語を突き抜けて奥へ飛ばす
+                            ? {
+                                // 単語を貫いた直後にフェードアウト
+                                x: ['0px', '-120px', '-185px', '-245px'],
+                                y: ['0px', '-145px', '-155px', '-175px'],
+                                rotateZ: [0, 960, 1200, 1320],
+                                opacity: [1, 1, 0, 0],
+                                scale: [0.9, 1, 0.72, 0.35],
+                              }
                             : { x: ['0px', '-40px', 0], y: [0, -10, 40], opacity: [1, 1, 0] }
                         }
-                        transition={{ duration: 0.4, ease: 'easeOut' }}
+                        transition={{ duration: 0.8, ease: 'easeOut' }}
                       >
                         <img src="/cards/seal-card.svg" className="small-seal-symbol" alt="seal" />
                       </motion.div>

@@ -103,7 +103,7 @@ function normalizePosTag(tag: string | null): string | undefined {
 function buildWordsFromSyntax(
   text: string,
   tokens: SyntaxToken[]
-): Array<{ lemma: string; pos: string | undefined; surfaceVariants: string[]; exampleSentence?: string }> {
+): Array<{ lemma: string; pos: string | undefined; surfaceVariants: string[]; exampleSentence?: string; firstCharIndex: number }> {
   const sentences = splitSentences(text);
   const lemmaMap = new Map<
     string,
@@ -140,6 +140,7 @@ function buildWordsFromSyntax(
     pos: string | undefined;
     surfaceVariants: string[];
     exampleSentence?: string;
+    firstCharIndex: number;
   }> = [];
 
   for (const [lemma, data] of lemmaMap) {
@@ -149,10 +150,48 @@ function buildWordsFromSyntax(
       pos: data.pos,
       surfaceVariants: Array.from(data.surfaceVariants),
       exampleSentence,
+      firstCharIndex: data.firstCharIndex,
     });
   }
 
-  return result;
+  // 文章内の出現位置順に揃える
+  return result.sort((a, b) => a.firstCharIndex - b.firstCharIndex);
+}
+
+/** 本文全体から均等に max 個を選ぶ（先頭偏り対策） */
+function pickEvenlyDistributedWords<
+  T extends { firstCharIndex: number }
+>(words: T[], max: number): T[] {
+  if (words.length <= max) return words;
+  const picked: T[] = [];
+  const used = new Set<number>();
+  const n = words.length;
+  for (let i = 0; i < max; i++) {
+    // 区間中央寄りのインデックスを選ぶ
+    const raw = Math.floor(((i + 0.5) * n) / max);
+    let idx = Math.max(0, Math.min(n - 1, raw));
+    // 重複した場合は近傍探索
+    if (used.has(idx)) {
+      let l = idx - 1;
+      let r = idx + 1;
+      while (l >= 0 || r < n) {
+        if (l >= 0 && !used.has(l)) {
+          idx = l;
+          break;
+        }
+        if (r < n && !used.has(r)) {
+          idx = r;
+          break;
+        }
+        l--;
+        r++;
+      }
+    }
+    used.add(idx);
+    picked.push(words[idx]);
+  }
+  // 出現順を維持
+  return picked.sort((a, b) => a.firstCharIndex - b.firstCharIndex);
 }
 
 /** Gemini で activeEnemies のみ意味を生成（品詞は NL API の pos をそのまま使用） */
@@ -286,15 +325,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '抽出できる単語がありませんでした' }, { status: 400 });
     }
 
-    // activeEnemies: 最大21体を先頭から選択（出現順）
-    const activeLemmas = wordsFromSyntax.slice(0, ACTIVE_ENEMIES_MAX).map((w) => w.lemma);
+    // activeEnemies: 本文全体から均等に最大21体を選択（先頭偏りを防ぐ）
+    const activeWords = pickEvenlyDistributedWords(wordsFromSyntax, ACTIVE_ENEMIES_MAX);
+    const activeLemmaSet = new Set(activeWords.map((w) => w.lemma.toLowerCase()));
+    const activeLemmas = activeWords.map((w) => w.lemma);
 
     // Gemini は activeEnemies のみ意味生成
     const meaningMap = await generateMeaningsForActive(activeLemmas);
 
     const words = wordsFromSyntax.map((w) => ({
       word: w.lemma,
-      meaning: meaningMap.get(w.lemma.toLowerCase()),
+      meaning: activeLemmaSet.has(w.lemma.toLowerCase()) ? meaningMap.get(w.lemma.toLowerCase()) : undefined,
       pos: w.pos, // Natural Language API の pos をそのまま
       surfaceVariants: w.surfaceVariants,
       exampleSentence: w.exampleSentence,

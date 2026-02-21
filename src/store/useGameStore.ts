@@ -63,6 +63,10 @@ interface GameState extends UserState {
   // 翻訳履歴
   translationHistory: TranslationHistory[];
 
+  // 単コレ日次制限
+  dailyWordCollectionScanCount: number;
+  lastWordCollectionScanDate: string;
+
   // 単コレ冒険ログ
   wordCollectionScans: WordCollectionScan[];
 
@@ -206,6 +210,8 @@ const initialState: GameState = {
   
   dailyScanCount: 0,
   lastScanDate: '',
+  dailyWordCollectionScanCount: 0,
+  lastWordCollectionScanDate: '',
   dailyFreeQuestGenerationCount: 0,
   lastFreeQuestGenerationDate: '',
   dailyTranslationCount: 0,
@@ -817,6 +823,26 @@ export const useGameStore = create<GameStore>()(
 
       saveWordCollectionScan: (result, imageUrl) => {
         const state = get();
+        // Enforce daily limit only in production-like environments
+        const today = getTodayString();
+        if (!isLocalDevelopment()) {
+          if (state.lastWordCollectionScanDate !== today) {
+            // reset daily counter for new day
+            set({ dailyWordCollectionScanCount: 0, lastWordCollectionScanDate: today });
+            // refresh state variable after set
+            const refreshed = get();
+            // use refreshed for check
+            if ((refreshed.dailyWordCollectionScanCount ?? 0) >= 5) {
+              console.warn('[saveWordCollectionScan] daily limit reached (after reset)'); 
+              return undefined;
+            }
+          } else {
+            if ((state.dailyWordCollectionScanCount ?? 0) >= 5) {
+              console.warn('[saveWordCollectionScan] daily limit reached');
+              return undefined;
+            }
+          }
+        }
         const ACTIVE_MAX = LIMITS.WORD_COLLECTION_SCANS.ACTIVE_ENEMIES_MAX ?? 21;
 
         const isWordCollectionResult = 'words' in result && Array.isArray((result as WordCollectionScanResult).words);
@@ -870,13 +896,37 @@ export const useGameStore = create<GameStore>()(
 
         if (words.length === 0) return;
 
+        // 同一lemmaの重複を統合（20/21重複対策）
+        const wordMap = new Map<string, WordEnemy>();
+        for (const w of words) {
+          const key = w.word;
+          const prev = wordMap.get(key);
+          if (!prev) {
+            wordMap.set(key, { ...w });
+            continue;
+          }
+          wordMap.set(key, {
+            ...prev,
+            // 欠けている情報を補完
+            meaning: prev.meaning || w.meaning,
+            pos: prev.pos || w.pos,
+            exampleSentence: prev.exampleSentence || w.exampleSentence,
+            surfaceVariants: Array.from(new Set([...(prev.surfaceVariants ?? []), ...(w.surfaceVariants ?? [])])),
+          });
+        }
+        words = Array.from(wordMap.values());
+
         const shortTitle = text.slice(0, 25).trim() + (text.length > 25 ? '…' : '') || new Date().toLocaleDateString('ja-JP');
         const scanNum = state.wordCollectionScans.length + 1;
         const title = `スキャン${scanNum}：${shortTitle}`;
 
+        const dexSet = new Set(state.wordDexOrder ?? []);
         const sortedForActive = [...words]
           .filter((w) => w.meaning?.trim())
           .sort((a, b) => {
+            const aRegistered = dexSet.has(a.word);
+            const bRegistered = dexSet.has(b.word);
+            if (aRegistered !== bRegistered) return aRegistered ? 1 : -1;
             if (a.asked !== b.asked) return a.asked ? 1 : -1;
             if ((a.wrongCount ?? 0) !== (b.wrongCount ?? 0)) return (b.wrongCount ?? 0) - (a.wrongCount ?? 0);
             return Math.random() - 0.5;
@@ -899,7 +949,12 @@ export const useGameStore = create<GameStore>()(
         const updated = [newScan, ...state.wordCollectionScans];
         const limited = updated.slice(0, LIMITS.WORD_COLLECTION_SCANS.MAX_ITEMS);
 
-        set({ wordCollectionScans: limited });
+        // increment daily counter and persist new scan list
+        set({
+          wordCollectionScans: limited,
+          dailyWordCollectionScanCount: (state.dailyWordCollectionScanCount ?? 0) + 1,
+          lastWordCollectionScanDate: getTodayString(),
+        });
         return newScan.id;
       },
 
@@ -964,38 +1019,17 @@ export const useGameStore = create<GameStore>()(
         const scan = state.wordCollectionScans.find((s) => s.id === scanId);
         if (!scan) return;
         const ACTIVE_MAX = LIMITS.WORD_COLLECTION_SCANS.ACTIVE_ENEMIES_MAX ?? 21;
-        const currentActive = scan.activeEnemyWords ?? [];
-        const activeSet = new Set(currentActive);
-
-        // ===== 修正箇所 =====
-        // 現在セットされている単語のデータを取得
-        const currentWordsData = currentActive
-          .map((w) => scan.words.find((x) => x.word === w))
-          .filter((w) => w !== undefined);
-
-        // 現在のアクティブ単語が「すべて捕獲済み（hp === 0）」かどうか判定
-        const isAllCaptured = currentWordsData.length > 0 && currentWordsData.every((w) => w!.hp === 0);
-
-        let remaining: string[];
-        if (isAllCaptured) {
-          // すべて捕獲した場合は、次の新しい21体のためにリストをリセット（次の冒険へ）
-          remaining = [];
-        } else {
-          // まだ進行中の場合は、捕獲済みの単語（hp === 0）も捨てずにそのまま残す！
-          remaining = currentWordsData.map((w) => w!.word);
-        }
-        // ====================
-
+        // 毎回、未出題(asked=false)を最優先してアクティブ枠を再構成する。
+        // これにより同一scanIdで複数回プレイしても未出題単語を出し切れる。
         const reserve = scan.words
-          .filter((w) => w.hp > 0 && w.meaning?.trim() && !activeSet.has(w.word))
+          .filter((w) => w.hp > 0 && w.meaning?.trim())
           .sort((a, b) => {
             if (a.asked !== b.asked) return a.asked ? 1 : -1;
             if ((a.wrongCount ?? 0) !== (b.wrongCount ?? 0)) return (b.wrongCount ?? 0) - (a.wrongCount ?? 0);
             return Math.random() - 0.5;
           });
-          
-        const toAdd = reserve.slice(0, ACTIVE_MAX - remaining.length).map((w) => w.word);
-        const newActive = [...remaining, ...toAdd];
+
+        const newActive = reserve.slice(0, ACTIVE_MAX).map((w) => w.word);
         // Debug: log snapshot presence before updating active list
         try {
           const target = state.wordCollectionScans.find((x) => x.id === scanId);
@@ -1005,7 +1039,12 @@ export const useGameStore = create<GameStore>()(
         set({
           wordCollectionScans: state.wordCollectionScans.map((s) =>
             s.id === scanId
-              ? { ...s, activeEnemyWords: newActive.length > 0 ? newActive : undefined, lastAdventureSnapshot: s.lastAdventureSnapshot }
+              ? {
+                  ...s,
+                  activeEnemyWords: newActive.length > 0 ? newActive : undefined,
+                  activeEnemyTotal: newActive.length > 0 ? newActive.length : s.activeEnemyTotal,
+                  lastAdventureSnapshot: s.lastAdventureSnapshot,
+                }
               : s
           ),
         });
@@ -1744,6 +1783,8 @@ export const useGameStore = create<GameStore>()(
         vipExpiresAt: state.vipExpiresAt,
         dailyScanCount: state.dailyScanCount,
         lastScanDate: state.lastScanDate,
+        dailyWordCollectionScanCount: state.dailyWordCollectionScanCount,
+        lastWordCollectionScanDate: state.lastWordCollectionScanDate,
         dailyFreeQuestGenerationCount: state.dailyFreeQuestGenerationCount,
         lastFreeQuestGenerationDate: state.lastFreeQuestGenerationDate,
         dailyTranslationCount: state.dailyTranslationCount,

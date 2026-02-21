@@ -30,9 +30,11 @@ function WordCollectionContent() {
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
   const [questMode, setQuestMode] = useState<'explore' | 'retry'>('explore');
   const [battleResult, setBattleResult] = useState<BattleResultData | null>(null);
-  const { addToast } = useToast();
+  useToast(); // hook initialization (addToast not used here)
   const wordCollectionScans = useGameStore((s) => s.wordCollectionScans);
   const wordDexOrder = useGameStore((s) => s.wordDexOrder);
+  const dailyWordCollectionScanCount = useGameStore((s) => s.dailyWordCollectionScanCount);
+  const lastWordCollectionScanDate = useGameStore((s) => s.lastWordCollectionScanDate);
   const getWordCollectionScanById = useGameStore((s) => s.getWordCollectionScanById);
   const refillActiveEnemies = useGameStore((s) => s.refillActiveEnemies);
   const saveAdventureSnapshot = useGameStore((s) => s.saveAdventureSnapshot);
@@ -40,7 +42,7 @@ function WordCollectionContent() {
   const scansForDisplay: ScanCardData[] = wordCollectionScans.map((scan) => {
     // ===== HPベースの純粋な計算ロジック（スナップショットは無視） =====
     const activeWords = scan.activeEnemyWords ?? [];
-    const activeTotal = activeWords.length;
+    const activeTotal = scan.activeEnemyTotal ?? activeWords.length;
 
     const activeWordsData = activeWords
       .map((w) => scan.words.find((sw) => sw.word === w))
@@ -280,17 +282,37 @@ function WordCollectionContent() {
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
         {/* 2) 新規スキャン導線（単コレ内のスキャン画面へ） */}
-        <button
-          type="button"
-          onClick={() => {
-            vibrateLight();
-            setView('scan');
-          }}
-          className="block w-full py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold text-center flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25"
-        >
-          <Scan className="w-5 h-5" />
-          新しい英文をスキャン
-        </button>
+        {(() => {
+          const today = new Date().toISOString().split('T')[0];
+          const isDevEnv =
+            process.env.NODE_ENV !== 'production' ||
+            (typeof window !== 'undefined' &&
+              (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
+          const reachedLimit = !isDevEnv && lastWordCollectionScanDate === today && (dailyWordCollectionScanCount ?? 0) >= 5;
+          return (
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (reachedLimit) {
+                    vibrateLight();
+                    // show simple inline feedback via alert (keeps change minimal)
+                    alert('本日の限度数に達しました');
+                    return;
+                  }
+                  vibrateLight();
+                  setView('scan');
+                }}
+                disabled={reachedLimit}
+                className={`block w-full py-4 rounded-xl ${reachedLimit ? 'bg-gray-700 text-gray-300 cursor-not-allowed' : 'bg-gradient-to-r from-amber-600 to-amber-500 text-white'} font-bold text-center flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25`}
+              >
+                <Scan className="w-5 h-5" />
+                新しい英文をスキャン
+              </button>
+              {reachedLimit && <p className="text-center text-sm text-red-400 mt-2">本日の限度数に達しました</p>}
+            </div>
+          );
+        })()}
 
         {/* 3) 冒険ログ（タップで階層へ） */}
         <section>
