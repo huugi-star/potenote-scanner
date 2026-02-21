@@ -41,7 +41,8 @@ interface WordCollectionQuestScreenProps {
 
 // ===== Selection Logic =====
 
-function selectQuestions(scan: WordCollectionScan, questMode: QuestMode): WordEnemy[] {
+function selectQuestions(scan: WordCollectionScan, questMode: QuestMode, dexWords: string[]): WordEnemy[] {
+  const dexSet = new Set(dexWords);
   const withMeaning = scan.words.filter((w) => w.meaning && w.meaning.trim());
   if (withMeaning.length === 0) return [];
 
@@ -53,10 +54,13 @@ function selectQuestions(scan: WordCollectionScan, questMode: QuestMode): WordEn
 
   let pool: WordEnemy[];
   if (questMode === 'explore') {
-    pool = activeWords.filter((w) => w.hp > 0);
+    const unregistered = activeWords.filter((w) => w.hp > 0 && !dexSet.has(w.word));
+    // 未登録を優先。ただし空なら未捕獲語でフォールバック（出題ゼロ回避）
+    pool = unregistered.length > 0 ? unregistered : activeWords.filter((w) => w.hp > 0);
   } else {
     // 再戦でも捕獲済み（hp===0）は出題しない
-    pool = activeWords.filter((w) => w.hp > 0);
+    const unregistered = activeWords.filter((w) => w.hp > 0 && !dexSet.has(w.word));
+    pool = unregistered.length > 0 ? unregistered : activeWords.filter((w) => w.hp > 0);
   }
 
   if (pool.length === 0) return [];
@@ -119,10 +123,11 @@ function buildChoices(correct: WordEnemy, allWithMeaning: WordEnemy[]): string[]
 export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack }: WordCollectionQuestScreenProps) => {
   const updateWordEnemyState = useGameStore((s) => s.updateWordEnemyState);
   const registerWordDexWords = useGameStore((s) => s.registerWordDexWords);
+  const wordDexOrder = useGameStore((s) => s.wordDexOrder);
 
   // 選択肢は問題ごとに初期化時に固定（ストア更新で再生成されないようにする）
   const [questionsWithChoices] = useState(() => {
-    const qs = selectQuestions(scan, questMode);
+    const qs = selectQuestions(scan, questMode, wordDexOrder);
     const allWithMeaning = scan.words.filter((w) => w.meaning?.trim()) as Array<WordEnemy & { meaning: string }>;
     return qs.map((q) => {
       const choices = buildChoices(q, allWithMeaning);
@@ -131,7 +136,7 @@ export const WordCollectionQuestScreen = ({ scan, questMode, onComplete, onBack 
     });
   });
 
-  // 図鑑登録タイミング（以前の仕様）：出題候補になった時点で登録
+  // 図鑑登録タイミング：出題候補になった時点で登録（???演出用）
   useEffect(() => {
     registerWordDexWords(questionsWithChoices.map((q) => q.word.word));
   }, [questionsWithChoices, registerWordDexWords]);

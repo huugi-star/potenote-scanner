@@ -40,6 +40,19 @@ function WordCollectionContent() {
   const saveAdventureSnapshot = useGameStore((s) => s.saveAdventureSnapshot);
 
   const scansForDisplay: ScanCardData[] = wordCollectionScans.map((scan) => {
+    // 冒険ログは「完了時のスナップショット」を最優先で表示（続きを探索しても崩れない）
+    if (scan.lastAdventureSnapshot) {
+      const snap = scan.lastAdventureSnapshot;
+      return {
+        id: scan.id,
+        title: scan.title,
+        capturedInActive: snap.capturedCount,
+        defeatedInActive: snap.defeatedCount,
+        remainingInActive: snap.remainingCount,
+        activeTotal: snap.total > 0 ? snap.total : 1,
+      };
+    }
+
     // ===== HPベースの純粋な計算ロジック（スナップショットは無視） =====
     const activeWords = scan.activeEnemyWords ?? [];
     const activeTotal = scan.activeEnemyTotal ?? activeWords.length;
@@ -201,19 +214,25 @@ function WordCollectionContent() {
         scan={selectedScan}
         questMode={questMode}
         onComplete={(result) => {
-          // Save a snapshot of this adventure so logs remain immutable after continuing.
-          const total = selectedScan.activeEnemyTotal ?? (selectedScan.activeEnemyWords?.length ?? selectedScan.words.length);
-          const capturedCount = result.capturedWords.length;
-          const defeatedCount = result.defeatedCount;
-          const remainingCount = Math.max(0, (total ?? 0) - capturedCount - defeatedCount);
+          // Save an immutable adventure snapshot using latest store state
+          // (HP=0 を捕獲として集計し、分母は固定値を維持)
+          const latestScan = getWordCollectionScanById(selectedScan.id) ?? selectedScan;
+          const activeWords = latestScan.activeEnemyWords ?? [];
+          const total = latestScan.activeEnemyTotal ?? activeWords.length;
+          const activeWordsData = activeWords
+            .map((w) => latestScan.words.find((sw) => sw.word === w))
+            .filter((w) => w !== undefined) as Array<typeof latestScan.words[0]>;
+          const capturedCount = activeWordsData.filter((w) => w.hp === 0).length;
+          const defeatedCount = activeWordsData.filter((w) => w.hp === 1 || w.hp === 2).length;
+          const remainingCount = Math.max(0, total - capturedCount - defeatedCount);
           saveAdventureSnapshot(selectedScan.id, {
             timestamp: new Date().toISOString(),
             capturedCount,
             defeatedCount,
             remainingCount,
-            total: total ?? 0,
-            capturedWords: result.capturedWords,
-            defeatedWords: result.defeatedWords,
+            total: total > 0 ? total : 1,
+            capturedWords: activeWordsData.filter((w) => w.hp === 0),
+            defeatedWords: activeWordsData.filter((w) => w.hp === 1 || w.hp === 2),
           });
           setBattleResult(result);
           setView('result');

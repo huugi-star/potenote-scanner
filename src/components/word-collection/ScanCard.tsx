@@ -112,7 +112,7 @@ export const ScanCard = memo(({ data, onExplore, onRetry }: ScanCardProps) => {
 
       {/* 安心の一文 */}
       <p className="text-[10px] text-gray-500">
-        冒険は基本20体ずつ進みます
+        冒険の分母は開始時に固定されます
       </p>
 
       {/* 下段：アクションボタン */}

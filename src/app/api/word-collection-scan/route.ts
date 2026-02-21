@@ -167,10 +167,17 @@ function pickEvenlyDistributedWords<
   const picked: T[] = [];
   const used = new Set<number>();
   const n = words.length;
+
+  const pickRandomIndexInRange = (start: number, end: number): number => {
+    if (end <= start) return start;
+    return start + Math.floor(Math.random() * (end - start));
+  };
+
   for (let i = 0; i < max; i++) {
-    // 区間中央寄りのインデックスを選ぶ
-    const raw = Math.floor(((i + 0.5) * n) / max);
-    let idx = Math.max(0, Math.min(n - 1, raw));
+    // 本文全体を max 区間に分け、各区間から1語をランダム抽出
+    const start = Math.floor((i * n) / max);
+    const end = Math.floor(((i + 1) * n) / max);
+    let idx = Math.max(0, Math.min(n - 1, pickRandomIndexInRange(start, end)));
     // 重複した場合は近傍探索
     if (used.has(idx)) {
       let l = idx - 1;

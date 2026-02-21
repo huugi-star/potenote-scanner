@@ -921,20 +921,18 @@ export const useGameStore = create<GameStore>()(
         const title = `スキャン${scanNum}：${shortTitle}`;
 
         const dexSet = new Set(state.wordDexOrder ?? []);
-        const sortedForActive = [...words]
-          .filter((w) => w.meaning?.trim())
-          .sort((a, b) => {
-            const aRegistered = dexSet.has(a.word);
-            const bRegistered = dexSet.has(b.word);
-            if (aRegistered !== bRegistered) return aRegistered ? 1 : -1;
+        const withMeaning = words.filter((w) => w.meaning?.trim() && w.hp > 0);
+        const unregisteredForActive = withMeaning.filter((w) => !dexSet.has(w.word));
+        const registeredForActive = withMeaning.filter((w) => dexSet.has(w.word));
+        const sortCandidates = (arr: WordEnemy[]) =>
+          [...arr].sort((a, b) => {
             if (a.asked !== b.asked) return a.asked ? 1 : -1;
             if ((a.wrongCount ?? 0) !== (b.wrongCount ?? 0)) return (b.wrongCount ?? 0) - (a.wrongCount ?? 0);
             return Math.random() - 0.5;
           });
-        const initialActive = sortedForActive
-          .filter((w) => w.hp > 0)
-          .slice(0, ACTIVE_MAX)
-          .map((w) => w.word);
+        // 未登録優先。ただし枠が不足する場合は登録済みで補充して分母を崩さない
+        const prioritized = [...sortCandidates(unregisteredForActive), ...sortCandidates(registeredForActive)];
+        const initialActive = prioritized.slice(0, ACTIVE_MAX).map((w) => w.word);
 
         const newScan: WordCollectionScan = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -1019,15 +1017,19 @@ export const useGameStore = create<GameStore>()(
         const scan = state.wordCollectionScans.find((s) => s.id === scanId);
         if (!scan) return;
         const ACTIVE_MAX = LIMITS.WORD_COLLECTION_SCANS.ACTIVE_ENEMIES_MAX ?? 21;
+        const dexSet = new Set(state.wordDexOrder ?? []);
         // 毎回、未出題(asked=false)を最優先してアクティブ枠を再構成する。
         // これにより同一scanIdで複数回プレイしても未出題単語を出し切れる。
-        const reserve = scan.words
-          .filter((w) => w.hp > 0 && w.meaning?.trim())
-          .sort((a, b) => {
+        const sortCandidates = (arr: WordEnemy[]) =>
+          [...arr].sort((a, b) => {
             if (a.asked !== b.asked) return a.asked ? 1 : -1;
             if ((a.wrongCount ?? 0) !== (b.wrongCount ?? 0)) return (b.wrongCount ?? 0) - (a.wrongCount ?? 0);
             return Math.random() - 0.5;
           });
+        const reserveUnregistered = scan.words.filter((w) => w.hp > 0 && w.meaning?.trim() && !dexSet.has(w.word));
+        const reserveRegistered = scan.words.filter((w) => w.hp > 0 && w.meaning?.trim() && dexSet.has(w.word));
+        // 未登録優先 + 足りない分を登録済みで補充
+        const reserve = [...sortCandidates(reserveUnregistered), ...sortCandidates(reserveRegistered)];
 
         const newActive = reserve.slice(0, ACTIVE_MAX).map((w) => w.word);
         // Debug: log snapshot presence before updating active list
@@ -1042,7 +1044,8 @@ export const useGameStore = create<GameStore>()(
               ? {
                   ...s,
                   activeEnemyWords: newActive.length > 0 ? newActive : undefined,
-                  activeEnemyTotal: newActive.length > 0 ? newActive.length : s.activeEnemyTotal,
+                  // 分母は捕獲しても崩さない（初期設定値を維持）
+                  activeEnemyTotal: s.activeEnemyTotal,
                   lastAdventureSnapshot: s.lastAdventureSnapshot,
                 }
               : s
@@ -1063,7 +1066,31 @@ export const useGameStore = create<GameStore>()(
         console.log('[saveAdventureSnapshot] saving snapshot for', scanId, snapshot);
         set({
           wordCollectionScans: state.wordCollectionScans.map((s) =>
-            s.id === scanId ? { ...s, lastAdventureSnapshot: snapshot } : s
+            s.id === scanId
+              ? (() => {
+                  const prev = s.lastAdventureSnapshot;
+                  const total = prev?.total ?? snapshot.total;
+                  // capturedWords は累積（重複を除外して加算）
+                  const mergedCapturedMap = new Map<string, WordEnemy>();
+                  for (const w of prev?.capturedWords ?? []) mergedCapturedMap.set(w.word, w);
+                  for (const w of snapshot.capturedWords ?? []) mergedCapturedMap.set(w.word, w);
+                  const mergedCapturedWords = Array.from(mergedCapturedMap.values());
+                  const capturedCount = Math.min(total, mergedCapturedWords.length);
+                  const defeatedCount = Math.max(0, snapshot.defeatedCount);
+                  const remainingCount = Math.max(0, total - capturedCount - defeatedCount);
+                  return {
+                    ...s,
+                    lastAdventureSnapshot: {
+                      ...snapshot,
+                      total,
+                      capturedCount,
+                      defeatedCount,
+                      remainingCount,
+                      capturedWords: mergedCapturedWords,
+                    },
+                  };
+                })()
+              : s
           ),
         });
         // Ensure persisted storage is updated immediately to avoid race with HMR/refresh.
@@ -1073,9 +1100,29 @@ export const useGameStore = create<GameStore>()(
           if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed && Array.isArray(parsed.wordCollectionScans)) {
-              parsed.wordCollectionScans = parsed.wordCollectionScans.map((s: any) =>
-                s.id === scanId ? { ...s, lastAdventureSnapshot: snapshot } : s
-              );
+              parsed.wordCollectionScans = parsed.wordCollectionScans.map((s: any) => {
+                if (s.id !== scanId) return s;
+                const prev = s.lastAdventureSnapshot;
+                const total = prev?.total ?? snapshot.total;
+                const mergedCapturedMap = new Map<string, any>();
+                for (const w of prev?.capturedWords ?? []) mergedCapturedMap.set(w.word, w);
+                for (const w of snapshot.capturedWords ?? []) mergedCapturedMap.set(w.word, w);
+                const mergedCapturedWords = Array.from(mergedCapturedMap.values());
+                const capturedCount = Math.min(total, mergedCapturedWords.length);
+                const defeatedCount = Math.max(0, snapshot.defeatedCount);
+                const remainingCount = Math.max(0, total - capturedCount - defeatedCount);
+                return {
+                  ...s,
+                  lastAdventureSnapshot: {
+                    ...snapshot,
+                    total,
+                    capturedCount,
+                    defeatedCount,
+                    remainingCount,
+                    capturedWords: mergedCapturedWords,
+                  },
+                };
+              });
               localStorage.setItem(key, JSON.stringify(parsed));
               console.log('[saveAdventureSnapshot] persisted snapshot to localStorage');
             }
