@@ -745,10 +745,10 @@ export const WordCollectionQuestScreen = ({
                               }
                             : sealPhase === 'stick'
                             // 直撃後、単語の中央（背面）で正面向きに静止
-                            ? { x: '-120px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: [1.06, 1] }
+                            ? { x: '-120px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: [1.06, 1], opacity: 0.7 }
                             : sealPhase === 'seal'
-                            ? { x: '-120px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: 1 }
-                            : { x: '-120px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: 1 }
+                            ? { x: '-120px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: 1, opacity: 0.7 }
+                            : { x: '-120px', y: '-145px', rotateZ: 1080, rotateY: 0, scale: 1, opacity: 0.7 }
                         }
                         transition={{ duration: sealPhase === 'throw' ? 0.52 : sealPhase === 'stick' ? 0.12 : sealPhase === 'seal' ? 0.25 : 0.01, ease: 'easeOut' }}
                       >
