@@ -268,9 +268,16 @@ function WordCollectionContent() {
         }}
         onRetry={() => {
           // 同じスキャンで再チャレンジ（retry モード）
+          const latestScan = getWordCollectionScanById(selectedScanId);
+          const damagedWords = (latestScan?.words ?? [])
+            .filter((w) => w.hp > 0 && w.hp < 3)
+            .map((w) => w.word);
+          const mergedPriorityWords = Array.from(
+            new Set([...(battleResult.askedWords ?? []), ...damagedWords])
+          );
           setSelectedScanId(selectedScanId);
           setQuestMode('retry');
-          setRetryPriorityWords(battleResult.askedWords ?? []);
+          setRetryPriorityWords(mergedPriorityWords);
           setView('quest');
           setBattleResult(null);
         }}

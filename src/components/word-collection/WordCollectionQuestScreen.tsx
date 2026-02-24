@@ -13,7 +13,7 @@ import { useGameStore } from '@/store/useGameStore';
 import type { WordEnemy, WordCollectionScan } from '@/types';
 
 const QUESTIONS_PER_ROUND = 7;
-const TIME_LIMIT_SEC = 5.5;
+const TIME_LIMIT_SEC = 5.0;
 
 // ===== Types =====
 
@@ -66,9 +66,9 @@ function selectQuestions(
     // 未登録を優先。ただし空なら未捕獲語でフォールバック（出題ゼロ回避）
     pool = unregistered.length > 0 ? unregistered : activeWords.filter((w) => w.hp > 0);
   } else {
-    // 再戦でも捕獲済み（hp===0）は出題しない
-    const unregistered = activeWords.filter((w) => w.hp > 0 && !dexSet.has(w.word));
-    pool = unregistered.length > 0 ? unregistered : activeWords.filter((w) => w.hp > 0);
+    // 再戦は「さっき戦った語 / HPが減っている語」を優先するため、
+    // 図鑑登録状態に関わらず未捕獲（hp>0）を候補にする。
+    pool = activeWords.filter((w) => w.hp > 0);
   }
 
   if (pool.length === 0) return [];
@@ -85,8 +85,10 @@ function selectQuestions(
       const bInPriority = bPriority !== undefined;
       if (aInPriority !== bInPriority) return aInPriority ? -1 : 1;
       if (aInPriority && bInPriority && aPriority !== bPriority) return (aPriority as number) - (bPriority as number);
+      const aDamaged = a.hp < 3;
+      const bDamaged = b.hp < 3;
+      if (aDamaged !== bDamaged) return aDamaged ? -1 : 1;
       if (a.hp !== b.hp) return a.hp - b.hp;
-      if (a.asked !== b.asked) return a.asked ? 1 : -1;
       if ((a.wrongCount ?? 0) !== (b.wrongCount ?? 0)) return (b.wrongCount ?? 0) - (a.wrongCount ?? 0);
     }
     return Math.random() - 0.5;

@@ -122,7 +122,7 @@ function buildStructureSummary(tokens: SyntaxToken[]): string {
   return s;
 }
 
-/** 構文解析結果がある場合: 説明のみ生成用プロンプト */
+/** 構文解析結果がある場合: 説明のみ生成用プロンプト（実装互換：FRAME/S_formal/S_real を使わない） */
 function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
   return (
     "あなたは「ビジュアル英文解釈（伊藤和夫）」のエキスパートです。\n" +
@@ -132,7 +132,7 @@ function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
     "\n\n【あなたの役割】\n" +
     "1. **入力された英文の全文を必ず解析すること。途中で切れず、すべての文を sentences に含めること。**\n" +
     "2. **文頭・修飾語句・接続詞など、一字一句省略せず、入力の全文を main_structure のチャンクで網羅すること。省略禁止。**\n" +
-    "3. **主語（S）の扱い**: 主語となる名詞句全体を一つの【】ブロックとして扱うこと。主語を説明する that節・関係詞節・分詞句・前置詞句などは、修飾（M）であっても主語の外に出さず、【】の内部に＜＞として入れ子構造で表示すること。S の text には例 \"The man ＜who lives next door＞\" のように＜＞で修飾を囲む。主語を途中で閉じてはいけない。主節の動詞（V）が現れるまで S は確定しない。\n" +
+    "3. **主語（S）の扱い**: 主語となる名詞句全体を一つの【】ブロックとして扱うこと。主語を説明する that節・関係詞節・分詞句・前置詞句などは、修飾（M）であっても主語の外に出さず、【】の内部に＜＞として入れ子構造で表示すること。S の text には例 \"【The man ＜who lives next door＞】\" のように＜＞で修飾を囲む。主語を途中で閉じてはいけない。主節の動詞（V）が現れるまで S は確定しない。\n" +
     "4. 上記の構造サマリを参考に S/V/O/M の構成を把握する\n" +
     "5. 英文をチャンクに分け、各チャンクに日本語訳と役割を割り当てる\n" +
     "6. 構造（root/subjects/objects）はサマリを尊重する\n" +
@@ -142,27 +142,47 @@ function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
     "10. **vocab_list には重要単語・イディオム・熟語を必ず含めること**（語彙学習に役立つものを3〜8個選び、{ \"word\": \"英語\", \"meaning\": \"日本語の意味\" } 形式で出力）\n\n" +
     "【表示整形ルール】\n" +
     "- 【】は主語(S)や目的語(O)など「名詞句ブロック」。名詞句は途中で閉じない。\n" +
-    "- 名詞句を修飾する要素（that節/関係詞節/分詞句/名詞に係る前置詞句）は、文全体のMとして外に出さず、【】の内部に＜＞として入れ子にする。例: \"The man ＜who lives next door＞\"、\"the fact ＜that he is honest＞\"。\n" +
+    "- 名詞句を修飾する要素（that節/関係詞節/分詞句/名詞に係る前置詞句）は、文全体のMとして外に出さず、【】の内部に＜＞として入れ子にする。例: \"【The man ＜who lives next door＞】\"、\"【the fact ＜that he is honest＞】\"。\n" +
     "- 動詞を修飾する要素（副詞句・前置詞句など）は、動詞の外側に＜＞で置く。例: \"went ＜to school＞\"。\n" +
     "- 動詞(V)はそのまま表示する（括弧で囲まない）。\n\n" +
-    "【It を含む構文の扱い（最重要）】\n" +
-    "1. **基本ルール**: 文頭の It / be / that が実質的な意味内容を持たない場合は、role:\"FRAME\"（文の枠組み）として出力し、S/V/O/C には含めない。\n" +
-    "2. **強調構文 (It is A that B)**: It, is, that は role:\"FRAME\"。中身の A, B で本来の S/V/O/C を決定する。\n" +
-    "3. **仮主語**: It が内容を持たない仮主語の場合、It = role:\"S_formal\"、to不定詞句 / that節 = role:\"S_real\" とする。\n" +
-    "4. **【特効薬】It is not until ... that ... 構文**: \n" +
-    "   - \"It was not until ...\" 全体を「時を表す副詞節」の枠組みとして扱う。\n" +
-    "   - until節の中身（例: the experiment was repeated...）は role:\"M\" (副詞節) とする。\n" +
-    "   - that 以下の文（例: the researchers realized...）が主節の S / V となる。\n\n" +
-    "【重要】and/or/but などの等位接続詞は S/V/O/C/M に含めず、role: \"CONJ\"、type: \"connector\" とすること。補語(C)として誤認しないこと。\n\n" +
-    "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ\" }] }\n\n" +
+    "【It / There 構文の扱い（最重要・実装互換）】\n" +
+    "0. **role は必ず次のいずれかのみを使うこと**: \"S\"|\"V\"|\"O\"|\"C\"|\"M\"|\"CONN\"|\"CONJ\"|\"S'\"|\"O'\"|\"C'\"|\"M'\"|\"V'\"。\n" +
+    "   - **禁止**: role:\"FRAME\" / \"S_formal\" / \"S_real\" / \"O_formal\" / \"O_real\" などは一切使わない（実装側で M に潰れて崩れるため）。\n\n" +
+    "1. **形式主語 It 構文**（It is ADJ to V / It is ADJ that ...）\n" +
+    "   - It = role:\"S\"（文法上の主語）\n" +
+    "   - be動詞 = role:\"V\"\n" +
+    "   - 形容詞（important/clear など）= role:\"C\"\n" +
+    "   - to不定詞句 / that節 = role:\"S'\"（真主語）\n" +
+    "   - main_structure では to句/that節は **1つの塊** で出し、内部の分解は sub_structures に書く。\n\n" +
+    "2. **強調構文**（It is A that/who B）\n" +
+    "   - It = role:\"S\"、be動詞 = role:\"V\"、A = role:\"C\"（焦点）\n" +
+    "   - that/who 以下は **A を修飾する節（形容詞節）** として sub_structures に記述する。\n" +
+    "   - **禁止**: that/who節を main_structure の別チャンクで role:\"S\" に置かない（重複・崩れの原因）。\n\n" +
+    "3. **天候・時間・距離の It**\n" +
+    "   - 意味が薄くても文法上の主語なので It = role:\"S\"（Mには絶対にしない）。\n\n" +
+    "4. **There is/are 構文（存在構文）**\n" +
+    "   - There = role:\"S\"（形式主語として扱い、文頭Mにしない：UIが安定するため）\n" +
+    "   - be動詞 = role:\"V\"\n" +
+    "   - 後続名詞句 = role:\"C\"（補語：be動詞の後ろの名詞）\n" +
+    "   - **重要（統一）**: 名詞句を修飾する場所/時間の前置詞句（on the desk / in the classroom / recently / tomorrow 等）は、原則として **【名詞句】の内部に＜＞で含める**。\n" +
+    "     例: There is 【a book ＜on the desk＞】\n" +
+    "     例: There are 【many students ＜in the classroom＞】\n" +
+    "   - **禁止**: 上記の on the desk / in the classroom / tomorrow を main_structure の独立した M チャンクとして外に出す（重複・マージ関数と衝突するため）。\n\n" +
+    "5. **【特効薬】It was not until ... that ... 構文**\n" +
+    "   - \"It was not until ...\" は文の枠組みだが、role:\"FRAME\" は使えないため、main_structure では次のように整理する。\n" +
+    "   - It = S / was = V / not until ... = M（時を表す大きな修飾）\n" +
+    "   - that 以下の内容が主節の核（S/V/O/C）になるように main_structure を組む。\n\n" +
+    "【重要】and/or/but などの等位接続詞は S/V/O/C/M に含めず、role:\"CONJ\"、type:\"connector\" とすること。補語(C)として誤認しないこと。\n\n" +
+    "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ|S'|O'|C'|M'|V'\" }] }\n\n" +
     "【出力JSONフォーマット】\n" +
-    '{"clean_text":"<CLEANED>","sentences":[{"sentence_id":1,"original_text":"<CLEANED>","translation":"和訳","main_structure":[{"text":"","translation":"","type":"noun|verb|modifier|connector","role":"S|V|O|C|M|CONN|CONJ"}],"chunks":[],"vocab_list":[],"details":["構造の概要説明をここに"],"sub_structures":[{"target_text":"節の文字列","explanation":"解説","chunks":[{"text":"","translation":"","type":"noun","role":"S"}]}]}]}\n\n' +
+    '{"clean_text":"<入力された英文>","sentences":[{"sentence_id":1,"original_text":"<入力された英文>","translation":"和訳","main_structure":[{"text":"","translation":"","type":"noun|verb|modifier|connector","role":"S|V|O|C|M|CONN|CONJ|S\'|O\'|C\'|M\'|V\'"}],"chunks":[],"vocab_list":[],"details":["構造の概要説明をここに"],"sub_structures":[{"target_text":"節の文字列","explanation":"解説","chunks":[{"text":"","translation":"","type":"noun","role":"S"}]}]}]}\n\n' +
+    "出力は必ずJSONのみとし、```json などのMarkdownブロック記法は一切含めないでください。\n\n" +
     "【実際の解析対象】\n" +
     cleaned
-  ).replace(/<CLEANED>/g, cleaned);
+  );
 }
 
-/** フォールバック: 従来のGemini単独解析用プロンプト */
+/** フォールバック: Gemini単独解析用プロンプト（実装互換：FRAME/S_formal/S_real を使わない） */
 function buildFallbackPrompt(cleaned: string): string {
   return (
     "あなたは「ビジュアル英文解釈（伊藤和夫）」のエキスパートです。\n" +
@@ -171,24 +191,43 @@ function buildFallbackPrompt(cleaned: string): string {
     "【解析ルール】\n" +
     "1. **入力された英文の全文を必ず解析すること。途中で切れず、すべての文を sentences に含めること。**\n" +
     "2. **文頭・修飾語句・接続詞・句読点など、一字一句省略せず、入力の全文を main_structure のチャンクで網羅すること。省略は厳禁。**\n" +
-    "3. **主語（S）の扱い**: 主語となる名詞句全体を一つの【】ブロックとして扱うこと。主語を説明する that節・関係詞節・分詞句・前置詞句などは、修飾（M）であっても主語の外に出さず、【】の内部に＜＞として入れ子構造で表示すること。S の text には例 \"The man ＜who lives next door＞\" のように＜＞で修飾を囲む。主語を途中で閉じてはいけない。主節の動詞（V）が現れるまで S は確定しない。\n" +
-    "4. S / V / O / C / M / CONN / CONJ の役割を割り当てる。**and/or/but などの等位接続詞は S/V/O/C/M に含めず、必ず role: \"CONJ\"、type: \"connector\" とすること。補語(C)として誤認しないこと。**\n" +
+    "3. **主語（S）の扱い**: 主語となる名詞句全体を一つの【】ブロックとして扱うこと。主語を説明する that節・関係詞節・分詞句・前置詞句などは、修飾（M）であっても主語の外に出さず、【】の内部に＜＞として入れ子構造で表示すること。S の text には例 \"【The man ＜who lives next door＞】\" のように＜＞で修飾を囲む。主語を途中で閉じてはいけない。主節の動詞（V）が現れるまで S は確定しない。\n" +
+    "4. S / V / O / C / M / CONN / CONJ の役割を割り当てる。**and/or/but などの等位接続詞は S/V/O/C/M に含めず、必ず role:\"CONJ\"、type:\"connector\" とすること。補語(C)として誤認しないこと。**\n" +
     "5. M（修飾語句）は前置詞句や副詞節などの大きな塊でまとめ、文頭のイントロフレーズ・副詞節・前置詞句も必ず省略せず残す。\n" +
     "6. **名詞節・形容詞節・副詞節がある場合、sub_structures に必ず内部構造を記述する。** target_text, explanation, chunks を含めること。節内の語も省略しないこと。**main_structure には sub_structures の target_text に相当する全文チャンクを必ず含めること。**\n" +
     "7. S/O/C → noun、M → modifier、V → verb、CONN/CONJ → connector のtypeを設定すること。\n" +
     "8. **details は必ず1つ以上出力すること**（文の構造の概要説明）。\n" +
     "9. **vocab_list には重要単語・イディオム・熟語を必ず含めること**（語彙学習に役立つものを3〜8個選び、{ \"word\": \"英語\", \"meaning\": \"日本語の意味\" } 形式で出力）\n\n" +
-    "【It を含む構文の扱い（最重要）】\n" +
-    "1. **基本ルール**: 文頭の It / be / that が実質的な意味内容を持たない場合は、role:\"FRAME\"（文の枠組み）として出力し、S/V/O/C には含めない。\n" +
-    "2. **強調構文 (It is A that B)**: It, is, that は role:\"FRAME\"。中身の A, B で本来の S/V/O/C を決定する。\n" +
-    "3. **仮主語**: It が内容を持たない仮主語の場合、It = role:\"S_formal\"、to不定詞句 / that節 = role:\"S_real\" とする。\n" +
-    "4. **【特効薬】It is not until ... that ... 構文**: \n" +
-    "   - \"It was not until ...\" 全体を「時を表す副詞節」の枠組みとして扱う。\n" +
-    "   - until節の中身（例: the experiment was repeated...）は role:\"M\" (副詞節) とする。\n" +
-    "   - that 以下の文（例: the researchers realized...）が主節の S / V となる。\n\n" +
-    "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ\" }] }\n\n" +
-    "【出力JSONの例】\n" +
-    '{"clean_text":"Because he was sick, he could not go to school.","sentences":[{"sentence_id":1,"original_text":"Because he was sick, he could not go to school.","translation":"彼は病気だったので、学校へ行けなかった。","main_structure":[{"text":"Because he was sick,","translation":"彼は病気だったので","type":"connector","role":"M"},{"text":"he","translation":"彼は","type":"noun","role":"S"},{"text":"could not go","translation":"行けなかった","type":"verb","role":"V"},{"text":"to school.","translation":"学校へ","type":"modifier","role":"M"}],"chunks":[],"vocab_list":[{"word":"sick","meaning":"病気の"},{"word":"could not go","meaning":"行けなかった（イディオム）"},{"word":"because","meaning":"～なので、～だから"}],"details":["副詞節(Because...)が主節のVを修飾している構造。"],"sub_structures":[{"target_text":"Because he was sick","explanation":"Because が導く副詞節。主節の述語 could not go を修飾し、理由を表す。","chunks":[{"text":"Because","translation":"なぜなら","type":"connector","role":"CONN"},{"text":"he","translation":"彼は","type":"noun","role":"S"},{"text":"was sick","translation":"病気だった","type":"verb","role":"V"}]}]}]}\n\n' +
+    "【表示整形ルール】\n" +
+    "- 【】は主語(S)や目的語(O)など「名詞句ブロック」。名詞句は途中で閉じない。\n" +
+    "- 名詞句を修飾する要素（that節/関係詞節/分詞句/名詞に係る前置詞句）は、文全体のMとして外に出さず、【】の内部に＜＞として入れ子にする。\n" +
+    "- 動詞を修飾する要素（副詞句・前置詞句など）は、動詞の外側に＜＞で置く。\n" +
+    "- 動詞(V)はそのまま表示する（括弧で囲まない）。\n\n" +
+    "【It / There 構文の扱い（最重要・実装互換）】\n" +
+    "0. **role は必ず次のいずれかのみを使うこと**: \"S\"|\"V\"|\"O\"|\"C\"|\"M\"|\"CONN\"|\"CONJ\"|\"S'\"|\"O'\"|\"C'\"|\"M'\"|\"V'\"。\n" +
+    "   - **禁止**: role:\"FRAME\" / \"S_formal\" / \"S_real\" / \"O_formal\" / \"O_real\" などは一切使わない（実装側で M に潰れて崩れるため）。\n\n" +
+    "1. **形式主語 It 構文**（It is ADJ to V / It is ADJ that ...）\n" +
+    "   - It = role:\"S\"、be動詞 = role:\"V\"、形容詞 = role:\"C\"。\n" +
+    "   - to不定詞句 / that節 = role:\"S'\"（真主語）。main_structure では **1つの塊** で出し、内部は sub_structures に記述する。\n\n" +
+    "2. **強調構文**（It is A that/who B）\n" +
+    "   - It = S / is(or was) = V / A = C。\n" +
+    "   - that/who 以下は **A を修飾する形容詞節** として sub_structures に記述する。\n" +
+    "   - **禁止**: that/who節を main_structure の別チャンクで role:\"S\" に置く。\n\n" +
+    "3. **天候・時間・距離の It**\n" +
+    "   - It = role:\"S\"（Mにしない）。\n\n" +
+    "4. **There is/are 構文（存在構文）**\n" +
+    "   - There = role:\"S\"（形式主語として固定し、文頭Mにしない：UIが安定するため）\n" +
+    "   - be動詞 = role:\"V\"\n" +
+    "   - 後続名詞句 = role:\"C\"（be動詞の補語）\n" +
+    "   - 名詞句を修飾する場所/時間の句（on the desk / in the classroom / recently / tomorrow 等）は、**原則として【名詞句】内に＜＞で含める**。\n" +
+    "   - **禁止**: それらを main_structure の独立 M として外に出す（重複の原因）。\n\n" +
+    "5. **It was not until ... that ...**\n" +
+    "   - It = S / was = V / not until ... = M。\n" +
+    "   - that 以下の内容が主節の核（S/V/O/C）になるように main_structure を組む。\n\n" +
+    "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ|S'|O'|C'|M'|V'\" }] }\n\n" +
+    "【出力JSONフォーマット】\n" +
+    '{"clean_text":"<入力された英文>","sentences":[{"sentence_id":1,"original_text":"<入力された英文>","translation":"和訳","main_structure":[{"text":"","translation":"","type":"noun|verb|modifier|connector","role":"S|V|O|C|M|CONN|CONJ|S\'|O\'|C\'|M\'|V\'"}],"chunks":[],"vocab_list":[],"details":["構造の概要説明をここに"],"sub_structures":[{"target_text":"節の文字列","explanation":"解説","chunks":[{"text":"","translation":"","type":"noun","role":"S"}]}]}]}\n\n' +
+    "出力は必ずJSONのみとし、```json などのMarkdownブロック記法は一切含めないでください。\n\n" +
     "【実際の解析対象】\n" +
     cleaned
   );
