@@ -163,7 +163,7 @@ function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
     "4. **There is/are 構文（存在構文）**\n" +
     "   - There = role:\"S\"（形式主語として扱い、文頭Mにしない：UIが安定するため）\n" +
     "   - be動詞 = role:\"V\"\n" +
-    "   - 後続名詞句 = role:\"C\"（補語：be動詞の後ろの名詞）\n" +
+    "   - 後続名詞句 = role:\"S'\"（真主語：存在するモノ/人）\n" +
     "   - **重要（統一）**: 名詞句を修飾する場所/時間の前置詞句（on the desk / in the classroom / recently / tomorrow 等）は、原則として **【名詞句】の内部に＜＞で含める**。\n" +
     "     例: There is 【a book ＜on the desk＞】\n" +
     "     例: There are 【many students ＜in the classroom＞】\n" +
@@ -172,6 +172,9 @@ function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
     "   - \"It was not until ...\" は文の枠組みだが、role:\"FRAME\" は使えないため、main_structure では次のように整理する。\n" +
     "   - It = S / was = V / not until ... = M（時を表す大きな修飾）\n" +
     "   - that 以下の内容が主節の核（S/V/O/C）になるように main_structure を組む。\n\n" +
+    "6. **It takes / cost / require などの構文**\n" +
+    "   - 形式主語構文ではなく、通常の SVO(O) 構造として扱う。\n" +
+    "   - It = role:\"S\"、takes/cost/require = role:\"V\"、後続の目的語（時間・金額・人など） = role:\"O\" とする。\n\n" +
     "【重要】and/or/but などの等位接続詞は S/V/O/C/M に含めず、role:\"CONJ\"、type:\"connector\" とすること。補語(C)として誤認しないこと。\n\n" +
     "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ|S'|O'|C'|M'|V'\" }] }\n\n" +
     "【出力JSONフォーマット】\n" +
@@ -218,12 +221,15 @@ function buildFallbackPrompt(cleaned: string): string {
     "4. **There is/are 構文（存在構文）**\n" +
     "   - There = role:\"S\"（形式主語として固定し、文頭Mにしない：UIが安定するため）\n" +
     "   - be動詞 = role:\"V\"\n" +
-    "   - 後続名詞句 = role:\"C\"（be動詞の補語）\n" +
+    "   - 後続名詞句 = role:\"S'\"（真主語：存在するモノ/人）\n" +
     "   - 名詞句を修飾する場所/時間の句（on the desk / in the classroom / recently / tomorrow 等）は、**原則として【名詞句】内に＜＞で含める**。\n" +
     "   - **禁止**: それらを main_structure の独立 M として外に出す（重複の原因）。\n\n" +
     "5. **It was not until ... that ...**\n" +
     "   - It = S / was = V / not until ... = M。\n" +
     "   - that 以下の内容が主節の核（S/V/O/C）になるように main_structure を組む。\n\n" +
+    "6. **It takes / cost / require などの構文**\n" +
+    "   - 形式主語構文ではなく、通常の SVO(O) 構造として扱う。\n" +
+    "   - It = role:\"S\"、takes/cost/require = role:\"V\"、後続の目的語（時間・金額・人など） = role:\"O\" とする。\n\n" +
     "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ|S'|O'|C'|M'|V'\" }] }\n\n" +
     "【出力JSONフォーマット】\n" +
     '{"clean_text":"<入力された英文>","sentences":[{"sentence_id":1,"original_text":"<入力された英文>","translation":"和訳","main_structure":[{"text":"","translation":"","type":"noun|verb|modifier|connector","role":"S|V|O|C|M|CONN|CONJ|S\'|O\'|C\'|M\'|V\'"}],"chunks":[],"vocab_list":[],"details":["構造の概要説明をここに"],"sub_structures":[{"target_text":"節の文字列","explanation":"解説","chunks":[{"text":"","translation":"","type":"noun","role":"S"}]}]}]}\n\n' +
