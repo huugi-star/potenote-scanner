@@ -247,6 +247,20 @@ const HomeScreen = ({
           </motion.div>
         </Link>
 
+        {/* スキャン翻訳ボタン */}
+        <motion.button
+          onClick={() => {
+            vibrateLight();
+            onNavigate('translation_mode_select');
+          }}
+          className="w-full mt-3 py-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <Languages className="w-7 h-7" />
+          スキャンして英語学習・翻訳
+        </motion.button>
+
         {/* メインアクション */}
         <motion.button
           onClick={() => {
@@ -274,20 +288,6 @@ const HomeScreen = ({
         >
           <Volume2 className="w-7 h-7" />
           音声講義を聞く
-        </motion.button>
-
-        {/* スキャン翻訳ボタン */}
-        <motion.button
-          onClick={() => {
-            vibrateLight();
-            onNavigate('translation_mode_select');
-          }}
-          className="w-full mt-3 py-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <Languages className="w-7 h-7" />
-          スキャンして英語学習・翻訳
         </motion.button>
 
         {/* フリークエスト */}

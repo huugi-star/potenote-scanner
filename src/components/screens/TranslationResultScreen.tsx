@@ -237,32 +237,47 @@ export const TranslationResultScreen = ({
                 onClick={() => setSymbolsOpen(o => !o)}
                 className="w-full flex items-center justify-between px-4 py-3 text-left text-indigo-100 font-semibold"
               >
-                <span>🔍 記号と構造の読み方</span>
-                <motion.div animate={{ rotate: symbolsOpen ? 180 : 0 }}>
-                  <ChevronDown className="w-5 h-5 text-indigo-200" />
-                </motion.div>
-              </button>
-              <AnimatePresence>
-                {symbolsOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="px-4 pb-4 text-sm text-indigo-100 space-y-3"
-                  >
-                    <div>
-                      <p className="font-bold text-indigo-100 mb-1">1. 文の骨組み (SVOC) — 場所で役割が決まる</p>
-                      <p className="text-indigo-200/90"><span className="text-red-300 font-bold">S</span> (主人公)：「〜は」</p>
-                      <p className="text-indigo-200/90"><span className="text-red-300 font-bold">V</span> (結論)：「〜する」 — ここが最重要。Vの後ろを見て O か C かを予測。</p>
-                      <p className="text-indigo-200/90"><span className="text-red-300 font-bold">O</span> (ターゲット)：「〜を」 (S ≠ O)</p>
-                      <p className="text-indigo-200/90"><span className="text-red-300 font-bold">C</span> (イコール)：「〜だ」 (S ＝ C)</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="font-bold text-indigo-100 mb-1">2. 記号のルール</p>
-                      <p>【　】：文の骨組み（主役）— 絶対に省けない「誰が・何を」などメインパーツ</p>
-                      <p>（　）：名詞のお飾り（説明）— 直前の【名詞】を詳しく説明するアクセサリー</p>
-                      <p>＜　＞：文の背景（おまけ）— 「いつ・どこで・なぜ」等の補足。骨組みにはならない</p>
-                    </div>
+<span>🔍 記号と構造の読み方</span>
+              <motion.div animate={{ rotate: symbolsOpen ? 180 : 0 }}>
+                <ChevronDown className="w-5 h-5 text-indigo-200" />
+              </motion.div>
+            </button>
+            <AnimatePresence>
+              {symbolsOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="px-4 pb-4 text-sm text-indigo-100 space-y-3"
+                >
+                  <div>
+                    <p className="font-bold text-indigo-100 mb-1">1. 文の骨組み （SVOC）＋ M（修飾）— 場所で役割が決まる</p>
+                    <p className="text-indigo-200/90"><span className="text-red-300 font-bold">S</span> (主人公)：「〜は」</p>
+                    <p className="text-indigo-200/90">
+                      <span className="text-red-300 font-bold">S'</span> (真主語)：Sのあとに出てくる「本当の主語」。<br />　（長い主語を後ろに回すとき使われる）<br />
+                      　It や There が文頭にあるとき、後ろに本当の主語（S'）が現れることがある。
+                    </p>
+                    <p className="text-indigo-200/90"><span className="text-red-300 font-bold">V</span> (結論)：「〜する」 — ここが最重要。Vの後ろを見て O か C かを予測。</p>
+                    <p className="text-indigo-200/90"><span className="text-red-300 font-bold">O</span> (ターゲット)：「〜を」 (S ≠ O)</p>
+                    <p className="text-indigo-200/90"><span className="text-red-300 font-bold">C</span> (イコール)：「〜だ」 (S ＝ C)</p>
+                    <p className="text-indigo-200/90"><span className="text-red-300 font-bold">M</span> (修飾)：文の背景。なくても文は成立する</p>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <p className="font-bold text-indigo-100 mb-1">2. 記号のルール</p>
+                    <p className="text-indigo-200/90">【　】：文の骨組み（主役）— 絶対に省けない「誰が・何を」などメインパーツ</p>
+                    <p className="text-indigo-200/90">（　）：名詞のお飾り（説明）— 直前の【名詞】を詳しく説明するアクセサリー</p>
+                    <p className="text-indigo-200/90">＜　＞：文の背景（おまけ）— 「いつ・どこで・なぜ」等の補足。骨組みにはならない</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="font-bold text-indigo-100 mb-1">3. 基本の5文型 — Vが後ろの形を決める</p>
+                    <p className="text-indigo-200/90"><span className="text-red-300 font-bold">SV</span>：「SがVする」（一番シンプルな形）</p>
+                    <p className="text-indigo-200/90"><span className="text-red-300 font-bold">SVC</span>：「SはCだ」（S ＝ C）</p>
+                    <p className="text-indigo-200/90"><span className="text-red-300 font-bold">SVO</span>：「SがOをVする」（Oに動作が向かう）</p>
+                    <p className="text-indigo-200/90"><span className="text-red-300 font-bold">SVOO</span>：「Sが O(誰か)に O(何か)を Vする」（あげる・伝える）</p>
+                    <p className="text-indigo-200/90"><span className="text-red-300 font-bold">SVOC</span>：「Sは OをCのままに Vする / O＝Cだと Vする」（O ＝ C）</p>
+                  </div>
                   </motion.div>
                 )}
               </AnimatePresence>
