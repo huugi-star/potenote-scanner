@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Share2, Volume2, Languages, Sword } from 'lucide-react';
+import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Share2, Languages, Sword } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 import { auth } from '@/lib/firebase';
@@ -114,7 +114,6 @@ const HomeScreen = ({
   const totalQuizzes = useGameStore(state => state.totalQuizzes);
   const quizHistoryCount = useGameStore(state => state.quizHistory.length);
   const translationHistoryCount = useGameStore(state => state.translationHistory.length);
-  const lectureHistoryCount = useGameStore(state => state.lectureHistory.length);
   const equipment = useGameStore(state => state.equipment);
   // const [showShop, setShowShop] = useState(false); // 一時的に非表示
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
@@ -258,7 +257,7 @@ const HomeScreen = ({
           whileTap={{ scale: 0.98 }}
         >
           <Languages className="w-7 h-7" />
-          スキャンして英語学習・翻訳
+          英文解釈・翻訳
         </motion.button>
 
         {/* メインアクション */}
@@ -274,20 +273,6 @@ const HomeScreen = ({
         >
           <Scan className="w-7 h-7" />
           参考書をクイズにする
-        </motion.button>
-
-        {/* 音声講義ボタン */}
-        <motion.button
-          onClick={() => {
-            vibrateLight();
-            onNavigate('lecture');
-          }}
-          className="w-full mt-3 py-5 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-purple-500/25"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <Volume2 className="w-7 h-7" />
-          音声講義を聞く
         </motion.button>
 
         {/* フリークエスト */}
@@ -307,27 +292,6 @@ const HomeScreen = ({
             フリークエスト
             <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
               {quizHistoryCount}
-            </span>
-          </motion.button>
-        )}
-
-        {/* 講義履歴 */}
-        {lectureHistoryCount > 0 && (
-          <motion.button
-            onClick={() => {
-              vibrateLight();
-              onNavigate('lecture_history');
-            }}
-            className="w-full mt-3 py-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold flex items-center justify-center gap-2"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <Volume2 className="w-5 h-5" />
-            講義履歴
-            <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
-              {lectureHistoryCount}
             </span>
           </motion.button>
         )}
