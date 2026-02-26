@@ -30,6 +30,7 @@ import { useToast } from '@/components/ui/Toast';
 import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/imageUtils';
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
 import { LIMITS } from '@/lib/constants';
+import { getJstDateString } from '@/lib/dateUtils';
 import type { QuizRaw, StructuredOCR, QuizResult, TranslationResult } from '@/types';
 import { PREPOSITION_QUIZ, PrepositionQuizItem } from '@/data/prepositionQuiz';
 
@@ -95,7 +96,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const canScan = isVIP || remainingScans > 0;
   // スキャン残数が0なら翻訳モードでもアップロード不可
   const canUpload = canScan;
-  const today = new Date().toISOString().split('T')[0];
+  const today = getJstDateString();
   const usedToday = lastScanDate === today ? dailyScanCount : 0;
   const freeRemaining = Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - usedToday);
   const bonusRemaining = Math.max(0, bonusScanBalance ?? 0);

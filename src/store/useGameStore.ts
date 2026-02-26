@@ -9,6 +9,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult } from '@/types';
 import { ALL_ITEMS, getItemById } from '@/data/items';
 import { REWARDS, DISTANCE, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
+import { getJstDateString } from '@/lib/dateUtils';
 import { extractWords } from '@/lib/wordExtraction';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
 import { db, auth } from '@/lib/firebase';
@@ -17,7 +18,7 @@ import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, orderBy, li
 // ===== Helper Functions =====
 
 const getTodayString = (): string => {
-  return new Date().toISOString().split('T')[0];
+  return getJstDateString();
 };
 
 // ローカル環境判定（開発環境では制限を外す）
@@ -516,7 +517,7 @@ export const useGameStore = create<GameStore>()(
         
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayString = yesterday.toISOString().split('T')[0];
+        const yesterdayString = getJstDateString(-1);
         const isConsecutive = state.lastLoginDate === yesterdayString;
         
         const bonusCoins = state.isVIP 
@@ -838,22 +839,15 @@ export const useGameStore = create<GameStore>()(
         // Enforce daily limit only in production-like environments
         const today = getTodayString();
         const dailyLimit = LIMITS.WORD_COLLECTION_SCANS.DAILY_SCAN_LIMIT ?? 3;
+        const isNewDay = state.lastWordCollectionScanDate !== today;
+        const currentDailyCount = isNewDay ? 0 : (state.dailyWordCollectionScanCount ?? 0);
+        const freeRemaining = Math.max(0, dailyLimit - currentDailyCount);
+        const bonusBalance = state.bonusScanBalance ?? 0;
+        const useBonus = !state.isVIP && freeRemaining <= 0 ? 1 : 0;
         if (!isLocalDevelopment()) {
-          if (state.lastWordCollectionScanDate !== today) {
-            // reset daily counter for new day
-            set({ dailyWordCollectionScanCount: 0, lastWordCollectionScanDate: today });
-            // refresh state variable after set
-            const refreshed = get();
-            // use refreshed for check
-            if ((refreshed.dailyWordCollectionScanCount ?? 0) >= dailyLimit) {
-              console.warn('[saveWordCollectionScan] daily limit reached (after reset)'); 
-              return undefined;
-            }
-          } else {
-            if ((state.dailyWordCollectionScanCount ?? 0) >= dailyLimit) {
-              console.warn('[saveWordCollectionScan] daily limit reached');
-              return undefined;
-            }
+          if (!state.isVIP && freeRemaining <= 0 && bonusBalance <= 0) {
+            console.warn('[saveWordCollectionScan] daily limit reached');
+            return undefined;
           }
         }
         const ACTIVE_MAX = LIMITS.WORD_COLLECTION_SCANS.ACTIVE_ENEMIES_MAX ?? 21;
@@ -963,8 +957,9 @@ export const useGameStore = create<GameStore>()(
         // increment daily counter and persist new scan list
         set({
           wordCollectionScans: limited,
-          dailyWordCollectionScanCount: (state.dailyWordCollectionScanCount ?? 0) + 1,
-          lastWordCollectionScanDate: getTodayString(),
+          dailyWordCollectionScanCount: currentDailyCount + (freeRemaining > 0 || state.isVIP ? 1 : 0),
+          lastWordCollectionScanDate: today,
+          bonusScanBalance: Math.max(0, bonusBalance - useBonus),
         });
         return newScan.id;
       },

@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/Toast';
 import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/imageUtils';
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
 import { LIMITS } from '@/lib/constants';
+import { getJstDateString } from '@/lib/dateUtils';
 import type { WordCollectionScanResult } from '@/types';
 
 // ===== Types =====
@@ -38,15 +39,18 @@ export const WordCollectionScanScreen = ({ onComplete, onBack }: WordCollectionS
   const isVIP = useGameStore((s) => s.isVIP);
   const dailyWordCollectionScanCount = useGameStore((s) => s.dailyWordCollectionScanCount);
   const lastWordCollectionScanDate = useGameStore((s) => s.lastWordCollectionScanDate);
+  const bonusScanBalance = useGameStore((s) => s.bonusScanBalance);
   const saveWordCollectionScan = useGameStore((s) => s.saveWordCollectionScan);
 
   const { addToast } = useToast();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getJstDateString();
   const dailyLimit = LIMITS.WORD_COLLECTION_SCANS.DAILY_SCAN_LIMIT ?? 3;
   const usedToday = lastWordCollectionScanDate === today ? (dailyWordCollectionScanCount ?? 0) : 0;
-  const remainingToday = Math.max(0, dailyLimit - usedToday);
-  const canScan = isVIP || remainingToday > 0;
+  const freeRemaining = Math.max(0, dailyLimit - usedToday);
+  const bonusRemaining = Math.max(0, bonusScanBalance ?? 0);
+  const totalRemaining = freeRemaining + bonusRemaining;
+  const canScan = isVIP || totalRemaining > 0;
 
   const stopProgressTicker = useCallback((finalValue?: number) => {
     if (progressTimerRef.current) {
@@ -76,13 +80,14 @@ export const WordCollectionScanScreen = ({ onComplete, onBack }: WordCollectionS
       vibrateLight();
 
       const state = useGameStore.getState();
-      const currentToday = new Date().toISOString().split('T')[0];
+      const currentToday = getJstDateString();
       const usedNow =
         state.lastWordCollectionScanDate === currentToday
           ? (state.dailyWordCollectionScanCount ?? 0)
           : 0;
-      const remainingNow = Math.max(0, dailyLimit - usedNow);
-      const canScanNow = state.isVIP || remainingNow > 0;
+      const freeRemainingNow = Math.max(0, dailyLimit - usedNow);
+      const bonusRemainingNow = Math.max(0, state.bonusScanBalance ?? 0);
+      const canScanNow = state.isVIP || (freeRemainingNow + bonusRemainingNow) > 0;
       if (!canScanNow) {
         setErrorMessage('本日の単コレスキャン上限に達しました');
         setScanState('error');
@@ -217,7 +222,14 @@ export const WordCollectionScanScreen = ({ onComplete, onBack }: WordCollectionS
               isVIP ? 'bg-amber-500/20 text-amber-400' : canScan ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
             }`}
           >
-            {isVIP ? '無制限' : `残り ${remainingToday}/${dailyLimit} 回`}
+            {isVIP ? (
+              '無制限'
+            ) : (
+              <div className="leading-tight">
+                <p>本日残り {totalRemaining}回</p>
+                <p className="text-[10px] opacity-80">無料：{freeRemaining} / ボーナス：{bonusRemaining}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

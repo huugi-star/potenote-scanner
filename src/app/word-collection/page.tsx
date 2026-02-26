@@ -21,6 +21,7 @@ import { WordDexScreen } from '@/components/word-collection/WordDexScreen';
 import { WordDexVolScreen } from '@/components/word-collection/WordDexVolScreen';
 import { WordDexDetailScreen } from '@/components/word-collection/WordDexDetailScreen';
 import { LIMITS } from '@/lib/constants';
+import { getJstDateString } from '@/lib/dateUtils';
 
 // ===== Page Content =====
 
@@ -317,7 +318,7 @@ function WordCollectionContent() {
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
         {/* 2) 新規スキャン導線（単コレ内のスキャン画面へ） */}
         {(() => {
-          const today = new Date().toISOString().split('T')[0];
+          const today = getJstDateString();
           const isDevEnv =
             process.env.NODE_ENV !== 'production' ||
             (typeof window !== 'undefined' &&
