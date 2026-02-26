@@ -175,6 +175,10 @@ function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
     "6. **It takes / cost / require などの構文**\n" +
     "   - 形式主語構文ではなく、通常の SVO(O) 構造として扱う。\n" +
     "   - It = role:\"S\"、takes/cost/require = role:\"V\"、後続の目的語（時間・金額・人など） = role:\"O\" とする。\n\n" +
+    "【助動詞・準助動詞・疑問文の扱い】\n" +
+    "- **基本**: 助動詞（can, will等）や準助動詞（have to, ought to等）は、MやSに含めず、本動詞と結合して【1つのV】として扱うこと。\n" +
+    "- **be going to**: 「be going to + 動詞」は常に未来表現として扱い、進行形＋目的の不定詞には分けず、全体を結合して【1つのV】とすること。\n" +
+    "- **疑問文・倒置**: 文頭の助動詞は M にせず単独で role:\"V\" にする。さらに、主語の後ろに残った「本動詞」も絶対に O に巻き込まず、必ず独立した role:\"V\" とすること。\n\n" +
     "【重要】and/or/but などの等位接続詞は S/V/O/C/M に含めず、role:\"CONJ\"、type:\"connector\" とすること。補語(C)として誤認しないこと。\n\n" +
     "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ|S'|O'|C'|M'|V'\" }] }\n\n" +
     "【出力JSONフォーマット】\n" +
@@ -182,7 +186,7 @@ function buildSyntaxPrompt(structureSummary: string, cleaned: string): string {
     "出力は必ずJSONのみとし、```json などのMarkdownブロック記法は一切含めないでください。\n\n" +
     "【実際の解析対象】\n" +
     cleaned
-  );
+  ).replace(/<CLEANED>/g, cleaned);
 }
 
 /** フォールバック: Gemini単独解析用プロンプト（実装互換：FRAME/S_formal/S_real を使わない） */
@@ -230,6 +234,10 @@ function buildFallbackPrompt(cleaned: string): string {
     "6. **It takes / cost / require などの構文**\n" +
     "   - 形式主語構文ではなく、通常の SVO(O) 構造として扱う。\n" +
     "   - It = role:\"S\"、takes/cost/require = role:\"V\"、後続の目的語（時間・金額・人など） = role:\"O\" とする。\n\n" +
+    "【助動詞・準助動詞・疑問文の扱い】\n" +
+    "- **基本**: 助動詞（can, will等）や準助動詞（have to, ought to等）は、MやSに含めず、本動詞と結合して【1つのV】として扱うこと。\n" +
+    "- **be going to**: 「be going to + 動詞」は常に未来表現として扱い、進行形＋目的の不定詞には分けず、全体を結合して【1つのV】とすること。\n" +
+    "- **疑問文・倒置**: 文頭の助動詞は M にせず単独で role:\"V\" にする。さらに、主語の後ろに残った「本動詞」も絶対に O に巻き込まず、必ず独立した role:\"V\" とすること。\n\n" +
     "【sub_structures の形式】各要素: { \"target_text\": \"節の文字列\", \"explanation\": \"役割と内部構造の解説\", \"chunks\": [{ \"text\": \"\", \"translation\": \"\", \"type\": \"noun|verb|modifier|connector\", \"role\": \"S|V|O|C|M|CONN|CONJ|S'|O'|C'|M'|V'\" }] }\n\n" +
     "【出力JSONフォーマット】\n" +
     '{"clean_text":"<入力された英文>","sentences":[{"sentence_id":1,"original_text":"<入力された英文>","translation":"和訳","main_structure":[{"text":"","translation":"","type":"noun|verb|modifier|connector","role":"S|V|O|C|M|CONN|CONJ|S\'|O\'|C\'|M\'|V\'"}],"chunks":[],"vocab_list":[],"details":["構造の概要説明をここに"],"sub_structures":[{"target_text":"節の文字列","explanation":"解説","chunks":[{"text":"","translation":"","type":"noun","role":"S"}]}]}]}\n\n' +
