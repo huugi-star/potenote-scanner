@@ -68,6 +68,9 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
 
   // Store
   const isVIP = useGameStore(state => state.isVIP);
+  const dailyScanCount = useGameStore(state => state.dailyScanCount);
+  const lastScanDate = useGameStore(state => state.lastScanDate);
+  const bonusScanBalance = useGameStore(state => state.bonusScanBalance);
   const scanType = useGameStore(state => state.scanType);
   const translationMode = useGameStore(state => state.translationMode);
   const englishLearningMode = useGameStore(state => state.englishLearningMode);
@@ -92,6 +95,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const canScan = isVIP || remainingScans > 0;
   // スキャン残数が0なら翻訳モードでもアップロード不可
   const canUpload = canScan;
+  const today = new Date().toISOString().split('T')[0];
+  const usedToday = lastScanDate === today ? dailyScanCount : 0;
+  const freeRemaining = Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - usedToday);
+  const bonusRemaining = Math.max(0, bonusScanBalance ?? 0);
 
   const displayProgress = Math.min(100, Math.max(0, Math.round(progress)));
   const fallbackProgressLabel = scanState === 'uploading'
@@ -521,7 +528,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                 VIP Unlimited
               </span>
             ) : (
-              `残り ${remainingScans}/${LIMITS.FREE_USER.DAILY_SCAN_LIMIT} 回`
+              <div className="leading-tight">
+                <p>本日残り {remainingScans}回</p>
+                <p className="text-[10px] opacity-80">無料：{freeRemaining} / ボーナス：{bonusRemaining}</p>
+              </div>
             )}
           </div>
         </div>

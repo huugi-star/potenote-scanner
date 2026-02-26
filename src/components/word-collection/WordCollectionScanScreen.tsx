@@ -36,15 +36,17 @@ export const WordCollectionScanScreen = ({ onComplete, onBack }: WordCollectionS
   const progressTimerRef = useRef<number | null>(null);
 
   const isVIP = useGameStore((s) => s.isVIP);
-  const checkTranslationLimit = useGameStore((s) => s.checkTranslationLimit);
-  const incrementTranslationCount = useGameStore((s) => s.incrementTranslationCount);
-  const incrementScanCount = useGameStore((s) => s.incrementScanCount);
+  const dailyWordCollectionScanCount = useGameStore((s) => s.dailyWordCollectionScanCount);
+  const lastWordCollectionScanDate = useGameStore((s) => s.lastWordCollectionScanDate);
   const saveWordCollectionScan = useGameStore((s) => s.saveWordCollectionScan);
 
   const { addToast } = useToast();
 
-  const limitCheck = checkTranslationLimit();
-  const canScan = isVIP || limitCheck.canTranslate;
+  const today = new Date().toISOString().split('T')[0];
+  const dailyLimit = LIMITS.WORD_COLLECTION_SCANS.DAILY_SCAN_LIMIT ?? 3;
+  const usedToday = lastWordCollectionScanDate === today ? (dailyWordCollectionScanCount ?? 0) : 0;
+  const remainingToday = Math.max(0, dailyLimit - usedToday);
+  const canScan = isVIP || remainingToday > 0;
 
   const stopProgressTicker = useCallback((finalValue?: number) => {
     if (progressTimerRef.current) {
@@ -73,9 +75,16 @@ export const WordCollectionScanScreen = ({ onComplete, onBack }: WordCollectionS
     async (file: File) => {
       vibrateLight();
 
-      const limitCheck = checkTranslationLimit();
-      if (!limitCheck.canTranslate) {
-        setErrorMessage(limitCheck.error || '翻訳回数の上限に達しました');
+      const state = useGameStore.getState();
+      const currentToday = new Date().toISOString().split('T')[0];
+      const usedNow =
+        state.lastWordCollectionScanDate === currentToday
+          ? (state.dailyWordCollectionScanCount ?? 0)
+          : 0;
+      const remainingNow = Math.max(0, dailyLimit - usedNow);
+      const canScanNow = state.isVIP || remainingNow > 0;
+      if (!canScanNow) {
+        setErrorMessage('本日の単コレスキャン上限に達しました');
         setScanState('error');
         vibrateError();
         return;
@@ -136,8 +145,6 @@ export const WordCollectionScanScreen = ({ onComplete, onBack }: WordCollectionS
           words: Array.isArray(data.words) ? data.words : [],
         };
 
-        incrementTranslationCount();
-        incrementScanCount();
         const newScanId = saveWordCollectionScan(result, compressed.dataUrl);
 
         stopProgressTicker(100);
@@ -153,14 +160,12 @@ export const WordCollectionScanScreen = ({ onComplete, onBack }: WordCollectionS
       }
     },
     [
-      checkTranslationLimit,
       startProgressTicker,
       stopProgressTicker,
-      incrementTranslationCount,
-      incrementScanCount,
       saveWordCollectionScan,
       onComplete,
       addToast,
+      dailyLimit,
     ]
   );
 
@@ -212,7 +217,7 @@ export const WordCollectionScanScreen = ({ onComplete, onBack }: WordCollectionS
               isVIP ? 'bg-amber-500/20 text-amber-400' : canScan ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
             }`}
           >
-            {isVIP ? '無制限' : `残り ${limitCheck.remaining}/${LIMITS.FREE_USER.DAILY_TRANSLATION_LIMIT} 回`}
+            {isVIP ? '無制限' : `残り ${remainingToday}/${dailyLimit} 回`}
           </div>
         </div>
       </div>
@@ -277,7 +282,7 @@ export const WordCollectionScanScreen = ({ onComplete, onBack }: WordCollectionS
                       <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
                         <AlertCircle className="w-8 h-8 text-red-400" />
                       </div>
-                      <p className="text-red-400 font-medium mb-2">本日の翻訳上限に達しました</p>
+                      <p className="text-red-400 font-medium mb-2">本日の単コレスキャン上限に達しました</p>
                       <p className="text-gray-500 text-sm">明日またお試しください</p>
                     </>
                   )}

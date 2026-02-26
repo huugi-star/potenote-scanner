@@ -243,6 +243,7 @@ export interface UserState {
   // 日次制限
   dailyScanCount: number;        // 本日のスキャン済み回数
   lastScanDate: string;          // 最終スキャン日 (YYYY-MM-DD)
+  bonusScanBalance: number;      // 無料枠超過時に消費される追加スキャン残高
   dailyFreeQuestGenerationCount: number;  // 本日のフリークエスト新問題生成回数
   lastFreeQuestGenerationDate: string;     // 最終フリークエスト生成日 (YYYY-MM-DD)
   dailyTranslationCount: number;  // 本日の翻訳回数

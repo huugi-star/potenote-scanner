@@ -210,6 +210,7 @@ const initialState: GameState = {
   
   dailyScanCount: 0,
   lastScanDate: '',
+  bonusScanBalance: 0,
   dailyWordCollectionScanCount: 0,
   lastWordCollectionScanDate: '',
   dailyFreeQuestGenerationCount: 0,
@@ -312,6 +313,7 @@ export const useGameStore = create<GameStore>()(
                 : state.vipExpiresAt,
               dailyScanCount: cloudData.userState?.dailyScanCount ?? state.dailyScanCount,
               lastScanDate: cloudData.userState?.lastScanDate ?? state.lastScanDate,
+              bonusScanBalance: cloudData.userState?.bonusScanBalance ?? state.bonusScanBalance,
               dailyFreeQuestGenerationCount:
                 cloudData.userState?.dailyFreeQuestGenerationCount ?? state.dailyFreeQuestGenerationCount,
               lastFreeQuestGenerationDate:
@@ -457,6 +459,7 @@ export const useGameStore = create<GameStore>()(
                   : null,
                 dailyScanCount: state.dailyScanCount,
                 lastScanDate: state.lastScanDate,
+                bonusScanBalance: state.bonusScanBalance,
                 dailyFreeQuestGenerationCount:
                   state.dailyFreeQuestGenerationCount,
                 lastFreeQuestGenerationDate:
@@ -544,12 +547,16 @@ export const useGameStore = create<GameStore>()(
         
         const state = get();
         const today = getTodayString();
+        const freeLimit = LIMITS.FREE_USER.DAILY_SCAN_LIMIT;
+        const currentDailyScanCount = state.lastScanDate !== today ? 0 : state.dailyScanCount;
+        const bonusScanBalance = state.bonusScanBalance ?? 0;
         
         if (state.lastScanDate !== today) {
           set({ dailyScanCount: 0, lastScanDate: today });
-          return { 
-            canScan: true, 
-            remaining: state.isVIP ? Infinity : Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - amount) 
+          const freeRemaining = Math.max(0, freeLimit - currentDailyScanCount);
+          return {
+            canScan: true,
+            remaining: state.isVIP ? Infinity : (freeRemaining + bonusScanBalance),
           };
         }
         
@@ -557,7 +564,8 @@ export const useGameStore = create<GameStore>()(
           return { canScan: true, remaining: Infinity };
         }
         
-        const remaining = LIMITS.FREE_USER.DAILY_SCAN_LIMIT - state.dailyScanCount;
+        const freeRemaining = Math.max(0, freeLimit - currentDailyScanCount);
+        const remaining = freeRemaining + bonusScanBalance;
         
         if (remaining < amount) {
           return { 
@@ -572,8 +580,17 @@ export const useGameStore = create<GameStore>()(
       
       incrementScanCount: (amount = 1) => {
         const state = get();
+        const today = getTodayString();
+        const freeLimit = LIMITS.FREE_USER.DAILY_SCAN_LIMIT;
+        const isNewDay = state.lastScanDate !== today;
+        const currentDailyScanCount = isNewDay ? 0 : state.dailyScanCount;
+        const freeRemaining = Math.max(0, freeLimit - currentDailyScanCount);
+        const useFree = Math.min(amount, freeRemaining);
+        const useBonus = Math.max(0, amount - useFree);
         set({
-          dailyScanCount: state.dailyScanCount + amount,
+          dailyScanCount: Math.min(freeLimit, currentDailyScanCount + useFree),
+          lastScanDate: today,
+          bonusScanBalance: Math.max(0, (state.bonusScanBalance ?? 0) - useBonus),
           totalScans: state.totalScans + amount,
         });
         get().syncWithCloud();
@@ -581,8 +598,9 @@ export const useGameStore = create<GameStore>()(
       
       recoverScanCount: () => {
         const state = get();
-        const newCount = Math.max(0, state.dailyScanCount - REWARDS.AD_REWARDS.SCAN_RECOVERY_COUNT);
-        set({ dailyScanCount: newCount });
+        set({
+          bonusScanBalance: (state.bonusScanBalance ?? 0) + REWARDS.AD_REWARDS.SCAN_RECOVERY_COUNT,
+        });
         get().syncWithCloud();
       },
 
@@ -600,24 +618,18 @@ export const useGameStore = create<GameStore>()(
           return { success: false, message: 'VIPは回復不要です' };
         }
 
-        // 既に残回数があるなら不要
-        const remaining = LIMITS.FREE_USER.DAILY_SCAN_LIMIT - get().dailyScanCount;
-        if (remaining > 0) {
-          return { success: false, message: 'まだ残回数があります' };
-        }
-
         // コイン消費チェック（100コイン固定）
         const cost = 100;
         if (!get().spendCoins(cost)) {
           return { success: false, message: 'コインが不足しています (100コイン必要)' };
         }
 
-        // 消費カウントを1減らし、残回数+1相当とする
+        // 追加回数はボーナス残高として付与（無料枠超過分から消費される）
         set(state => ({
-          dailyScanCount: Math.max(0, state.dailyScanCount - 1),
+          bonusScanBalance: (state.bonusScanBalance ?? 0) + 1,
         }));
         get().syncWithCloud();
-        return { success: true, message: 'スキャン回数を1回回復しました' };
+        return { success: true, message: 'ボーナススキャンを1回付与しました' };
       },
       
       // ===== Free Quest Generation Management =====
@@ -825,6 +837,7 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         // Enforce daily limit only in production-like environments
         const today = getTodayString();
+        const dailyLimit = LIMITS.WORD_COLLECTION_SCANS.DAILY_SCAN_LIMIT ?? 3;
         if (!isLocalDevelopment()) {
           if (state.lastWordCollectionScanDate !== today) {
             // reset daily counter for new day
@@ -832,12 +845,12 @@ export const useGameStore = create<GameStore>()(
             // refresh state variable after set
             const refreshed = get();
             // use refreshed for check
-            if ((refreshed.dailyWordCollectionScanCount ?? 0) >= 5) {
+            if ((refreshed.dailyWordCollectionScanCount ?? 0) >= dailyLimit) {
               console.warn('[saveWordCollectionScan] daily limit reached (after reset)'); 
               return undefined;
             }
           } else {
-            if ((state.dailyWordCollectionScanCount ?? 0) >= 5) {
+            if ((state.dailyWordCollectionScanCount ?? 0) >= dailyLimit) {
               console.warn('[saveWordCollectionScan] daily limit reached');
               return undefined;
             }
@@ -1793,11 +1806,12 @@ export const useGameStore = create<GameStore>()(
 
       // ログアウト時にゲストのスキャン回数を保持したままリセット
       resetPreserveGuestUsage: () => {
-        const { dailyScanCount, lastScanDate } = get();
+        const { dailyScanCount, lastScanDate, bonusScanBalance } = get();
         set({
           ...initialState,
           dailyScanCount,
           lastScanDate,
+          bonusScanBalance,
         });
       },
     }),
@@ -1830,6 +1844,7 @@ export const useGameStore = create<GameStore>()(
         vipExpiresAt: state.vipExpiresAt,
         dailyScanCount: state.dailyScanCount,
         lastScanDate: state.lastScanDate,
+        bonusScanBalance: state.bonusScanBalance,
         dailyWordCollectionScanCount: state.dailyWordCollectionScanCount,
         lastWordCollectionScanDate: state.lastWordCollectionScanDate,
         dailyFreeQuestGenerationCount: state.dailyFreeQuestGenerationCount,
@@ -1872,8 +1887,9 @@ export const selectIsVIP = (state: GameState) => state.isVIP;
 export const selectCanScan = (state: GameState) => {
   if (state.isVIP) return true;
   const today = getTodayString();
-  if (state.lastScanDate !== today) return true;
-  return state.dailyScanCount < LIMITS.FREE_USER.DAILY_SCAN_LIMIT;
+  const dailyScanCount = state.lastScanDate !== today ? 0 : state.dailyScanCount;
+  const freeRemaining = Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - dailyScanCount);
+  return freeRemaining + (state.bonusScanBalance ?? 0) > 0;
 };
 
 export const selectRemainingScanCount = (state: GameState) => {
@@ -1881,8 +1897,9 @@ export const selectRemainingScanCount = (state: GameState) => {
   if (isLocalDevelopment()) return Infinity;
   if (state.isVIP) return Infinity;
   const today = getTodayString();
-  if (state.lastScanDate !== today) return LIMITS.FREE_USER.DAILY_SCAN_LIMIT;
-  return Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - state.dailyScanCount);
+  const dailyScanCount = state.lastScanDate !== today ? 0 : state.dailyScanCount;
+  const freeRemaining = Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - dailyScanCount);
+  return freeRemaining + (state.bonusScanBalance ?? 0);
 };
 
 export const selectEquippedItemDetails = (state: GameState) => {

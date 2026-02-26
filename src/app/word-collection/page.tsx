@@ -20,6 +20,7 @@ import { WordCollectionResultScreen } from '@/components/word-collection/WordCol
 import { WordDexScreen } from '@/components/word-collection/WordDexScreen';
 import { WordDexVolScreen } from '@/components/word-collection/WordDexVolScreen';
 import { WordDexDetailScreen } from '@/components/word-collection/WordDexDetailScreen';
+import { LIMITS } from '@/lib/constants';
 
 // ===== Page Content =====
 
@@ -321,7 +322,8 @@ function WordCollectionContent() {
             process.env.NODE_ENV !== 'production' ||
             (typeof window !== 'undefined' &&
               (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
-          const reachedLimit = !isDevEnv && lastWordCollectionScanDate === today && (dailyWordCollectionScanCount ?? 0) >= 5;
+          const dailyLimit = LIMITS.WORD_COLLECTION_SCANS.DAILY_SCAN_LIMIT ?? 3;
+          const reachedLimit = !isDevEnv && lastWordCollectionScanDate === today && (dailyWordCollectionScanCount ?? 0) >= dailyLimit;
           return (
             <div>
               <button

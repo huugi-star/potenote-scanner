@@ -97,6 +97,7 @@ export const LIMITS = {
     MAX_ITEMS: 50,           // 最大保存数（localStorage容量対策）
   },
   WORD_COLLECTION_SCANS: {
+    DAILY_SCAN_LIMIT: 3,     // 単コレスキャンは1日3回まで
     MAX_ITEMS: 50,           // 単コレ冒険ログの最大件数
     ACTIVE_ENEMIES_MAX: 21,  // 1冒険あたりの戦闘対象上限
   },
