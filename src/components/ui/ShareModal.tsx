@@ -5,11 +5,13 @@
  * QRコードとSNSシェアボタンを提供
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Copy, Check, Share2, Twitter, MessageCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
+import { auth } from '@/lib/firebase';
 
 // ===== Types =====
 
@@ -22,6 +24,19 @@ interface ShareModalProps {
 
 export const ShareModal = ({ isOpen, onClose }: ShareModalProps) => {
   const [copied, setCopied] = useState(false);
+  const [supportIdCopied, setSupportIdCopied] = useState(false);
+  const [supportId, setSupportId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!auth) {
+      setSupportId(null);
+      return;
+    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setSupportId(user?.uid ?? null);
+    });
+    return () => unsubscribe();
+  }, []);
   
   // アプリのURLを取得
   const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -38,6 +53,18 @@ export const ShareModal = ({ isOpen, onClose }: ShareModalProps) => {
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy URL:', err);
+    }
+  };
+
+  const handleCopySupportId = async () => {
+    if (!supportId) return;
+    try {
+      await navigator.clipboard.writeText(supportId);
+      setSupportIdCopied(true);
+      vibrateSuccess();
+      setTimeout(() => setSupportIdCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy support ID:', err);
     }
   };
   
@@ -144,6 +171,33 @@ export const ShareModal = ({ isOpen, onClose }: ShareModalProps) => {
               </button>
             </div>
           </div>
+
+          {/* 支援者向けサポートID（ログイン時のみ表示） */}
+          {supportId && (
+            <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+              <p className="text-amber-300 font-semibold mb-2">🎁 支援者の方へ</p>
+              <p className="text-gray-300 text-sm mb-2">
+                ボーナス受け取り用の「サポートID」はこちらです：
+              </p>
+              <p className="font-mono text-amber-100 text-xs break-all mb-3">{supportId}</p>
+              <button
+                onClick={handleCopySupportId}
+                className="w-full py-2 px-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              >
+                {supportIdCopied ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    コピーしました！
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    IDをコピー
+                  </>
+                )}
+              </button>
+            </div>
+          )}
           
           {/* SNSシェアボタン */}
           <div className="space-y-3">

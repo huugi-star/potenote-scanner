@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { addDoc, collection, doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { FieldValue } from "firebase-admin/firestore";
+import { adminDb } from "@/lib/firebaseAdmin";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -46,13 +46,6 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!db) {
-      return NextResponse.json(
-        { error: "Firestore is not available" },
-        { status: 500 }
-      );
-    }
-
     const parsed = RequestSchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -70,9 +63,9 @@ export async function POST(req: Request) {
     const { uid, bonusAmount, note } = parsed.data;
     const today = getTodayString();
 
-    const userRef = doc(db, "users", uid);
-    const snap = await getDoc(userRef);
-    if (!snap.exists()) {
+    const userRef = adminDb.collection("users").doc(uid);
+    const snap = await userRef.get();
+    if (!snap.exists) {
       return NextResponse.json(
         { error: "User not found" },
         { status: 404 }
@@ -95,8 +88,7 @@ export async function POST(req: Request) {
         : 0;
     const afterBonusScanBalance = beforeBonusScanBalance + bonusAmount;
 
-    await setDoc(
-      userRef,
+    await userRef.set(
       {
         userState: {
           bonusScanBalance: afterBonusScanBalance,
@@ -119,7 +111,7 @@ export async function POST(req: Request) {
 
     // 監査ログ（失敗しても本処理は成功扱い）
     try {
-      await addDoc(collection(db, "admin_actions"), {
+      await adminDb.collection("admin_actions").add({
         action: "grant_scan",
         uid,
         note: note ?? "",
@@ -128,7 +120,7 @@ export async function POST(req: Request) {
         beforeBonusScanBalance,
         afterBonusScanBalance,
         bonusAmount,
-        createdAt: Timestamp.now(),
+        createdAt: FieldValue.serverTimestamp(),
       });
     } catch (auditErr) {
       console.warn("[grant-scan] failed to write admin_actions:", auditErr);
