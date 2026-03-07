@@ -101,10 +101,8 @@ const ConsecutiveDays = ({ days }: { days: number }) => {
  */
 const PotatoPresenting = ({ 
   stage, 
-  isVIP 
 }: { 
   stage: 'entering' | 'presenting' | 'celebrating';
-  isVIP: boolean;
 }) => {
   const getEmotion = () => {
     switch (stage) {
@@ -238,7 +236,7 @@ export const LoginBonusModal = ({
 
             {/* ポテトとプレゼント */}
             <div className="relative flex justify-center py-6">
-              <PotatoPresenting stage={stage} isVIP={isVIP} />
+              <PotatoPresenting stage={stage} />
             </div>
 
             {/* ボーナス表示 */}
