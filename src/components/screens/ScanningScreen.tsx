@@ -20,7 +20,8 @@ import {
   CheckCircle,
   X,
   ChevronLeft,
-  Sparkles
+  Sparkles,
+  History
 } from 'lucide-react';
 import { useGameStore, selectRemainingScanCount } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
@@ -39,16 +40,20 @@ import { PREPOSITION_QUIZ, PrepositionQuizItem } from '@/data/prepositionQuiz';
 interface ScanningScreenProps {
   onQuizReady: (quiz: QuizRaw, imageUrl: string, ocrText?: string, structuredOCR?: StructuredOCR) => void;
   onTranslationReady?: (result: TranslationResult, imageUrl: string) => void;
+  onOpenFreeQuest?: () => void;
+  onOpenWordDex?: () => void;
   onBack?: () => void;
 }
 
 type ScanState = 'idle' | 'uploading' | 'processing' | 'ready' | 'error';
+type IdleView = 'hub' | 'upload';
 
 // ===== Main Component =====
 
-export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: ScanningScreenProps) => {
+export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQuest, onOpenWordDex, onBack }: ScanningScreenProps) => {
   // State
   const [scanState, setScanState] = useState<ScanState>('idle');
+  const [idleView, setIdleView] = useState<IdleView>('hub');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
@@ -72,6 +77,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const dailyScanCount = useGameStore(state => state.dailyScanCount);
   const lastScanDate = useGameStore(state => state.lastScanDate);
   const bonusScanBalance = useGameStore(state => state.bonusScanBalance);
+  const quizHistoryCount = useGameStore(state => state.quizHistory.length);
   const scanType = useGameStore(state => state.scanType);
   const translationMode = useGameStore(state => state.translationMode);
   const englishLearningMode = useGameStore(state => state.englishLearningMode);
@@ -82,6 +88,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const incrementTranslationCount = useGameStore(state => state.incrementTranslationCount);
   const purchaseScanRecovery = useGameStore(state => state.purchaseScanRecovery);
   const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
+  const registerQuizBatchToWordDex = useGameStore(state => state.registerQuizBatchToWordDex);
   const setTranslationResult = useGameStore(state => state.setTranslationResult);
   const setLastScanQuizId = useGameStore(state => state.setLastScanQuizId);
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
@@ -94,6 +101,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const progressTimerRef = useRef<number | null>(null);
 
   const canScan = isVIP || remainingScans > 0;
+  const isQuizMode = scanType === 'quiz';
   // スキャン残数が0なら翻訳モードでもアップロード不可
   const canUpload = canScan;
   const today = getJstDateString();
@@ -158,7 +166,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
     setPreQuiz([]);
     setPreQuizIndex(0);
     setPreQuizSelected(null);
-  }, [clearGeneratedQuiz, setTranslationResult, setLastScanQuizId, stopProgressTicker]);
+    setIdleView(scanType === 'quiz' ? 'hub' : 'upload');
+  }, [clearGeneratedQuiz, setTranslationResult, setLastScanQuizId, stopProgressTicker, scanType]);
 
   useEffect(() => {
     if (generatedQuiz && scanImageUrl && scanState === 'idle') {
@@ -396,6 +405,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           console.log('[ScanningScreen] Calling saveQuizHistory...');
           await saveQuizHistory(quizResult.quiz, initialResult, quizResult.ocrText, quizResult.structuredOCR);
           console.log('[ScanningScreen] saveQuizHistory completed');
+          registerQuizBatchToWordDex(quizResult.quiz, scanQuizId);
 
           // ストアに保存（ページ更新後も保持）
           setGeneratedQuiz(quizResult.quiz, compressed.dataUrl, quizResult.ocrText, quizResult.structuredOCR);
@@ -437,7 +447,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
       vibrateError();
       addToast('error', message);
     }
-  }, [checkScanLimit, incrementScanCount, addToast, translationMode, scanType, onTranslationReady, saveQuizHistory, setGeneratedQuiz, setAspAdRecommendation, onQuizReady, startProgressTicker, stopProgressTicker]);
+  }, [checkScanLimit, incrementScanCount, addToast, translationMode, scanType, onTranslationReady, saveQuizHistory, registerQuizBatchToWordDex, setGeneratedQuiz, setAspAdRecommendation, onQuizReady, startProgressTicker, stopProgressTicker]);
 
   // ファイル入力変更
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -486,6 +496,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
   const handleReset = () => {
     vibrateLight();
     setScanState('idle');
+    setIdleView(scanType === 'quiz' ? 'hub' : 'upload');
     setSelectedImage(null);
     clearGeneratedQuiz(); // ストアからもクリア
     setErrorMessage('');
@@ -512,7 +523,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           )}
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Scan className="w-6 h-6 text-cyan-400" />
-            スキャン
+            冒険の拠点
           </h1>
           
           {/* スキャン残り回数 */}
@@ -537,14 +548,16 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
           </div>
         </div>
 
-        {/* ポテトアバター */}
-        <div className="flex justify-center mb-6">
-          <PotatoAvatar
-            emotion={scanState === 'ready' ? 'happy' : scanState === 'error' ? 'confused' : 'normal'}
-            size={100}
-            ssrEffect={isVIP}
-          />
-        </div>
+        {/* ポテトアバター（拠点画面ではカード内に表示） */}
+        {scanState !== 'idle' && (
+          <div className="flex justify-center mb-6">
+            <PotatoAvatar
+              emotion={scanState === 'ready' ? 'happy' : scanState === 'error' ? 'confused' : 'normal'}
+              size={100}
+              ssrEffect={false}
+            />
+          </div>
+        )}
 
         {/* 英文解釈モードの学習属性選択（スキャン前） */}
         {scanType === 'translation' && translationMode === 'english_learning' && (
@@ -587,67 +600,146 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
             >
-              <div
-                className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${
-                  canUpload 
-                    ? 'border-gray-600 hover:border-cyan-500 cursor-pointer' 
-                    : 'border-gray-700 bg-gray-800/50 cursor-not-allowed'
-                }`}
-                onDrop={canUpload ? handleDrop : undefined}
-                onDragOver={(e) => e.preventDefault()}
-                onClick={() => {
-                  if (canUpload) {
-                    vibrateLight();
-                    fileInputRef.current?.click();
-                  }
-                }}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleInputChange}
-                  disabled={!canUpload}
-                />
+              {isQuizMode && idleView === 'hub' ? (
+                <div className="space-y-3">
+                  <motion.button
+                    onClick={() => {
+                      vibrateLight();
+                      setIdleView('upload');
+                    }}
+                    className="w-full py-5 rounded-2xl bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-bold text-lg flex items-center justify-center gap-2"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Scan className="w-6 h-6" />
+                    新しい冒険をスキャン
+                  </motion.button>
 
-                {canUpload ? (
-                  <>
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cyan-500/20 flex items-center justify-center">
-                      <Camera className="w-8 h-8 text-cyan-400" />
-                    </div>
-                    <p className="text-white font-medium mb-2">
-                      画像をアップロード
-                    </p>
-                    <p className="text-gray-400 text-sm">
-                      タップして選択、またはドラッグ＆ドロップ
-                    </p>
-                    
-                    {/* 注意書き */}
-                    <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                      <p className="text-amber-400 text-xs font-medium flex items-center justify-center gap-1">
-                        <AlertCircle className="w-3.5 h-3.5" />
-                        1ページずつスキャンしてください
-                      </p>
-                      <p className="text-amber-400/70 text-xs mt-1">
-                        見開き2ページは正しく読み取れません
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
-                      <AlertCircle className="w-8 h-8 text-red-400" />
-                    </div>
-                    <p className="text-red-400 font-medium mb-2">
-                      本日のスキャン回数上限（3回）
-                    </p>
-                    <p className="text-gray-500 text-sm">
-                      回復オプションを購入するか、VIPプラン（1日50回まで）にアップグレードしてください（実装予定）。
-                    </p>
-                  </>
-                )}
-              </div>
+                  <motion.button
+                    onClick={() => {
+                      if (!onOpenFreeQuest || quizHistoryCount <= 0) return;
+                      vibrateLight();
+                      onOpenFreeQuest();
+                    }}
+                    disabled={!onOpenFreeQuest || quizHistoryCount <= 0}
+                    className={`w-full py-4 rounded-xl text-white font-bold flex items-center justify-center gap-2 ${
+                      quizHistoryCount > 0
+                        ? 'bg-gradient-to-r from-emerald-600 to-emerald-500'
+                        : 'bg-gray-700/70 text-gray-400'
+                    }`}
+                    whileHover={quizHistoryCount > 0 ? { scale: 1.02 } : {}}
+                    whileTap={quizHistoryCount > 0 ? { scale: 0.98 } : {}}
+                  >
+                    <History className="w-5 h-5" />
+                    フリークエスト
+                    <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                      {quizHistoryCount}
+                    </span>
+                  </motion.button>
+
+                  <motion.button
+                    onClick={() => {
+                      if (!onOpenWordDex) return;
+                      vibrateLight();
+                      onOpenWordDex();
+                    }}
+                    disabled={!onOpenWordDex}
+                    className="w-full py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-bold flex items-center justify-center gap-2"
+                    whileHover={onOpenWordDex ? { scale: 1.02 } : {}}
+                    whileTap={onOpenWordDex ? { scale: 0.98 } : {}}
+                  >
+                    ことば図鑑
+                  </motion.button>
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-gray-800/50 border border-gray-700 p-4">
+                  {isQuizMode && (
+                    <button
+                      onClick={() => {
+                        vibrateLight();
+                        setIdleView('hub');
+                      }}
+                      className="mb-3 text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      冒険の拠点に戻る
+                    </button>
+                  )}
+
+                  <div className="mb-3">
+                    <h2 className="text-white font-bold text-lg">
+                      {isQuizMode ? '' : '画像をアップロード'}
+                    </h2>
+                  </div>
+                  <p className="text-gray-400 text-sm mb-4">
+                    {isQuizMode
+                      ? ''
+                      : '翻訳したい画像をアップロードしてください。'}
+                  </p>
+
+                  <div
+                    className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${
+                      canUpload 
+                        ? 'border-gray-600 hover:border-cyan-500 cursor-pointer' 
+                        : 'border-gray-700 bg-gray-800/50 cursor-not-allowed'
+                    }`}
+                    onDrop={canUpload ? handleDrop : undefined}
+                    onDragOver={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (canUpload) {
+                        vibrateLight();
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleInputChange}
+                      disabled={!canUpload}
+                    />
+
+                    {canUpload ? (
+                      <>
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cyan-500/20 flex items-center justify-center">
+                          <Camera className="w-8 h-8 text-cyan-400" />
+                        </div>
+                        <p className="text-white font-medium mb-2">
+                          {isQuizMode ? '画像を読み込んで、冒険開始' : '翻訳用の画像をアップロード'}
+                        </p>
+                        <p className="text-gray-400 text-sm">
+                          タップして選択、またはドラッグ＆ドロップ
+                        </p>
+                        
+                        {/* 注意書き */}
+                        <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                          <p className="text-amber-400 text-xs font-medium flex items-center justify-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            1ページずつスキャンしてください
+                          </p>
+                          <p className="text-amber-400/70 text-xs mt-1">
+                            見開き2ページは正しく読み取れません
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
+                          <AlertCircle className="w-8 h-8 text-red-400" />
+                        </div>
+                        <p className="text-red-400 font-medium mb-2">
+                          本日のスキャン回数上限（3回）
+                        </p>
+                        <p className="text-gray-500 text-sm">
+                          回復オプションを購入するか、VIPプラン（1日50回まで）にアップグレードしてください（実装予定）。
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Freeユーザー向け回復オプション */}
               {!isVIP && scanType === 'quiz' && !canScan && (
@@ -845,7 +937,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onBack }: Scan
                   whileTap={{ scale: 0.98 }}
                 >
                   <Play className="w-6 h-6" />
-                  クイズを始める
+                  冒険を始める
                 </motion.button>
 
                 <button

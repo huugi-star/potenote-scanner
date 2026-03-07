@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <g transform="translate(0, 49)">
+    <!-- eyes -->
+    <circle cx="205" cy="172" r="9" fill="#4A2511"/>
+    <circle cx="290" cy="172" r="9" fill="#4A2511"/>
+    <!-- mouth -->
+    <path d="M 233 186 Q 248 200 263 186" fill="none" stroke="#4A2511" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

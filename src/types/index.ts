@@ -19,12 +19,50 @@ export interface QuizQuestion {
 }
 
 /**
+ * 1問ごとの回答ログ
+ */
+export interface QuizQuestionAttempt {
+  questionIndex: number;
+  selectedAnswer: number | null;
+  isCorrect: boolean;
+}
+
+/**
  * APIから返されるクイズ生データ
  */
 export interface QuizRaw {
   summary: string;           // スキャンした内容の要約
   keywords: string[];        // フラッグ用キーワード (Top 3)
   questions: QuizQuestion[]; // クイズ問題 (5問)
+}
+
+/**
+ * ことば図鑑: 図鑑（カテゴリー）
+ */
+export interface WordDexDictionary {
+  id: string;
+  name: string;
+  icon?: string;
+  theme?: 'forest' | 'neon' | 'brown' | 'indigo' | 'emerald' | 'amber' | 'rose' | 'slate';
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * ことば図鑑: 用語
+ */
+export interface WordDexWord {
+  id: string;
+  name: string;
+  description: string;
+  dictionaryId: string;
+  batchId: string;
+  correctCount: number;
+  wrongCount: number;
+  totalAttempts: number;
+  consecutiveCorrect: number;
+  firstEncounterDate: string;
+  lastAttemptDate: string;
 }
 
 /**

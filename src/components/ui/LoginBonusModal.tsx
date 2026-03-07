@@ -123,7 +123,7 @@ const PotatoPresenting = ({
     >
       <PotatoAvatar
         emotion={getEmotion()}
-        ssrEffect={isVIP}
+        ssrEffect={false}
         size={140}
       />
       

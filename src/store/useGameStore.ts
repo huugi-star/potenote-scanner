@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult } from '@/types';
+import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult, QuizQuestionAttempt, WordDexDictionary, WordDexWord } from '@/types';
 import { ALL_ITEMS, getItemById } from '@/data/items';
 import { REWARDS, DISTANCE, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { getJstDateString } from '@/lib/dateUtils';
@@ -41,6 +41,65 @@ const weightedRandom = <T extends { dropWeight: number }>(items: T[]): T => {
   return items[items.length - 1];
 };
 
+const DEFAULT_WORD_DEX_DICTIONARIES: WordDexDictionary[] = [
+  { id: 'dex_english', name: '英語図鑑', icon: '📘', theme: 'forest', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'dex_chemistry', name: '科目図鑑', icon: '🧪', theme: 'neon', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'dex_takken', name: '資格図鑑', icon: '🏠', theme: 'brown', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'dex_hobby', name: '趣味図鑑', icon: '🎨', theme: 'rose', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'dex_other', name: 'その他図鑑', icon: '📚', theme: 'slate', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+];
+
+const normalizeWordName = (value: string): string => value.trim().replace(/\s+/g, ' ');
+
+const mergeDefaultDictionaries = (dictionaries?: WordDexDictionary[]): WordDexDictionary[] => {
+  const current = Array.isArray(dictionaries) ? dictionaries : [];
+  const byId = new Map(current.map((d) => [d.id, d] as const));
+  const merged = [...current];
+  for (const def of DEFAULT_WORD_DEX_DICTIONARIES) {
+    if (!byId.has(def.id)) merged.push(def);
+  }
+  return merged;
+};
+
+const includesAny = (text: string, keywords: string[]): boolean => {
+  return keywords.some((k) => text.includes(k));
+};
+
+const inferDictionaryIdFromQuiz = (quiz: QuizRaw, dictionaries: WordDexDictionary[]): string => {
+  const allText = [
+    quiz.summary,
+    quiz.keywords.join(' '),
+    ...quiz.questions.map((q) => `${q.q} ${q.options.join(' ')} ${q.explanation}`),
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  const hobbyKeywords = [
+    'アニメ', '漫画', 'まんが', 'マンガ', 'アイドル', 'ゲーム', '推し', '声優', '映画', 'ドラマ', '音楽', 'バンド',
+    'anime', 'manga', 'idol', 'otaku', 'youtube', 'vtuber',
+  ];
+  const chemistryKeywords = [
+    '化学', '元素', '原子', '分子', 'イオン', '化学式', 'モル', '酸', '塩基', '酸化', '還元',
+    'chemistry', 'atom', 'molecule', 'ion', 'molar',
+  ];
+  const takkenKeywords = [
+    '宅建', '不動産', '借地', '借家', '登記', '区分所有', '法令上', '都市計画', '建築基準', '重要事項', '媒介',
+    'real estate', 'property',
+  ];
+  const englishKeywords = [
+    '英語', '英文', '文法', '単語', '熟語', 'toeic', '英検',
+    'english', 'grammar', 'vocabulary',
+  ];
+
+  const hasDict = (id: string) => dictionaries.some((d) => d.id === id);
+  if (includesAny(allText, hobbyKeywords) && hasDict('dex_hobby')) return 'dex_hobby';
+  if (includesAny(allText, chemistryKeywords) && hasDict('dex_chemistry')) return 'dex_chemistry';
+  if (includesAny(allText, takkenKeywords) && hasDict('dex_takken')) return 'dex_takken';
+  if (includesAny(allText, englishKeywords) && hasDict('dex_english')) return 'dex_english';
+  if (hasDict('dex_other')) return 'dex_other';
+  return dictionaries[0]?.id ?? 'dex_english';
+};
+
 // ===== Store Types =====
 
 interface GameState extends UserState {
@@ -73,6 +132,10 @@ interface GameState extends UserState {
 
   // ワード図鑑：発見順（問題として初出した順）
   wordDexOrder: string[];
+
+  // ことば図鑑
+  wordDexDictionaries: WordDexDictionary[];
+  wordDexWords: WordDexWord[];
 
   // 講義履歴
   lectureHistory: LectureHistory[];
@@ -145,6 +208,15 @@ interface GameActions {
   registerWordDexWords: (words: string[]) => void;
   getWordDexOrder: () => string[];
 
+  // ことば図鑑
+  getWordDexDictionaries: () => WordDexDictionary[];
+  addWordDexDictionary: (payload: { name: string; icon?: string; theme?: WordDexDictionary['theme'] }) => void;
+  renameWordDexDictionary: (dictionaryId: string, nextName: string) => void;
+  deleteWordDexDictionary: (dictionaryId: string) => void;
+  registerQuizBatchToWordDex: (quiz: QuizRaw, batchId: string, dictionaryId?: string) => void;
+  applyQuizAttemptsToWordDex: (batchId: string, attempts: QuizQuestionAttempt[]) => void;
+  moveWordDexBatch: (batchId: string, toDictionaryId: string) => void;
+
   // 講義履歴管理
   saveLectureHistory: (script: LectureScript, imageUrl?: string) => void;
   getLectureHistory: () => LectureHistory[];
@@ -200,18 +272,27 @@ type GameStore = GameState & GameActions;
 
 // ===== Initial State =====
 
+// ローカル開発時は全装備品を所持済みにする
+const DEV_INVENTORY = isLocalDevelopment()
+  ? ALL_ITEMS.filter(item => item.type === 'equipment').map(item => ({
+      itemId: item.id,
+      quantity: 1,
+      obtainedAt: new Date(),
+    }))
+  : [];
+
 const initialState: GameState = {
   uid: null,
-  coins: 0,
-  tickets: 0,
+  coins: isLocalDevelopment() ? 999999 : 0,
+  tickets: isLocalDevelopment() ? 999 : 0,
   stamina: STAMINA.MAX,
   
-  isVIP: false,
+  isVIP: isLocalDevelopment() ? true : false,
   vipExpiresAt: undefined,
   
   dailyScanCount: 0,
   lastScanDate: '',
-  bonusScanBalance: 0,
+  bonusScanBalance: isLocalDevelopment() ? 999 : 0,
   dailyWordCollectionScanCount: 0,
   lastWordCollectionScanDate: '',
   dailyFreeQuestGenerationCount: 0,
@@ -228,7 +309,7 @@ const initialState: GameState = {
   totalDistance: 0,
   totalQuizClears: 0,
   
-  inventory: [],
+  inventory: DEV_INVENTORY,
   equipment: {},
   
   journey: {
@@ -250,6 +331,8 @@ const initialState: GameState = {
   translationHistory: [],
   wordCollectionScans: [],
   wordDexOrder: [],
+  wordDexDictionaries: DEFAULT_WORD_DEX_DICTIONARIES,
+  wordDexWords: [],
 
   lectureHistory: [],
   
@@ -1157,6 +1240,158 @@ export const useGameStore = create<GameStore>()(
 
       getWordDexOrder: () => get().wordDexOrder,
 
+      // ===== ことば図鑑 =====
+      getWordDexDictionaries: () => {
+        const state = get();
+        if (!state.wordDexDictionaries || state.wordDexDictionaries.length === 0) {
+          set({ wordDexDictionaries: DEFAULT_WORD_DEX_DICTIONARIES });
+          return DEFAULT_WORD_DEX_DICTIONARIES;
+        }
+        const merged = mergeDefaultDictionaries(state.wordDexDictionaries);
+        if (merged.length !== state.wordDexDictionaries.length) {
+          set({ wordDexDictionaries: merged });
+        }
+        return merged;
+      },
+
+      addWordDexDictionary: (payload) => {
+        const name = payload.name.trim();
+        if (!name) return;
+        const state = get();
+        const now = new Date().toISOString();
+        const dictionaries = mergeDefaultDictionaries(state.wordDexDictionaries);
+        const id = `dex_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const next: WordDexDictionary = {
+          id,
+          name,
+          icon: payload.icon || '📘',
+          theme: payload.theme || 'forest',
+          createdAt: now,
+          updatedAt: now,
+        };
+        set({ wordDexDictionaries: [next, ...dictionaries] });
+      },
+
+      renameWordDexDictionary: (dictionaryId, nextName) => {
+        const trimmed = nextName.trim();
+        if (!trimmed) return;
+        const state = get();
+        const now = new Date().toISOString();
+        const dictionaries = mergeDefaultDictionaries(state.wordDexDictionaries);
+        set({
+          wordDexDictionaries: dictionaries.map((d) =>
+            d.id === dictionaryId ? { ...d, name: trimmed, updatedAt: now } : d
+          ),
+        });
+      },
+
+      deleteWordDexDictionary: (dictionaryId) => {
+        const state = get();
+        const dictionaries = mergeDefaultDictionaries(state.wordDexDictionaries);
+        const remaining = dictionaries.filter((d) => d.id !== dictionaryId);
+        // Move words in deleted dictionary to 'dex_other' if exists, otherwise keep dictionaryId
+        const other = remaining.find((d) => d.id === 'dex_other');
+        const newWords = state.wordDexWords.map((w) =>
+          w.dictionaryId === dictionaryId ? { ...w, dictionaryId: other ? other.id : w.dictionaryId } : w
+        );
+        set({
+          wordDexDictionaries: remaining,
+          wordDexWords: newWords,
+        });
+      },
+
+      registerQuizBatchToWordDex: (quiz, batchId, dictionaryId) => {
+        const state = get();
+        const dictionaries = mergeDefaultDictionaries(state.wordDexDictionaries);
+        const targetDictionaryId = dictionaryId || inferDictionaryIdFromQuiz(quiz, dictionaries);
+        const now = new Date().toISOString();
+
+        const currentWords = [...state.wordDexWords];
+        const order = [...state.wordDexOrder];
+        const seenOrder = new Set(order);
+
+        quiz.questions.forEach((q, idx) => {
+          const term = normalizeWordName(q.options[q.a] || q.q);
+          if (!term) return;
+
+          const wordId = `${batchId}_${idx}`;
+          const existingIndex = currentWords.findIndex((w) => w.id === wordId);
+          if (existingIndex >= 0) {
+            currentWords[existingIndex] = {
+              ...currentWords[existingIndex],
+              name: term,
+              description: currentWords[existingIndex].description || q.q,
+              dictionaryId: currentWords[existingIndex].dictionaryId || targetDictionaryId,
+            };
+          } else {
+            currentWords.push({
+              id: wordId,
+              name: term,
+              description: q.q || '',
+              dictionaryId: targetDictionaryId,
+              batchId,
+              correctCount: 0,
+              wrongCount: 0,
+              totalAttempts: 0,
+              consecutiveCorrect: 0,
+              firstEncounterDate: now,
+              lastAttemptDate: now,
+            });
+          }
+
+          if (!seenOrder.has(term)) {
+            seenOrder.add(term);
+            order.push(term);
+          }
+        });
+
+        set({
+          wordDexDictionaries: dictionaries,
+          wordDexWords: currentWords,
+          wordDexOrder: order,
+        });
+      },
+
+      applyQuizAttemptsToWordDex: (batchId, attempts) => {
+        if (!attempts || attempts.length === 0) return;
+        const state = get();
+        const now = new Date().toISOString();
+
+        const updatedWords = state.wordDexWords.map((word) => {
+          if (word.batchId !== batchId) return word;
+          const idxPart = word.id.replace(`${batchId}_`, '');
+          const questionIndex = Number(idxPart);
+          if (Number.isNaN(questionIndex)) return word;
+
+          const attempt = attempts.find((a) => a.questionIndex === questionIndex);
+          if (!attempt) return word;
+
+          const isCorrect = !!attempt.isCorrect;
+          return {
+            ...word,
+            totalAttempts: word.totalAttempts + 1,
+            correctCount: word.correctCount + (isCorrect ? 1 : 0),
+            wrongCount: word.wrongCount + (isCorrect ? 0 : 1),
+            consecutiveCorrect: isCorrect ? word.consecutiveCorrect + 1 : 0,
+            lastAttemptDate: now,
+          };
+        });
+
+        set({ wordDexWords: updatedWords });
+      },
+
+      moveWordDexBatch: (batchId, toDictionaryId) => {
+        const state = get();
+        const dictionaries = mergeDefaultDictionaries(state.wordDexDictionaries);
+        if (!dictionaries.some((d) => d.id === toDictionaryId)) return;
+
+        set({
+          wordDexWords: state.wordDexWords.map((word) =>
+            word.batchId === batchId ? { ...word, dictionaryId: toDictionaryId } : word
+          ),
+        });
+      },
+
       // ===== Lecture History Management =====
       
       saveLectureHistory: (script, imageUrl) => {
@@ -1462,13 +1697,15 @@ export const useGameStore = create<GameStore>()(
       pullGacha: (useTicket = false) => {
         const state = get();
         
-        if (useTicket) {
-          if (state.tickets < 1) {
-            return { error: ERROR_MESSAGES.INSUFFICIENT_TICKETS };
-          }
-        } else {
-          if (state.coins < GACHA.COST.SINGLE) {
-            return { error: ERROR_MESSAGES.INSUFFICIENT_COINS };
+        if (!isLocalDevelopment()) {
+          if (useTicket) {
+            if (state.tickets < 1) {
+              return { error: ERROR_MESSAGES.INSUFFICIENT_TICKETS };
+            }
+          } else {
+            if (state.coins < GACHA.COST.SINGLE) {
+              return { error: ERROR_MESSAGES.INSUFFICIENT_COINS };
+            }
           }
         }
         
@@ -1595,6 +1832,7 @@ export const useGameStore = create<GameStore>()(
       },
       
       useStamina: (amount = STAMINA.QUIZ_COST) => {
+        if (isLocalDevelopment()) return true;
         const state = get();
         if (state.stamina < amount) {
           return false;
@@ -1830,6 +2068,17 @@ export const useGameStore = create<GameStore>()(
           state.wordDexOrder = [];
           useGameStore.setState({ wordDexOrder: [] });
         }
+        if (state) {
+          const mergedDictionaries = mergeDefaultDictionaries(state.wordDexDictionaries);
+          if (!Array.isArray(state.wordDexDictionaries) || mergedDictionaries.length !== state.wordDexDictionaries.length) {
+            state.wordDexDictionaries = mergedDictionaries;
+            useGameStore.setState({ wordDexDictionaries: mergedDictionaries });
+          }
+        }
+        if (state && !Array.isArray(state.wordDexWords)) {
+          state.wordDexWords = [];
+          useGameStore.setState({ wordDexWords: [] });
+        }
       },
       partialize: (state) => ({
         coins: state.coins,
@@ -1862,6 +2111,8 @@ export const useGameStore = create<GameStore>()(
         translationHistory: state.translationHistory,
         wordCollectionScans: state.wordCollectionScans,
         wordDexOrder: state.wordDexOrder,
+        wordDexDictionaries: state.wordDexDictionaries,
+        wordDexWords: state.wordDexWords,
         lectureHistory: state.lectureHistory,
         scanType: state.scanType,
         translationResult: state.translationResult,

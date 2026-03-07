@@ -24,13 +24,21 @@ import { confettiSSR } from '@/lib/confetti';
 import { useToast } from '@/components/ui/Toast';
 import type { GachaResult } from '@/types';
 
+// カテゴリごとのサムネ background-position（DressUpScreen と共通設定）
+const THUMB_BG_POSITION: Record<string, string> = {
+  head     : '50% 20%',
+  face     : '50% 40%',
+  body     : '50% 60%',
+  accessory: '75% 30%',
+};
+
 // ===== Types =====
 
 interface GachaScreenProps {
   onBack: () => void;
 }
 
-type GachaState = 'idle' | 'rolling' | 'revealing' | 'result';
+type GachaState = 'idle' | 'rolling' | 'revealing' | 'result' | 'ten_result';
 
 // ===== Sub Components =====
 
@@ -224,7 +232,7 @@ const GachaResultDisplay = ({
 
           {/* アイテムビジュアル */}
           <motion.div
-            className="w-32 h-32 mx-auto mb-4 rounded-2xl flex items-center justify-center"
+            className="w-32 h-32 mx-auto mb-4 rounded-2xl overflow-hidden flex items-center justify-center"
             style={{ 
               background: getRarityGradient(item.rarity),
               boxShadow: `0 0 30px ${getRarityColor(item.rarity)}50`
@@ -233,17 +241,25 @@ const GachaResultDisplay = ({
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.2 }}
           >
-            {item.visual && item.visual.value ? (
-              item.visual.type === 'svg_path' ? (
-                <svg viewBox="0 0 24 24" className="w-16 h-16">
-                  <path d={item.visual.value} fill="white" stroke="rgba(0,0,0,0.2)" strokeWidth={0.5} />
-                </svg>
-              ) : (
-                <div 
-                  className="w-16 h-16 rounded-xl"
-                  style={{ backgroundColor: item.visual.value }}
-                />
-              )
+            {item.visual?.type === 'image' && item.visual.value ? (
+              <div
+                className="w-full h-full"
+                style={{
+                  backgroundImage   : `url(${item.visual.value})`,
+                  backgroundSize    : item.thumbnail?.size     ?? '170%',
+                  backgroundPosition: item.thumbnail?.position ?? THUMB_BG_POSITION[item.category ?? ''] ?? '50% 50%',
+                  backgroundRepeat  : 'no-repeat',
+                }}
+              />
+            ) : item.visual?.type === 'svg_path' && item.visual.value ? (
+              <svg viewBox="0 0 24 24" className="w-20 h-20">
+                <path d={item.visual.value} fill="white" stroke="rgba(0,0,0,0.2)" strokeWidth={0.5} />
+              </svg>
+            ) : item.visual?.type === 'color' && item.visual.value ? (
+              <div
+                className="w-20 h-20 rounded-xl"
+                style={{ backgroundColor: item.visual.value }}
+              />
             ) : null}
           </motion.div>
 
@@ -315,6 +331,7 @@ export const GachaScreen = ({ onBack }: GachaScreenProps) => {
   const [gachaState, setGachaState] = useState<GachaState>('idle');
   const [currentResult, setCurrentResult] = useState<GachaResult | null>(null);
   const [rollingRarity, setRollingRarity] = useState<Item['rarity']>('N');
+  const [tenResults, setTenResults] = useState<GachaResult[]>([]);
 
   // Store
   const coins = useGameStore(state => state.coins);
@@ -342,6 +359,28 @@ export const GachaScreen = ({ onBack }: GachaScreenProps) => {
     setCurrentResult(result);
   }, [pullGacha, addToast]);
 
+  // 10連ガチャ
+  const handleTenPull = useCallback(() => {
+    vibrateLight();
+    const results: GachaResult[] = [];
+    for (let i = 0; i < 10; i++) {
+      const result = pullGacha(false);
+      if ('error' in result) {
+        addToast('error', result.error);
+        return;
+      }
+      results.push(result);
+    }
+    const bestRarity = results.reduce<Item['rarity']>((best, r) => {
+      const order: Item['rarity'][] = ['N', 'R', 'SR', 'SSR'];
+      return order.indexOf(r.item.rarity) > order.indexOf(best) ? r.item.rarity : best;
+    }, 'N');
+    vibrateGacha(bestRarity);
+    if (results.some(r => r.item.rarity === 'SSR')) confettiSSR();
+    setTenResults(results);
+    setGachaState('ten_result');
+  }, [pullGacha, addToast]);
+
   // アニメーション完了
   const handleAnimationComplete = () => {
     if (currentResult) {
@@ -360,6 +399,7 @@ export const GachaScreen = ({ onBack }: GachaScreenProps) => {
     vibrateLight();
     setGachaState('idle');
     setCurrentResult(null);
+    setTenResults([]);
   };
 
   return (
@@ -500,7 +540,7 @@ export const GachaScreen = ({ onBack }: GachaScreenProps) => {
 
           {/* 10連 */}
           <motion.button
-            onClick={() => {/* 10連実装 */}}
+            onClick={handleTenPull}
             disabled={!canPullTen || gachaState !== 'idle'}
             className="w-full py-4 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             whileHover={canPullTen ? { scale: 1.02 } : {}}
@@ -528,13 +568,89 @@ export const GachaScreen = ({ onBack }: GachaScreenProps) => {
         )}
       </AnimatePresence>
 
-      {/* 結果表示 */}
+      {/* 単発結果表示 */}
       <AnimatePresence>
         {gachaState === 'result' && currentResult && (
           <GachaResultDisplay
             result={currentResult}
             onClose={handleCloseResult}
           />
+        )}
+      </AnimatePresence>
+
+      {/* 10連結果表示 */}
+      <AnimatePresence>
+        {gachaState === 'ten_result' && tenResults.length > 0 && (
+          <motion.div
+            className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-start overflow-y-auto py-8 px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-yellow-400" />
+              10連ガチャ結果
+            </h2>
+
+            <div className="grid grid-cols-5 gap-3 w-full max-w-sm mb-8">
+              {tenResults.map((r, i) => (
+                <motion.div
+                  key={i}
+                  className="flex flex-col items-center gap-1"
+                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ delay: i * 0.08, type: 'spring' }}
+                >
+                  {/* サムネ */}
+                  <div
+                    className="w-14 h-14 rounded-xl overflow-hidden"
+                    style={{
+                      background : getRarityGradient(r.item.rarity),
+                      boxShadow  : `0 0 10px ${getRarityColor(r.item.rarity)}60`,
+                    }}
+                  >
+                    {r.item.visual?.type === 'image' && r.item.visual.value ? (
+                      <div
+                        className="w-full h-full"
+                        style={{
+                          backgroundImage   : `url(${r.item.visual.value})`,
+                          backgroundSize    : r.item.thumbnail?.size     ?? '170%',
+                          backgroundPosition: r.item.thumbnail?.position ?? THUMB_BG_POSITION[r.item.category ?? ''] ?? '50% 50%',
+                          backgroundRepeat  : 'no-repeat',
+                        }}
+                      />
+                    ) : r.item.visual?.type === 'svg_path' && r.item.visual.value ? (
+                      <svg viewBox="0 0 24 24" className="w-full h-full p-2">
+                        <path d={r.item.visual.value} fill="white" />
+                      </svg>
+                    ) : r.item.visual?.type === 'color' && r.item.visual.value ? (
+                      <div className="w-full h-full" style={{ backgroundColor: r.item.visual.value }} />
+                    ) : null}
+                  </div>
+                  {/* レアリティ */}
+                  <span
+                    className="text-xs font-bold"
+                    style={{ color: getRarityColor(r.item.rarity) }}
+                  >
+                    {r.item.rarity}
+                  </span>
+                  {/* NEW バッジ */}
+                  {r.isNew && (
+                    <span className="text-xs text-yellow-400 font-bold">NEW</span>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.button
+              onClick={handleCloseResult}
+              className="px-8 py-3 rounded-xl bg-purple-600 text-white font-bold"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              閉じる
+            </motion.button>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

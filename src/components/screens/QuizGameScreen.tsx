@@ -11,7 +11,7 @@ import { Timer, Zap, BookOpen, CheckCircle, XCircle } from 'lucide-react';
 import { PotatoAvatar, type PotatoEmotion } from '@/components/ui/PotatoAvatar';
 import { vibrateLight, vibrateSuccess, vibrateError, vibratePerfect } from '@/lib/haptics';
 import { confettiPerfect } from '@/lib/confetti';
-import type { QuizRaw, QuizQuestion } from '@/types';
+import type { QuizRaw, QuizQuestion, QuizQuestionAttempt } from '@/types';
 import { LIMITS } from '@/lib/constants';
 
 // ===== Types =====
@@ -21,7 +21,7 @@ export type QuizMode = 'speed_rush' | 'potato_pupil';
 interface QuizGameScreenProps {
   quiz: QuizRaw;
   mode: QuizMode;
-  onComplete: (correctCount: number, totalQuestions: number, speedRushTotalTime?: number) => void;
+  onComplete: (correctCount: number, totalQuestions: number, speedRushTotalTime?: number, attempts?: QuizQuestionAttempt[]) => void;
 }
 
 interface QuizState {
@@ -532,8 +532,18 @@ export const QuizGameScreen = ({
       const speedRushTotalTime = mode === 'speed_rush' && state.correctAnswerTimes.length > 0
         ? state.correctAnswerTimes.reduce((sum, time) => sum + time, 0)
         : undefined;
-      
-      onComplete(finalCorrectCount, quiz.questions.length, speedRushTotalTime);
+
+      const attempts: QuizQuestionAttempt[] = quiz.questions.map((q, idx) => {
+        const rawAnswer = state.answers[idx] ?? (idx === state.currentIndex ? state.selectedAnswer : null);
+        const selectedAnswer = rawAnswer !== null && rawAnswer >= 0 ? rawAnswer : null;
+        return {
+          questionIndex: idx,
+          selectedAnswer,
+          isCorrect: selectedAnswer === q.a,
+        };
+      });
+
+      onComplete(finalCorrectCount, quiz.questions.length, speedRushTotalTime, attempts);
     } else {
       setState(prev => ({
         ...prev,

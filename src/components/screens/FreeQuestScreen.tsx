@@ -35,7 +35,7 @@ import type { QuizHistory, QuizRaw, QuizResult } from '@/types';
 
 interface FreeQuestScreenProps {
   onBack: () => void;
-  onStartQuiz: (quiz: QuizRaw) => void;
+  onStartQuiz: (quiz: QuizRaw, sourceHistoryId?: string) => void;
 }
 
 // ===== Main Component =====
@@ -156,7 +156,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
           );
           
           addToast('success', '新しい問題を生成しました！');
-          onStartQuiz(newQuizWithTitle);
+          onStartQuiz(newQuizWithTitle, newQuizId);
         } else {
           throw new Error('No questions generated');
         }
@@ -164,14 +164,14 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
         console.error('Quiz generation error:', error);
         // ★エラー時は生成回数を消費しない
         addToast('error', '新問題の生成に失敗。既存問題で挑戦します');
-        onStartQuiz(history.quiz);
+        onStartQuiz(history.quiz, history.id);
       } finally {
         setIsGenerating(false);
         setGeneratingId(null);
       }
     } else {
       addToast('info', 'OCRテキストがないため既存問題で挑戦します');
-      onStartQuiz(history.quiz);
+      onStartQuiz(history.quiz, history.id);
     }
   };
   
@@ -206,7 +206,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
       questions: shuffledQuestions.slice(0, 5), // 最大5問
     };
     
-    onStartQuiz(retryQuiz);
+    onStartQuiz(retryQuiz, history.id);
   };
 
   // クイズ履歴の削除
@@ -648,7 +648,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
 
                 <button
                   onClick={() => {
-                    onStartQuiz(selectedQuiz.quiz);
+                    onStartQuiz(selectedQuiz.quiz, selectedQuiz.id);
                     setSelectedQuiz(null);
                   }}
                   className="w-full py-3 rounded-xl bg-emerald-500 text-white font-bold"

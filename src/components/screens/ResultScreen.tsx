@@ -28,7 +28,7 @@ import { useToast } from '@/components/ui/Toast';
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
 import { confettiIslandClear } from '@/lib/confetti';
 import { DISTANCE } from '@/lib/constants';
-import type { QuizRaw, QuizResult, StructuredOCR } from '@/types';
+import type { QuizRaw, QuizResult, StructuredOCR, QuizQuestionAttempt } from '@/types';
 
 // ===== Types =====
 
@@ -37,8 +37,12 @@ interface ResultScreenProps {
   correctCount: number;
   totalQuestions: number;
   onContinue: () => void;
+  onContinueFreeQuest?: () => void;
+  onOpenWordDex?: () => void;
   onViewMap: () => void;
   isFreeQuest?: boolean;
+  batchId?: string;
+  attempts?: QuizQuestionAttempt[];
   ocrText?: string;
   structuredOCR?: StructuredOCR;
   mode?: 'speed_rush' | 'potato_pupil'; // クイズモード
@@ -56,8 +60,12 @@ export const ResultScreen = ({
   correctCount,
   totalQuestions,
   onContinue,
+  onContinueFreeQuest,
+  onOpenWordDex,
   onViewMap,
   isFreeQuest = false,
+  batchId,
+  attempts,
   ocrText,
   structuredOCR,
   mode,
@@ -78,6 +86,7 @@ export const ResultScreen = ({
   const applyQuizResult = useGameStore(state => state.applyQuizResult);
   const addFlag = useGameStore(state => state.addFlag);
   const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
+  const applyQuizAttemptsToWordDex = useGameStore(state => state.applyQuizAttemptsToWordDex);
   const updateSpeedRushBestTime = useGameStore(state => state.updateSpeedRushBestTime);
   const getSpeedRushBestTime = useGameStore(state => state.getSpeedRushBestTime);
 
@@ -143,6 +152,8 @@ export const ResultScreen = ({
         totalDistance: state.totalDistance + quizResult.earnedDistance,
         totalQuizClears: state.totalQuizClears + 1, // クリア回数もカウント
       });
+      // フリークエストでも開始元履歴IDがあれば同一履歴を上書き更新する
+      saveQuizHistory(quiz, quizResult, ocrText, structuredOCR);
     } else {
       // 通常クエスト: 結果を適用（1回のみ）
       applyQuizResult(quizResult);
@@ -162,9 +173,13 @@ export const ResultScreen = ({
         }, 1500);
       }
     }
+
+    if (batchId && attempts && attempts.length > 0) {
+      applyQuizAttemptsToWordDex(batchId, attempts);
+    }
     
     hasAppliedResult.current = true;
-  }, [mode, speedRushTotalTime, updateSpeedRushBestTime, isFreeQuest, correctCount, totalQuestions, adWatched, calculateResult, applyQuizResult, addFlag, saveQuizHistory, quiz, ocrText, structuredOCR, totalDistance]); // 依存配列を更新
+  }, [mode, speedRushTotalTime, updateSpeedRushBestTime, isFreeQuest, correctCount, totalQuestions, adWatched, calculateResult, applyQuizResult, addFlag, saveQuizHistory, applyQuizAttemptsToWordDex, batchId, attempts, quiz, ocrText, structuredOCR, totalDistance]); // 依存配列を更新
 
   // 広告視聴で2倍にする場合の追加コイン
   const handleAdRewardClaimed = () => {
@@ -262,7 +277,7 @@ export const ResultScreen = ({
           <PotatoAvatar
             emotion={emotion}
             size={120}
-            ssrEffect={isPerfect}
+            ssrEffect={false}
           />
           
           <div className="mt-4 flex items-center gap-2">
@@ -468,6 +483,19 @@ export const ResultScreen = ({
           animate={{ opacity: 1 }}
           transition={{ delay: 0.8 }}
         >
+          {isFreeQuest && onContinueFreeQuest && (
+            <button
+              onClick={() => {
+                vibrateLight();
+                onContinueFreeQuest();
+              }}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold flex items-center justify-center gap-2"
+            >
+              フリークエストを続ける
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          )}
+
           <button
             onClick={() => {
               vibrateLight();
@@ -475,7 +503,7 @@ export const ResultScreen = ({
             }}
             className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-bold flex items-center justify-center gap-2"
           >
-            続ける
+            戻る
             <ChevronRight className="w-5 h-5" />
           </button>
 
@@ -489,6 +517,18 @@ export const ResultScreen = ({
             <MapPin className="w-5 h-5" />
             マップを見る
           </button>
+
+          {onOpenWordDex && (
+            <button
+              onClick={() => {
+                vibrateLight();
+                onOpenWordDex();
+              }}
+              className="w-full py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-500 transition-colors"
+            >
+              ことば図鑑を見る
+            </button>
+          )}
         </motion.div>
       </div>
 

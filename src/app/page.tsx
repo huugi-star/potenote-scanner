@@ -9,12 +9,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, History, Share2, Languages, Sword } from 'lucide-react';
+import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import type { QuizRaw, StructuredOCR, TranslationResult, LectureHistory } from '@/types';
+import type { QuizRaw, StructuredOCR, TranslationResult, LectureHistory, QuizQuestionAttempt } from '@/types';
 
 // Screens
 import { ScanningScreen } from '@/components/screens/ScanningScreen';
@@ -24,6 +24,7 @@ import { GachaScreen } from '@/components/screens/GachaScreen';
 import { MapScreen } from '@/components/screens/MapScreen';
 import { DressUpScreen } from '@/components/screens/DressUpScreen';
 import { FreeQuestScreen } from '@/components/screens/FreeQuestScreen';
+import { QuizWordDexScreen } from '@/components/screens/QuizWordDexScreen';
 import { TranslationResultScreen } from '@/components/screens/TranslationResultScreen';
 import { TranslationHistoryScreen } from '@/components/screens/TranslationHistoryScreen';
 import { LectureScreen } from '@/components/screens/LectureScreen';
@@ -55,6 +56,7 @@ type GamePhase =
   | 'map'
   | 'dressup'
   | 'freequest'
+  | 'worddex'
   | 'translation_result'
   | 'translation_history'
   | 'lecture'
@@ -67,6 +69,8 @@ interface QuizSession {
   correctCount: number;
   speedRushTotalTime?: number; // speed rushモードでの正答の合計時間（秒）
   isFreeQuest?: boolean;
+  batchId?: string;
+  attempts?: QuizQuestionAttempt[];
   ocrText?: string;
   structuredOCR?: StructuredOCR;
 }
@@ -112,7 +116,6 @@ const HomeScreen = ({
   const isVIP = useGameStore(state => state.isVIP);
   const totalDistance = useGameStore(state => state.journey.totalDistance);
   const totalQuizzes = useGameStore(state => state.totalQuizzes);
-  const quizHistoryCount = useGameStore(state => state.quizHistory.length);
   const translationHistoryCount = useGameStore(state => state.translationHistory.length);
   const equipment = useGameStore(state => state.equipment);
   // const [showShop, setShowShop] = useState(false); // 一時的に非表示
@@ -200,16 +203,13 @@ const HomeScreen = ({
             vibrateLight();
             onNavigate('dressup');
           }}
-          animate={{ y: [0, -5, 0] }}
-          transition={{ duration: 3, repeat: Infinity }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          whileTap={{ scale: 0.97 }}
         >
           <PotatoAvatar
             equipped={equippedDetails}
             emotion="happy"
-            size={160}
-            ssrEffect={isVIP}
+            size={260}
+            ssrEffect={false}
           />
           <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-3 py-1 bg-pink-500/80 text-white text-xs rounded-full flex items-center gap-1">
             <Shirt className="w-3 h-3" />
@@ -272,29 +272,8 @@ const HomeScreen = ({
           whileTap={{ scale: 0.98 }}
         >
           <Scan className="w-7 h-7" />
-          参考書をクイズにする
+          スキャンして冒険する
         </motion.button>
-
-        {/* フリークエスト */}
-        {quizHistoryCount > 0 && (
-          <motion.button
-            onClick={() => {
-              vibrateLight();
-              onNavigate('freequest');
-            }}
-            className="w-full mt-3 py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold flex items-center justify-center gap-2"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <History className="w-5 h-5" />
-            フリークエスト
-            <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
-              {quizHistoryCount}
-            </span>
-          </motion.button>
-        )}
 
         {/* サブアクション */}
         <div className="grid grid-cols-2 gap-3 mt-4">
@@ -610,12 +589,14 @@ const AppContent = () => {
 
   // クイズ準備完了
   const handleQuizReady = useCallback((quiz: QuizRaw, imageUrl: string, ocrText?: string, structuredOCR?: StructuredOCR) => {
+    const batchId = useGameStore.getState().lastScanQuizId ?? undefined;
     setQuizSession({
       quiz,
       imageUrl,
       mode: 'potato_pupil',
       correctCount: 0,
       isFreeQuest: false,
+      batchId,
       ocrText,
       structuredOCR,
     });
@@ -632,13 +613,16 @@ const AppContent = () => {
   }, []);
 
   // フリークエスト開始
-  const handleFreeQuestStart = useCallback((quiz: QuizRaw) => {
+  const handleFreeQuestStart = useCallback((quiz: QuizRaw, sourceHistoryId?: string) => {
+    // フリークエストは既存履歴を上書き更新するため、開始元履歴IDを保持する
+    useGameStore.getState().setLastScanQuizId(sourceHistoryId ?? null);
     setQuizSession({
       quiz,
       imageUrl: '',
       mode: 'potato_pupil',
       correctCount: 0,
       isFreeQuest: true,
+      batchId: sourceHistoryId,
     });
     setPhase('mode_select');
   }, []);
@@ -652,9 +636,9 @@ const AppContent = () => {
   }, [quizSession]);
 
   // クイズ完了
-  const handleQuizComplete = useCallback((correctCount: number, _totalQuestions: number, speedRushTotalTime?: number) => {
+  const handleQuizComplete = useCallback((correctCount: number, _totalQuestions: number, speedRushTotalTime?: number, attempts?: QuizQuestionAttempt[]) => {
     if (quizSession) {
-      setQuizSession({ ...quizSession, correctCount, speedRushTotalTime });
+      setQuizSession({ ...quizSession, correctCount, speedRushTotalTime, attempts });
       setPhase('result');
     }
   }, [quizSession]);
@@ -720,6 +704,8 @@ const AppContent = () => {
             <ScanningScreen 
               onQuizReady={handleQuizReady}
               onTranslationReady={handleTranslationReady}
+              onOpenFreeQuest={() => handleNavigate('freequest')}
+              onOpenWordDex={() => handleNavigate('worddex')}
               onBack={handleBackToHome}
             />
           </motion.div>
@@ -772,13 +758,28 @@ const AppContent = () => {
               correctCount={quizSession.correctCount}
               totalQuestions={quizSession.quiz.questions.length}
               onContinue={handleBackToHome}
+              onContinueFreeQuest={quizSession.isFreeQuest ? () => setPhase('freequest') : undefined}
+              onOpenWordDex={() => setPhase('worddex')}
               onViewMap={() => setPhase('map')}
               isFreeQuest={quizSession.isFreeQuest}
+              batchId={quizSession.batchId}
+              attempts={quizSession.attempts}
               ocrText={quizSession.ocrText}
               structuredOCR={quizSession.structuredOCR}
               mode={quizSession.mode}
               speedRushTotalTime={quizSession.speedRushTotalTime}
             />
+          </motion.div>
+        )}
+
+        {phase === 'worddex' && (
+          <motion.div
+            key="worddex"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <QuizWordDexScreen onBack={() => setPhase('scanning')} />
           </motion.div>
         )}
 

@@ -35,6 +35,16 @@ const CATEGORIES: { key: EquipmentCategory; label: string; icon: React.ReactNode
   { key: 'accessory', label: 'アクセ', icon: <Sparkles className="w-5 h-5" /> },
 ];
 
+// ===== Thumbnail helpers =====
+
+// カテゴリごとの background-position（余白の多い画像を視認しやすい位置に寄せる）
+const THUMB_BG_POSITION: Record<string, string> = {
+  head     : '50% 20%',
+  face     : '50% 40%',
+  body     : '50% 60%',
+  accessory: '75% 30%',
+};
+
 // ===== Main Component =====
 
 export const DressUpScreen = ({ onBack }: DressUpScreenProps) => {
@@ -114,8 +124,8 @@ export const DressUpScreen = ({ onBack }: DressUpScreenProps) => {
             <PotatoAvatar
               equipped={equippedDetails}
               emotion="happy"
-              size={180}
-              ssrEffect={Object.values(equippedDetails).some(i => i?.rarity === 'SSR')}
+              size={280}
+              ssrEffect={false}
             />
           </motion.div>
         </div>
@@ -137,12 +147,28 @@ export const DressUpScreen = ({ onBack }: DressUpScreenProps) => {
                 >
                   <div className="text-xs text-gray-400 mb-1">{cat.label}</div>
                   {equipped ? (
-                    <div 
-                      className="w-8 h-8 mx-auto rounded-lg"
-                      style={{ 
-                        background: getRarityGradient(equipped.rarity) 
-                      }}
-                    />
+                    <div
+                      className="w-8 h-8 mx-auto rounded-lg overflow-hidden"
+                      style={{ background: getRarityGradient(equipped.rarity) }}
+                    >
+                      {equipped.visual?.type === 'image' && equipped.visual.value ? (
+                        <div
+                          className="w-full h-full"
+                          style={{
+                            backgroundImage   : `url(${equipped.visual.value})`,
+                            backgroundSize    : equipped.thumbnail?.size     ?? '170%',
+                            backgroundPosition: equipped.thumbnail?.position ?? THUMB_BG_POSITION[equipped.category ?? ''] ?? '50% 50%',
+                            backgroundRepeat  : 'no-repeat',
+                          }}
+                        />
+                      ) : equipped.visual?.type === 'svg_path' && equipped.visual.value ? (
+                        <svg viewBox="0 0 24 24" className="w-full h-full p-1">
+                          <path d={equipped.visual.value} fill="white" />
+                        </svg>
+                      ) : equipped.visual?.type === 'color' && equipped.visual.value ? (
+                        <div className="w-full h-full" style={{ backgroundColor: equipped.visual.value }} />
+                      ) : null}
+                    </div>
                   ) : (
                     <div className="w-8 h-8 mx-auto rounded-lg bg-gray-700 flex items-center justify-center">
                       <X className="w-4 h-4 text-gray-500" />
@@ -222,21 +248,29 @@ export const DressUpScreen = ({ onBack }: DressUpScreenProps) => {
                   )}
 
                   {/* アイテムビジュアル */}
-                  <div 
-                    className="w-12 h-12 mx-auto mb-2 rounded-lg flex items-center justify-center"
+                  <div
+                    className="w-16 h-16 mx-auto mb-2 rounded-lg overflow-hidden flex items-center justify-center"
                     style={{ background: getRarityGradient(item.rarity) }}
                   >
-                    {item.visual && item.visual.value ? (
-                      item.visual.type === 'svg_path' ? (
-                        <svg viewBox="0 0 24 24" className="w-8 h-8">
-                          <path d={item.visual.value} fill="white" />
-                        </svg>
-                      ) : (
-                        <div 
-                          className="w-8 h-8 rounded"
-                          style={{ backgroundColor: item.visual.value }}
-                        />
-                      )
+                    {item.visual?.type === 'image' && item.visual.value ? (
+                      <div
+                        className="w-full h-full"
+                        style={{
+                          backgroundImage   : `url(${item.visual.value})`,
+                          backgroundSize    : item.thumbnail?.size     ?? '170%',
+                          backgroundPosition: item.thumbnail?.position ?? THUMB_BG_POSITION[item.category ?? ''] ?? '50% 50%',
+                          backgroundRepeat  : 'no-repeat',
+                        }}
+                      />
+                    ) : item.visual?.type === 'svg_path' && item.visual.value ? (
+                      <svg viewBox="0 0 24 24" className="w-10 h-10">
+                        <path d={item.visual.value} fill="white" />
+                      </svg>
+                    ) : item.visual?.type === 'color' && item.visual.value ? (
+                      <div
+                        className="w-10 h-10 rounded"
+                        style={{ backgroundColor: item.visual.value }}
+                      />
                     ) : null}
                   </div>
 
