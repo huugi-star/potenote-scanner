@@ -1943,6 +1943,9 @@ export const useGameStore = create<GameStore>()(
             [item.category]: itemId,
           },
         });
+
+        // 装備変更をクラウドへ同期（リロード時に外れるのを防ぐ）
+        void get().syncWithCloud();
         
         return true;
       },
@@ -1954,6 +1957,9 @@ export const useGameStore = create<GameStore>()(
             [category]: undefined,
           },
         }));
+
+        // 装備解除もクラウドへ同期
+        void get().syncWithCloud();
       },
       
       // ===== VIP =====
