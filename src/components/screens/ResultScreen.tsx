@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
+import { getItemById } from '@/data/items';
 import { AdsModal } from '@/components/ui/AdsModal';
 import { AffiliateSection } from '@/components/ui/AffiliateSection';
 import { useToast } from '@/components/ui/Toast';
@@ -80,6 +81,13 @@ export const ResultScreen = ({
 
   // Store
   const isVIP = useGameStore(state => state.isVIP);
+  const equipment = useGameStore(state => state.equipment);
+  const equippedDetails = useMemo(() => ({
+    head: equipment.head ? getItemById(equipment.head) : undefined,
+    body: equipment.body ? getItemById(equipment.body) : undefined,
+    face: equipment.face ? getItemById(equipment.face) : undefined,
+    accessory: equipment.accessory ? getItemById(equipment.accessory) : undefined,
+  }), [equipment.head, equipment.body, equipment.face, equipment.accessory]);
   const totalDistance = useGameStore(state => state.journey.totalDistance);
   const totalQuizClears = useGameStore(state => state.totalQuizClears);
   const calculateResult = useGameStore(state => state.calculateResult);
@@ -280,6 +288,7 @@ export const ResultScreen = ({
             emotion={emotion}
             size={120}
             ssrEffect={false}
+            equipped={equippedDetails}
           />
           
           <div className="mt-4 flex items-center gap-2">

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { LogIn, LogOut, AlertCircle } from 'lucide-react';
-import { signInWithPopup, signOut } from 'firebase/auth';
+import { signInWithPopup, signOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
 import { useGameStore } from '@/store/useGameStore';
 
@@ -22,6 +22,8 @@ export const AuthButton = () => {
     }
     setLoading(true);
     try {
+      // 念のためログイン前にも永続化を明示（環境差異での未保持を防ぐ）
+      await setPersistence(auth, browserLocalPersistence);
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       await setUserId(user.uid);

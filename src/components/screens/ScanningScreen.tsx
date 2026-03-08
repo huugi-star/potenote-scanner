@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useGameStore, selectRemainingScanCount } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
+import { getItemById } from '@/data/items';
 import { ASPSalesModal } from '@/components/ui/ASPSalesModal';
 // import { ShopModal } from '@/components/ui/ShopModal'; // 一時的に非表示
 import { useToast } from '@/components/ui/Toast';
@@ -83,6 +84,13 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
   const englishLearningMode = useGameStore(state => state.englishLearningMode);
   const setEnglishLearningMode = useGameStore(state => state.setEnglishLearningMode);
   const remainingScans = useGameStore(selectRemainingScanCount);
+  const equipment = useGameStore(state => state.equipment);
+  const equippedDetails = useMemo(() => ({
+    head: equipment.head ? getItemById(equipment.head) : undefined,
+    body: equipment.body ? getItemById(equipment.body) : undefined,
+    face: equipment.face ? getItemById(equipment.face) : undefined,
+    accessory: equipment.accessory ? getItemById(equipment.accessory) : undefined,
+  }), [equipment.head, equipment.body, equipment.face, equipment.accessory]);
   const checkScanLimit = useGameStore(state => state.checkScanLimit);
   const incrementScanCount = useGameStore(state => state.incrementScanCount);
   const incrementTranslationCount = useGameStore(state => state.incrementTranslationCount);
@@ -555,6 +563,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
               emotion={scanState === 'ready' ? 'happy' : scanState === 'error' ? 'confused' : 'normal'}
               size={100}
               ssrEffect={false}
+              equipped={equippedDetails}
             />
           </div>
         )}

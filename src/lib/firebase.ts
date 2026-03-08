@@ -1,7 +1,7 @@
 // Firebase SDKの初期化
 
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // ★重要: Step 1で取得したキーを .env.local に入れて、ここで読み込みます
@@ -26,6 +26,12 @@ try {
   if (firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId) {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     authInstance = getAuth(app);
+    // リロード後もログイン状態を維持するため、永続化を明示設定
+    if (typeof window !== 'undefined') {
+      void setPersistence(authInstance, browserLocalPersistence).catch((error) => {
+        console.warn("Auth永続化設定に失敗:", error);
+      });
+    }
     dbInstance = getFirestore(app);
     googleProviderInstance = new GoogleAuthProvider();
   } else {

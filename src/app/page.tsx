@@ -540,6 +540,13 @@ const AppContent = () => {
   // Store
   const isVIP = useGameStore(state => state.isVIP);
   const setUserId = useGameStore(state => state.setUserId);
+  const equipment = useGameStore(state => state.equipment);
+  const equippedDetails = useMemo(() => ({
+    head: equipment.head ? getItemById(equipment.head) : undefined,
+    body: equipment.body ? getItemById(equipment.body) : undefined,
+    face: equipment.face ? getItemById(equipment.face) : undefined,
+    accessory: equipment.accessory ? getItemById(equipment.accessory) : undefined,
+  }), [equipment.head, equipment.body, equipment.face, equipment.accessory]);
 
   // 初回起動時のログインチェック & Firebase認証状態の反映（1回のみ）
   const hasInitializedRef = useRef(false);
@@ -568,13 +575,41 @@ const AppContent = () => {
 
     // 2. Firebase Auth のログイン状態をストアに反映（リロード後もログイン継続）
     if (auth) {
-      const unsubscribe = onAuthStateChanged(auth, async (user) => {
-        // user がいれば uid を、いなければ null をセット
-        // 注意: このコールバック内では loginCheck() を実行しない
-        // （loginCheck() は初回マウント時のみ実行される）
-        await setUserId(user ? user.uid : null);
+      const authInstance = auth;
+      let disposed = false;
+      let nullUserTimer: ReturnType<typeof setTimeout> | null = null;
+      const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
+        if (disposed) return;
+
+        // user がいれば即時反映
+        if (user) {
+          if (nullUserTimer) {
+            clearTimeout(nullUserTimer);
+            nullUserTimer = null;
+          }
+          await setUserId(user.uid);
+          return;
+        }
+
+        // リロード直後に一瞬 null が来る環境向け:
+        // 少し待って currentUser を再確認してからログアウト扱いにする
+        if (nullUserTimer) {
+          clearTimeout(nullUserTimer);
+        }
+        nullUserTimer = setTimeout(async () => {
+          if (disposed) return;
+          const restoredUser = authInstance.currentUser;
+          await setUserId(restoredUser ? restoredUser.uid : null);
+        }, 400);
       });
-      return () => unsubscribe();
+      return () => {
+        disposed = true;
+        if (nullUserTimer) {
+          clearTimeout(nullUserTimer);
+          nullUserTimer = null;
+        }
+        unsubscribe();
+      };
     }
 
     return;
@@ -742,6 +777,7 @@ const AppContent = () => {
               quiz={quizSession.quiz}
               mode={quizSession.mode}
               onComplete={handleQuizComplete}
+              equipped={equippedDetails}
             />
           </motion.div>
         )}

@@ -13,6 +13,7 @@ import { vibrateLight, vibrateSuccess, vibrateError, vibratePerfect } from '@/li
 import { confettiPerfect } from '@/lib/confetti';
 import type { QuizRaw, QuizQuestion, QuizQuestionAttempt } from '@/types';
 import { LIMITS } from '@/lib/constants';
+import type { Item } from '@/data/items';
 
 // ===== Types =====
 
@@ -22,6 +23,12 @@ interface QuizGameScreenProps {
   quiz: QuizRaw;
   mode: QuizMode;
   onComplete: (correctCount: number, totalQuestions: number, speedRushTotalTime?: number, attempts?: QuizQuestionAttempt[]) => void;
+  equipped?: {
+    head?: Item;
+    body?: Item;
+    face?: Item;
+    accessory?: Item;
+  };
 }
 
 interface QuizState {
@@ -316,6 +323,7 @@ const PotatoPupilUI = ({
             <PotatoAvatar
               emotion={potatoEmotion}
               size={140}
+              equipped={equipped}
             />
           </motion.div>
           
@@ -438,6 +446,7 @@ export const QuizGameScreen = ({
   quiz,
   mode,
   onComplete,
+  equipped,
 }: QuizGameScreenProps) => {
   const [state, setState] = useState<QuizState>({
     currentIndex: 0,
