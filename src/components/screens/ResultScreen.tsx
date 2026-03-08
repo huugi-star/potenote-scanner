@@ -152,6 +152,8 @@ export const ResultScreen = ({
         totalDistance: state.totalDistance + quizResult.earnedDistance,
         totalQuizClears: state.totalQuizClears + 1, // クリア回数もカウント
       });
+      // 距離・クリア回数の更新をクラウドへ同期
+      void useGameStore.getState().syncWithCloud();
       // フリークエストでも開始元履歴IDがあれば同一履歴を上書き更新する
       saveQuizHistory(quiz, quizResult, ocrText, structuredOCR);
     } else {

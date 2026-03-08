@@ -1513,6 +1513,7 @@ export const useGameStore = create<GameStore>()(
             totalDistance: state.journey.totalDistance + result.earnedDistance,
           },
         });
+        void get().syncWithCloud();
       },
       
       // ===== Quiz History =====
@@ -1829,6 +1830,7 @@ export const useGameStore = create<GameStore>()(
       
       addCoins: (amount) => {
         set(state => ({ coins: state.coins + amount }));
+        void get().syncWithCloud();
       },
       
       spendCoins: (amount) => {
