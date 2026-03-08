@@ -41,6 +41,9 @@ const weightedRandom = <T extends { dropWeight: number }>(items: T[]): T => {
   return items[items.length - 1];
 };
 
+// 10連中の同期競合を避けるため、単発同期を一時停止するフラグ
+let suppressGachaCloudSync = false;
+
 const DEFAULT_WORD_DEX_DICTIONARIES: WordDexDictionary[] = [
   { id: 'dex_english', name: '英語図鑑', icon: '📘', theme: 'forest', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: 'dex_chemistry', name: '科目図鑑', icon: '🧪', theme: 'neon', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -1777,6 +1780,11 @@ export const useGameStore = create<GameStore>()(
           inventory: newInventory,
           gachaPity: updatedPity,
         });
+
+        // ガチャ結果（コイン消費・所持品追加）をクラウドへ即時同期
+        if (!suppressGachaCloudSync) {
+          void get().syncWithCloud();
+        }
         
         return {
           item: selectedItem,
@@ -1795,16 +1803,24 @@ export const useGameStore = create<GameStore>()(
         const results: GachaResult[] = [];
         set({ coins: state.coins - GACHA.COST.TEN_PULL });
         
-        for (let i = 0; i < 10; i++) {
-          const tempCoins = get().coins;
-          set({ coins: tempCoins + GACHA.COST.SINGLE });
-          
-          const result = get().pullGacha(false);
-          
-          if (!('error' in result)) {
-            results.push(result);
+        suppressGachaCloudSync = true;
+        try {
+          for (let i = 0; i < 10; i++) {
+            const tempCoins = get().coins;
+            set({ coins: tempCoins + GACHA.COST.SINGLE });
+            
+            const result = get().pullGacha(false);
+            
+            if (!('error' in result)) {
+              results.push(result);
+            }
           }
+        } finally {
+          suppressGachaCloudSync = false;
         }
+
+        // 10連結果を最後に1回だけ同期（競合による巻き戻り防止）
+        void get().syncWithCloud();
         
         return results;
       },
