@@ -248,6 +248,7 @@ const PotatoPupilUI = ({
   onSelectAnswer,
   onNext,
   isLastQuestion,
+  equipped,
 }: {
   question: QuizQuestion;
   questionIndex: number;
@@ -258,6 +259,12 @@ const PotatoPupilUI = ({
   onSelectAnswer: (index: number) => void;
   onNext: () => void;
   isLastQuestion: boolean;
+  equipped?: {
+    head?: Item;
+    body?: Item;
+    face?: Item;
+    accessory?: Item;
+  };
 }) => {
   const [potatoEmotion, setPotatoEmotion] = useState<PotatoEmotion>('confused');
   const [speechBubble, setSpeechBubble] = useState('先生、これ教えて！');
@@ -590,6 +597,7 @@ export const QuizGameScreen = ({
       onSelectAnswer={handleSelectAnswer}
       onNext={handleNext}
       isLastQuestion={isLastQuestion}
+      equipped={equipped}
     />
   );
 };
