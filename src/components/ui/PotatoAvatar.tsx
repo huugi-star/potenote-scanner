@@ -249,9 +249,11 @@ const EmotionEffect = ({ emotion, size }: { emotion: PotatoEmotion; size: number
 const EquipmentLayer = ({
   item,
   size,
+  pose = 'idle',
 }: {
   item: Item;
   size: number;
+  pose?: AvatarPose;
 }) => {
   const { visual, category } = item;
   if (!visual?.value) return null;
@@ -269,9 +271,11 @@ const EquipmentLayer = ({
 
   const renderShape = () => {
     if (visual.type === 'image') {
+      // pose=up の場合は visual.up を優先、なければ visual.value にフォールバック
+      const src = (pose === 'up' && visual.up) ? visual.up : visual.value;
       return (
         <image
-          href={visual.value}
+          href={src}
           x={0} y={0}
           width={BASE} height={BASE}
           preserveAspectRatio="xMidYMid meet"
@@ -460,7 +464,12 @@ export const PotatoAvatar = ({
           className="absolute inset-0 object-contain"
         />
 
-        {/* Layer 2: 腕（左） */}
+        {/* Layer 2: 手持ちアクセ 下半分（腕の後ろ・head より後ろ） */}
+        {equipped.accessory?.held && (
+          <EquipmentLayer item={equipped.accessory} size={size} pose={activePose} />
+        )}
+
+        {/* Layer 3: 腕（左） */}
         <img
           src={arms.left}
           alt="arm-left"
@@ -469,7 +478,7 @@ export const PotatoAvatar = ({
           className="absolute inset-0 object-contain"
         />
 
-        {/* Layer 3: 腕（右） */}
+        {/* Layer 4: 腕（右） */}
         <img
           src={arms.right}
           alt="arm-right"
@@ -478,7 +487,7 @@ export const PotatoAvatar = ({
           className="absolute inset-0 object-contain"
         />
 
-        {/* Layer 4: 表情（まばたきで切替） */}
+        {/* Layer 5: 表情（まばたきで切替） */}
         <img
           src={faceSrc}
           alt="face"
@@ -487,15 +496,28 @@ export const PotatoAvatar = ({
           className="absolute inset-0 object-contain"
         />
 
-        {/* Layer 5: 装備（body → head → face → accessory の順） */}
+        {/* Layer 6: 装備（body → face → head → 通常アクセ → 手持ちアクセ上書き） */}
         <AnimatePresence>
-          {equipped.body      && <EquipmentLayer item={equipped.body}      size={size} />}
-          {equipped.head      && <EquipmentLayer item={equipped.head}      size={size} />}
-          {equipped.face      && <EquipmentLayer item={equipped.face}      size={size} />}
-          {equipped.accessory && <EquipmentLayer item={equipped.accessory} size={size} />}
+          {equipped.body && (
+            <EquipmentLayer item={equipped.body} size={size} pose={activePose} />
+          )}
+          {equipped.face && (
+            <EquipmentLayer item={equipped.face} size={size} pose={activePose} />
+          )}
+          {equipped.head && (
+            <EquipmentLayer item={equipped.head} size={size} pose={activePose} />
+          )}
+          {/* 通常アクセ */}
+          {equipped.accessory && !equipped.accessory.held && (
+            <EquipmentLayer item={equipped.accessory} size={size} pose={activePose} />
+          )}
+          {/* 手持ちアクセを head の前にも重ねて描画（腕との重なりは Layer2 で表現済み） */}
+          {equipped.accessory?.held && (
+            <EquipmentLayer item={equipped.accessory} size={size} pose={activePose} />
+          )}
         </AnimatePresence>
 
-        {/* Layer 6: 感情エフェクト（最前面） */}
+        {/* Layer 7: 感情エフェクト（最前面） */}
         <AnimatePresence>
           <EmotionEffect key={emotion} emotion={emotion} size={size} />
         </AnimatePresence>

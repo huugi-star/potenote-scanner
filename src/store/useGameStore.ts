@@ -525,6 +525,12 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         if (!db || !state.uid) return;
 
+        // ローカル開発時はクラウドへの書き込みをスキップ（DEV_INVENTORY等で本番データを汚染しない）
+        if (isLocalDevelopment()) {
+          console.log('[syncWithCloud] skipped in local development');
+          return;
+        }
+
         try {
           const userRef = doc(db, 'users', state.uid);
           const now = new Date().toISOString();

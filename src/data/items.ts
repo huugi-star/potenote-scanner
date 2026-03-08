@@ -6,8 +6,9 @@
  */
 
 export interface ItemVisual {
-  type: 'svg_path' | 'color' | 'image';
-  value: string;
+  type : 'svg_path' | 'color' | 'image';
+  value: string;       // idle / デフォルト画像パス（または color値 / svg_path値）
+  up?  : string;       // pose=up 時の画像パス（image タイプのみ）
 }
 
 export interface ItemThumbnail {
@@ -24,6 +25,7 @@ export interface Item {
   dropWeight: number; // ガチャ排出の重み付け
   visual: ItemVisual; // データ駆動で見た目を定義
   thumbnail?: ItemThumbnail; // サムネ個別調整（未指定はカテゴリデフォルト）
+  held?: boolean; // true = 手持ちアクセ（腕の後ろに描画）
   description?: string;
 }
 
@@ -111,26 +113,8 @@ export const ALL_ITEMS: Item[] = [
   // 装備品
  
  
-  {
-    id: 'r_necklace_star',
-    name: '星のネックレス',
-    type: 'equipment',
-    category: 'accessory',
-    rarity: 'R',
-    dropWeight: 7,
-    visual: { type: 'svg_path', value: 'M12,2 L14,8 L20,9 L15,14 L17,20 L12,16 L7,20 L9,14 L4,9 L10,8 Z' },
-    description: '小さな星のペンダント。',
-  },
-  {
-    id: 'r_shirt_stripe',
-    name: 'ストライプシャツ',
-    type: 'equipment',
-    category: 'body',
-    rarity: 'R',
-    dropWeight: 8,
-    visual: { type: 'color', value: '#87CEEB' },
-    description: '爽やかなストライプ柄。',
-  },
+  
+  
 
   // ===== SR レアリティ (スーパーレア) =====
   // 消耗品
@@ -464,7 +448,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'N',
     dropWeight: 40,
     visual: { type: 'image', value: '/items/face/round_glasses.png' },
-    thumbnail: { size: '170%', position: '50% 18%' },
+    thumbnail: { size: '280%', position: '50% 35%' },
     description: '知的に見えるシンプルな丸メガネ。',
   },
   {
@@ -475,7 +459,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'N',
     dropWeight: 40,
     visual: { type: 'image', value: '/items/face/small_round_glasses.png' },
-    thumbnail: { size: '165%', position: '50% 18%' },
+    thumbnail: { size: '280%', position: '50% 37%' },
     description: 'ちいさめサイズのかわいい丸メガネ。',
   },
   {
@@ -486,7 +470,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'N',
     dropWeight: 40,
     visual: { type: 'image', value: '/items/face/simple_sunglasses.png' },
-    thumbnail: { size: '170%', position: '50% 18%' },
+    thumbnail: { size: '280%', position: '50% 28%' },
     description: '気軽にかけられるサングラス。',
   },
   {
@@ -497,7 +481,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'N',
     dropWeight: 40,
     visual: { type: 'image', value: '/items/face/heart_cheek.png' },
-    thumbnail: { size: '160%', position: '50% 20%' },
+    thumbnail: { size: '260%', position: '50% 40%' },
     description: 'ほっぺにちょこんとハート模様。',
   },
   {
@@ -508,7 +492,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'N',
     dropWeight: 40,
     visual: { type: 'image', value: '/items/face/bandage.png' },
-    thumbnail: { size: '150%', position: '50% 20%' },
+    thumbnail: { size: '550%', position: '65% 36%' },
     description: 'やんちゃ感が出る小さな絆創膏。',
   },
   {
@@ -519,7 +503,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'N',
     dropWeight: 40,
     visual: { type: 'image', value: '/items/face/star_cheek.png' },
-    thumbnail: { size: '160%', position: '50% 20%' },
+    thumbnail: { size: '280%', position: '50% 45%' },
     description: '星マークのほっぺ飾り。',
   },
   {
@@ -530,7 +514,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'N',
     dropWeight: 40,
     visual: { type: 'image', value: '/items/face/triangle_cheek.png' },
-    thumbnail: { size: '155%', position: '50% 20%' },
+    thumbnail: { size: '255%', position: '50% 40%' },
     description: '三角モチーフのユニークなほっぺ飾り。',
   },
 
@@ -542,7 +526,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'R',
     dropWeight: 30,
     visual: { type: 'image', value: '/items/face/heart_glasses.png' },
-    thumbnail: { size: '170%', position: '50% 18%' },
+    thumbnail: { size: '280%', position: '50% 35%' },
     description: 'ハート型フレームのラブリーなメガネ。',
   },
   {
@@ -553,7 +537,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'R',
     dropWeight: 30,
     visual: { type: 'image', value: '/items/face/monocle.png' },
-    thumbnail: { size: '160%', position: '50% 18%' },
+    thumbnail: { size: '350%', position: '55% 45%' },
     description: '気品が増す片眼鏡。',
   },
   {
@@ -564,7 +548,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'R',
     dropWeight: 30,
     visual: { type: 'image', value: '/items/face/glitter_cheek.png' },
-    thumbnail: { size: '160%', position: '50% 20%' },
+    thumbnail: { size: '190%', position: '50% 40%' },
     description: 'きらめき粒子が舞うほっぺ飾り。',
   },
   {
@@ -575,7 +559,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'R',
     dropWeight: 30,
     visual: { type: 'image', value: '/items/face/mask.png' },
-    thumbnail: { size: '175%', position: '50% 18%' },
+    thumbnail: { size: '220%', position: '50% 35%' },
     description: 'ミステリアスな雰囲気を出す仮面。',
   },
   {
@@ -586,7 +570,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'R',
     dropWeight: 30,
     visual: { type: 'image', value: '/items/face/cat_whiskers.png' },
-    thumbnail: { size: '165%', position: '50% 20%' },
+    thumbnail: { size: '250%', position: '50% 45%' },
     description: 'にゃんとかわいい猫ひげ。',
   },
   {
@@ -597,7 +581,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'R',
     dropWeight: 30,
     visual: { type: 'image', value: '/items/face/cheek_star.png' },
-    thumbnail: { size: '160%', position: '50% 20%' },
+    thumbnail: { size: '270%', position: '50% 35%' },
     description: 'ほっぺに星がきらりと光る。',
   },
   {
@@ -608,7 +592,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'R',
     dropWeight: 30,
     visual: { type: 'image', value: '/items/face/glitter_glasses.png' },
-    thumbnail: { size: '172%', position: '50% 18%' },
+    thumbnail: { size: '280%', position: '50% 35%' },
     description: '小さな輝きを散りばめたメガネ。',
   },
   {
@@ -619,7 +603,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'R',
     dropWeight: 30,
     visual: { type: 'image', value: '/items/face/moon_tear.png' },
-    thumbnail: { size: '160%', position: '50% 20%' },
+    thumbnail: { size: '130%', position: '50% 35%' },
     description: '月のしずくのような涙飾り。',
   },
 
@@ -631,7 +615,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'SR',
     dropWeight: 20,
     visual: { type: 'image', value: '/items/face/star_glasses.png' },
-    thumbnail: { size: '175%', position: '50% 18%' },
+    thumbnail: { size: '250%', position: '50% 35%' },
     description: '星型フレームが目を引くメガネ。',
   },
   {
@@ -642,7 +626,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'SR',
     dropWeight: 20,
     visual: { type: 'image', value: '/items/face/angel_cheek.png' },
-    thumbnail: { size: '160%', position: '50% 20%' },
+    thumbnail: { size: '280%', position: '50% 25%' },
     description: 'やさしく光る天使のチーク。',
   },
   {
@@ -653,7 +637,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'SR',
     dropWeight: 20,
     visual: { type: 'image', value: '/items/face/light_tear.png' },
-    thumbnail: { size: '160%', position: '50% 20%' },
+    thumbnail: { size: '200%', position: '50% 35%' },
     description: '光のしずくが頬を伝う顔飾り。',
   },
   {
@@ -664,7 +648,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'SR',
     dropWeight: 20,
     visual: { type: 'image', value: '/items/face/rainbow_glasses.png' },
-    thumbnail: { size: '175%', position: '50% 18%' },
+    thumbnail: { size: '230%', position: '50% 35%' },
     description: '虹色にきらめく幻想的なメガネ。',
   },
 
@@ -676,7 +660,7 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'SSR',
     dropWeight: 10,
     visual: { type: 'image', value: '/items/face/star_eyes.png' },
-    thumbnail: { size: '170%', position: '50% 18%' },
+    thumbnail: { size: '280%', position: '50% 35%' },
     description: '瞳に星が宿る特別な装い。',
   },
   {
@@ -687,33 +671,298 @@ export const ALL_ITEMS: Item[] = [
     rarity: 'SSR',
     dropWeight: 10,
     visual: { type: 'image', value: '/items/face/cosmic_eyes.png' },
-    thumbnail: { size: '170%', position: '50% 18%' },
+    thumbnail: { size: '280%', position: '50% 35%' },
     description: '宇宙の奥行きを感じる神秘の瞳。',
   },
 
-
-
-  
+  // ACCESSORY 25
+  // =========================
   {
-    id: 'sr_cape_hero',
-    name: 'ヒーローマント',
+    id: 'n_accessory_small_book',
+    name: '小さな本',
     type: 'equipment',
-    category: 'body',
-    rarity: 'SR',
-    dropWeight: 5,
-    visual: { type: 'color', value: '#DC143C' },
-    description: '風になびく赤いマント。',
+    category: 'accessory',
+    rarity: 'N',
+    dropWeight: 40,
+    visual: { type: 'image', value: '/items/accessory/small_book.png' },
+    thumbnail: { size: '160%', position: '50% 8%' },
+    description: '片手で持てる小さな本。',
   },
   {
-    id: 'sr_ring_magic',
-    name: '魔法の指輪',
+    id: 'n_accessory_small_flag',
+    name: '小さな旗',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'N',
+    dropWeight: 40,
+    visual: { type: 'image', value: '/items/accessory/small_flag.png' },
+    thumbnail: { size: '160%', position: '50% 8%' },
+    description: '元気よく掲げられる小さな旗。',
+  },
+  {
+    id: 'n_accessory_star_effect',
+    name: '星エフェクト',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'N',
+    dropWeight: 40,
+    visual: { type: 'image', value: '/items/accessory/star_effect.png' },
+    thumbnail: { size: '165%', position: '50% 8%' },
+    description: 'まわりに星がふわっと舞う。',
+  },
+  {
+    id: 'n_accessory_flower_effect',
+    name: '花エフェクト',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'N',
+    dropWeight: 40,
+    visual: { type: 'image', value: '/items/accessory/flower_effect.png' },
+    thumbnail: { size: '165%', position: '50% 8%' },
+    description: '花びらが舞うやさしいエフェクト。',
+  },
+  {
+    id: 'n_accessory_heart_effect',
+    name: 'ハートエフェクト',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'N',
+    dropWeight: 40,
+    visual: { type: 'image', value: '/items/accessory/heart_effect.png' },
+    thumbnail: { size: '165%', position: '50% 8%' },
+    description: 'ハートがぽわっと浮かぶエフェクト。',
+  },
+  {
+    id: 'n_accessory_small_wand',
+    name: '小さな杖',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'N',
+    dropWeight: 40,
+    held: true, // ←追加
+
+    visual: {
+      type : 'image',
+      value: '/items/accessory/small_wand_idle.png',
+      up   : '/items/accessory/small_wand_up.png',
+    },
+  
+    thumbnail: { size: '260%', position: '-5% 65%' },
+    description: 'はじめての魔法ごっこにぴったりな杖。',
+  },
+  {
+    id: 'n_accessory_star_dust',
+    name: '星の粒',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'N',
+    dropWeight: 40,
+    visual: { type: 'image', value: '/items/accessory/star_dust.png' },
+    thumbnail: { size: '165%', position: '50% 8%' },
+    description: '小さな星の粒がきらめく。',
+  },
+  {
+    id: 'n_accessory_small_cloud',
+    name: '小さな雲',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'N',
+    dropWeight: 40,
+    visual: { type: 'image', value: '/items/accessory/small_cloud.png' },
+    thumbnail: { size: '165%', position: '50% 10%' },
+    description: 'ふわふわ浮かぶ小さな雲。',
+  },
+  {
+    id: 'n_accessory_wind_effect',
+    name: '風エフェクト',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'N',
+    dropWeight: 40,
+    visual: { type: 'image', value: '/items/accessory/wind_effect.png' },
+    thumbnail: { size: '165%', position: '50% 8%' },
+    description: 'そよ風が吹くような演出。',
+  },
+  {
+    id: 'n_accessory_light_dust',
+    name: '光の粒',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'N',
+    dropWeight: 40,
+    visual: { type: 'image', value: '/items/accessory/light_dust.png' },
+    thumbnail: { size: '165%', position: '50% 8%' },
+    description: '小さな光の粒がふわりと漂う。',
+  },
+
+  {
+    id: 'r_accessory_magic_book',
+    name: '魔法の本',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'R',
+    dropWeight: 30,
+    visual: { type: 'image', value: '/items/accessory/magic_book.png' },
+    thumbnail: { size: '165%', position: '50% 8%' },
+    description: '不思議な力を秘めた本。',
+  },
+  {
+    id: 'r_accessory_star_wand',
+    name: '星の杖',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'R',
+    dropWeight: 30,
+    visual: { type: 'image', value: '/items/accessory/star_wand.png' },
+    thumbnail: { size: '165%', position: '50% 8%' },
+    description: '先端に星がついた魔法の杖。',
+  },
+  {
+    id: 'r_accessory_moon_wand',
+    name: '月の杖',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'R',
+    dropWeight: 30,
+    visual: { type: 'image', value: '/items/accessory/moon_wand.png' },
+    thumbnail: { size: '165%', position: '50% 8%' },
+    description: '月の加護を感じる細身の杖。',
+  },
+  {
+    id: 'r_accessory_star_flag',
+    name: '星の旗',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'R',
+    dropWeight: 30,
+    visual: { type: 'image', value: '/items/accessory/star_flag.png' },
+    thumbnail: { size: '165%', position: '50% 8%' },
+    description: '星のしるしを掲げた旗。',
+  },
+  {
+    id: 'r_accessory_magic_effect',
+    name: '魔法エフェクト',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'R',
+    dropWeight: 30,
+    visual: { type: 'image', value: '/items/accessory/magic_effect.png' },
+    thumbnail: { size: '170%', position: '50% 8%' },
+    description: '魔法陣のような光が広がる。',
+  },
+  {
+    id: 'r_accessory_flower_wand',
+    name: '花の杖',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'R',
+    dropWeight: 30,
+    visual: { type: 'image', value: '/items/accessory/flower_wand.png' },
+    thumbnail: { size: '165%', position: '50% 8%' },
+    description: '花をあしらったやさしい杖。',
+  },
+  {
+    id: 'r_accessory_small_angel_wing',
+    name: '小さな天使羽',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'R',
+    dropWeight: 30,
+    visual: { type: 'image', value: '/items/accessory/small_angel_wing.png' },
+    thumbnail: { size: '170%', position: '50% 10%' },
+    description: '背中に添える小さな天使の羽。',
+  },
+  {
+    id: 'r_accessory_star_ring',
+    name: '星リング',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'R',
+    dropWeight: 30,
+    visual: { type: 'image', value: '/items/accessory/star_ring.png' },
+    thumbnail: { size: '170%', position: '50% 8%' },
+    description: '星がくるくる回るリングエフェクト。',
+  },
+
+  {
+    id: 'sr_accessory_magic_wand',
+    name: '魔法杖',
     type: 'equipment',
     category: 'accessory',
     rarity: 'SR',
-    dropWeight: 4,
-    visual: { type: 'color', value: '#9400D3' },
-    description: '不思議な力を秘めた指輪。',
+    dropWeight: 20,
+    visual: { type: 'image', value: '/items/accessory/magic_wand.png' },
+    thumbnail: { size: '170%', position: '50% 8%' },
+    description: '上級者向けのきらめく魔法杖。',
   },
+  {
+    id: 'sr_accessory_star_wings',
+    name: '星の羽',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'SR',
+    dropWeight: 20,
+    visual: { type: 'image', value: '/items/accessory/star_wings.png' },
+    thumbnail: { size: '175%', position: '50% 10%' },
+    description: '星の粒を散らす幻想的な羽。',
+  },
+  {
+    id: 'sr_accessory_light_ring',
+    name: '光リング',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'SR',
+    dropWeight: 20,
+    visual: { type: 'image', value: '/items/accessory/light_ring.png' },
+    thumbnail: { size: '170%', position: '50% 8%' },
+    description: '光の輪がキャラを包みこむ。',
+  },
+  {
+    id: 'sr_accessory_rainbow_effect',
+    name: '虹エフェクト',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'SR',
+    dropWeight: 20,
+    visual: { type: 'image', value: '/items/accessory/rainbow_effect.png' },
+    thumbnail: { size: '175%', position: '50% 8%' },
+    description: '虹色の光がふんわり広がる。',
+  },
+  {
+    id: 'sr_accessory_angel_wings',
+    name: '天使の羽',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'SR',
+    dropWeight: 20,
+    visual: { type: 'image', value: '/items/accessory/angel_wings.png' },
+    thumbnail: { size: '180%', position: '50% 10%' },
+    description: '清らかな印象を与える天使の羽。',
+  },
+
+  {
+    id: 'ssr_accessory_cosmic_effect',
+    name: '宇宙エフェクト',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'SSR',
+    dropWeight: 10,
+    visual: { type: 'image', value: '/items/accessory/cosmic_effect.png' },
+    thumbnail: { size: '180%', position: '50% 8%' },
+    description: '宇宙そのものをまとったような演出。',
+  },
+  {
+    id: 'ssr_accessory_light_aura',
+    name: '光のオーラ',
+    type: 'equipment',
+    category: 'accessory',
+    rarity: 'SSR',
+    dropWeight: 10,
+    visual: { type: 'image', value: '/items/accessory/light_aura.png' },
+    thumbnail: { size: '180%', position: '50% 8%' },
+    description: '神々しい光のオーラを放つ。',
+  },
+
 
   // ===== SSR レアリティ (スーパースーパーレア) =====
   // 消耗品
@@ -737,27 +986,7 @@ export const ALL_ITEMS: Item[] = [
   },
   // 装備品
   
- 
-  {
-    id: 'ssr_armor_dragon',
-    name: 'ドラゴンアーマー',
-    type: 'equipment',
-    category: 'body',
-    rarity: 'SSR',
-    dropWeight: 2,
-    visual: { type: 'color', value: '#B22222' },
-    description: '龍の鱗で作られた最強の鎧。',
-  },
-  {
-    id: 'ssr_wings_angel',
-    name: '天使の羽',
-    type: 'equipment',
-    category: 'accessory',
-    rarity: 'SSR',
-    dropWeight: 2,
-    visual: { type: 'svg_path', value: 'M12,12 C8,8 2,10 2,6 C2,2 8,4 12,8 C16,4 22,2 22,6 C22,10 16,8 12,12' },
-    description: '天界から舞い降りた神聖な翼。',
-  },
+
 ];
 
 /**
