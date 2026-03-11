@@ -2109,6 +2109,11 @@ export const useGameStore = create<GameStore>()(
           state.wordDexWords = [];
           useGameStore.setState({ wordDexWords: [] });
         }
+        // ローカル開発時は常に全装備品を所持済みに強制上書き
+        if (isLocalDevelopment() && state) {
+          state.inventory = DEV_INVENTORY;
+          useGameStore.setState({ inventory: DEV_INVENTORY });
+        }
       },
       partialize: (state) => ({
         coins: state.coins,
