@@ -7,7 +7,8 @@ export type ResearcherRank =
   | '研究員見習い'
   | '研究員'
   | '上級研究員'
-  | '特別顧問';
+  | '特別顧問'
+  | '開発者';
 
 /** 階級ごとのアイコン・表示色 */
 export const RANK_CONFIG: Record<ResearcherRank, { icon: string; className: string }> = {
