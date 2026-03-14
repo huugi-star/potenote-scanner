@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword } from 'lucide-react';
+import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword, Users } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 import { auth } from '@/lib/firebase';
@@ -22,6 +22,7 @@ import { QuizGameScreen, type QuizMode } from '@/components/screens/QuizGameScre
 import { ResultScreen } from '@/components/screens/ResultScreen';
 import { GachaScreen } from '@/components/screens/GachaScreen';
 import { MapScreen } from '@/components/screens/MapScreen';
+import { ResearcherDexScreen } from '@/components/screens/ResearcherDexScreen';
 import { DressUpScreen } from '@/components/screens/DressUpScreen';
 import { FreeQuestScreen } from '@/components/screens/FreeQuestScreen';
 import { QuizWordDexScreen } from '@/components/screens/QuizWordDexScreen';
@@ -54,6 +55,7 @@ type GamePhase =
   | 'result'
   | 'gacha'
   | 'map'
+  | 'researcher_dex' // 研究員図鑑
   | 'dressup'
   | 'freequest'
   | 'worddex'
@@ -303,6 +305,20 @@ const HomeScreen = ({
             マップ
           </motion.button>
         </div>
+
+        {/* 研究員図鑑（2行目） */}
+        <motion.button
+          onClick={() => {
+            vibrateLight();
+            onNavigate('researcher_dex');
+          }}
+          className="w-full mt-3 py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <Users className="w-5 h-5" />
+          研究員図鑑
+        </motion.button>
 
         {/* 翻訳履歴ボタン */}
         {translationHistoryCount > 0 && (
@@ -838,6 +854,17 @@ const AppContent = () => {
             exit={{ opacity: 0, x: -20 }}
           >
             <MapScreen onBack={handleBackToHome} />
+          </motion.div>
+        )}
+
+        {phase === 'researcher_dex' && (
+          <motion.div
+            key="researcher_dex"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <ResearcherDexScreen onBack={handleBackToHome} />
           </motion.div>
         )}
 

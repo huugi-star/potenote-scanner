@@ -1316,6 +1316,24 @@ export const ALL_ITEMS: Item[] = [
     description: 'ポテノートの世界観を象徴する特製ケープ。',
   },
   // ===== SSR レアリティ (スーパースーパーレア) =====
+  {
+    id: 'advisor_crown',
+    name: '特別顧問の冠',
+    type: 'equipment',
+    category: 'head',
+    rarity: 'SSR',
+    dropWeight: 0,
+  
+    gachaExcluded: true,
+    specialItem: true,
+    grantSource: 'advisor',
+  
+    visual: { type: 'image', value: '/items/head/advisor_crown.png' },
+    thumbnail: { size: '180%', position: '50% 50%' },
+    description: '研究所を支える特別顧問の証。',
+  },
+
+  // ===== SSR レアリティ (スーパースーパーレア) =====
   // 消耗品
   {
     id: 'ssr_elixir',

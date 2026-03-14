@@ -15,16 +15,21 @@ export const DeveloperSupport = () => {
   return (
     <div className="mx-4 my-8 p-6 bg-white rounded-2xl border border-gray-200 shadow-sm text-center">
       {/* アイコンヘッダー */}
-      <div className="text-4xl mb-3">👨‍💻 🤝</div>
+      <div className="text-4xl mb-3">🔬✨</div>
       
       {/* タイトル & メッセージ */}
-      <h3 className="font-bold text-gray-800 text-lg mb-3">開発者を応援する</h3>
+      <h3 className="font-bold text-gray-800 text-lg mb-3">Potenote Scannerを応援する</h3>
       <p className="text-sm text-gray-600 mb-6 leading-relaxed text-left">
-        Potenote Scannerは個人が情熱で開発・運営しています。<br/>
-        現在、高性能AIのサーバー代はすべて自腹で負担しています...！😭<br/>
-        <br/>
-        もし「役に立った！」と思っていただけたら、以下の方法でご支援いただけると、開発継続の大きな力になります。
-      </p>
+      <strong className="block text-center">【あなたに寄り添う。言の葉の世界】</strong><br/>
+      Potenote Scanner は、ことばの世界を少しずつ広げていく学習RPGです。<br/>
+現在 AI利用料や開発費を負担しながら、個人で開発・運営しています。<br/>
+  「面白い」「続いてほしい」と感じていただけたら、<br/>
+  note からご支援いただけると開発継続の大きな力になります。<br/>
+  <br/>
+  メンバーシップの一部特典として、<br/>
+  スキャン回数、ガチャコイン、<strong>研究員番号（研究員図鑑に登録）</strong>、研究員専用のアバター装飾などをご用意しています。<br/>
+  Potenote研究所の研究員として、ことばの世界を一緒に育てていただけたら嬉しいです。
+</p>
       
       {/* アクションボタンエリア */}
       <div className="flex flex-col gap-4">
@@ -37,10 +42,10 @@ export const DeveloperSupport = () => {
             rel="noopener noreferrer"
             className="block w-full bg-[#2cbd93] hover:opacity-90 text-white font-bold py-3 px-6 rounded-full shadow transition-all flex items-center justify-center gap-2"
           >
-            <span>📖 開発日誌を読む (note)</span>
+            <span>📖 開発日誌 / Potenote研究所を見る (note)</span>
           </a>
           <p className="text-[10px] text-gray-400 mt-1.5">
-            ※ 記事の「サポート」機能からご支援いただけます
+            ※ 記事のサポート機能やメンバーシップからご支援いただけます
           </p>
         </div>
 
