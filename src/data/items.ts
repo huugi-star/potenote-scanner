@@ -27,6 +27,12 @@ export interface Item {
   thumbnail?: ItemThumbnail; // サムネ個別調整（未指定はカテゴリデフォルト）
   held?: boolean; // true = 手持ちアクセ（腕の後ろに描画）
   description?: string;
+  /** true の場合はガチャの抽選対象から除外（特別付与専用） */
+  gachaExcluded?: boolean;
+  /** 特別枠アイテムであることを示す */
+  specialItem?: boolean;
+  /** 付与元の識別子（例: 'advisor'） */
+  grantSource?: string;
 }
 
 /**

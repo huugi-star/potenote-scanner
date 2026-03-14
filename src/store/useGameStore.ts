@@ -1749,7 +1749,9 @@ export const useGameStore = create<GameStore>()(
           }
         }
         
-        const itemsOfRarity = ALL_ITEMS.filter(item => item.rarity === selectedRarity);
+        const itemsOfRarity = ALL_ITEMS.filter(
+          (item) => item.rarity === selectedRarity && !item.gachaExcluded
+        );
         const selectedItem = weightedRandom(itemsOfRarity);
         
         const existingItem = state.inventory.find(inv => inv.itemId === selectedItem.id);
