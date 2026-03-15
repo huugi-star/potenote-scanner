@@ -1341,7 +1341,7 @@ export const ALL_ITEMS: Item[] = [
   },
   {
     id: 'sr_body_researcher_coat',
-    name: '研究員コート',
+    name: '上級研究員コート',
     type: 'equipment',
     category: 'body',
     rarity: 'SR',
@@ -1354,7 +1354,7 @@ export const ALL_ITEMS: Item[] = [
     visual: { type: 'image', value: '/items/body/researcher_coat.png' },
     thumbnail: { size: '240%', position: '50% 80%' },
   
-    description: '研究所の研究員に与えられる白衣コート。',
+    description: '研究所の上級研究員に与えられる白衣コート。',
   },
 
   // ===== SSR レアリティ (スーパースーパーレア) =====

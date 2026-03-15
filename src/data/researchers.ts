@@ -36,15 +36,15 @@ export interface Researcher {
 export const RESEARCHERS: Researcher[] = [
   {
     number: 1,
-    name: "Aoi",
+    name: "アオイ",
     rank: "開発者",
     field: "AIゲーム研究",
     joinedAt: "2026-03-14"
   },
   {
     number: 2,
-    name: "user123",
-    rank: "研究員見習い",
+    name: "sae",
+    rank: "研究員",
     field: "英語研究",
     joinedAt: "2026-03-15"
   }
