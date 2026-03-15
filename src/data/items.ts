@@ -55,33 +55,7 @@ export const RARITY_BASE_WEIGHTS = {
 export const ALL_ITEMS: Item[] = [
   // ===== N レアリティ (コモン) =====
   // 消耗品
-  {
-    id: 'n_potion_hp_s',
-    name: 'ミニ回復薬',
-    type: 'consumable',
-    rarity: 'N',
-    dropWeight: 15,
-    visual: { type: 'color', value: '#7CFC00' },
-    description: '小さな回復薬。スタミナを1回復する。',
-  },
-  {
-    id: 'n_coin_bag_s',
-    name: '小銭袋',
-    type: 'consumable',
-    rarity: 'N',
-    dropWeight: 15,
-    visual: { type: 'color', value: '#FFD700' },
-    description: '少しのコインが入った袋。10コイン獲得。',
-  },
-  {
-    id: 'n_map_fragment',
-    name: '地図の欠片',
-    type: 'consumable',
-    rarity: 'N',
-    dropWeight: 12,
-    visual: { type: 'color', value: '#DEB887' },
-    description: '古びた地図の一部。集めると何かが起こる？',
-  },
+
   // 装備品
   
 
@@ -89,33 +63,7 @@ export const ALL_ITEMS: Item[] = [
 
   // ===== R レアリティ (レア) =====
   // 消耗品
-  {
-    id: 'r_potion_hp_m',
-    name: '回復薬',
-    type: 'consumable',
-    rarity: 'R',
-    dropWeight: 12,
-    visual: { type: 'color', value: '#32CD32' },
-    description: 'スタミナを2回復する。',
-  },
-  {
-    id: 'r_coin_bag_m',
-    name: '銀貨袋',
-    type: 'consumable',
-    rarity: 'R',
-    dropWeight: 12,
-    visual: { type: 'color', value: '#C0C0C0' },
-    description: '銀貨がたくさん。30コイン獲得。',
-  },
-  {
-    id: 'r_exp_book',
-    name: '知識の書',
-    type: 'consumable',
-    rarity: 'R',
-    dropWeight: 10,
-    visual: { type: 'color', value: '#8B4513' },
-    description: '経験値が少し増える本。',
-  },
+
   // 装備品
  
  
@@ -124,33 +72,7 @@ export const ALL_ITEMS: Item[] = [
 
   // ===== SR レアリティ (スーパーレア) =====
   // 消耗品
-  {
-    id: 'sr_potion_hp_l',
-    name: '高級回復薬',
-    type: 'consumable',
-    rarity: 'SR',
-    dropWeight: 8,
-    visual: { type: 'color', value: '#00FF00' },
-    description: 'スタミナを全回復する。',
-  },
-  {
-    id: 'sr_coin_bag_l',
-    name: '金貨袋',
-    type: 'consumable',
-    rarity: 'SR',
-    dropWeight: 8,
-    visual: { type: 'color', value: '#FFD700' },
-    description: '金貨がたっぷり。100コイン獲得。',
-  },
-  {
-    id: 'sr_gacha_ticket',
-    name: 'ガチャチケット',
-    type: 'consumable',
-    rarity: 'SR',
-    dropWeight: 6,
-    visual: { type: 'color', value: '#FF69B4' },
-    description: '無料でガチャを1回引ける。',
-  },
+
   // 装備品(head)
 
   {
@@ -1359,24 +1281,7 @@ export const ALL_ITEMS: Item[] = [
 
   // ===== SSR レアリティ (スーパースーパーレア) =====
   // 消耗品
-  {
-    id: 'ssr_elixir',
-    name: 'エリクサー',
-    type: 'consumable',
-    rarity: 'SSR',
-    dropWeight: 4,
-    visual: { type: 'color', value: '#E6E6FA' },
-    description: '全ての状態を完全回復する伝説の霊薬。',
-  },
-  {
-    id: 'ssr_coin_treasure',
-    name: '宝箱',
-    type: 'consumable',
-    rarity: 'SSR',
-    dropWeight: 3,
-    visual: { type: 'svg_path', value: 'M4,10 L4,18 L20,18 L20,10 M2,10 L22,10 L20,6 L4,6 Z' },
-    description: '財宝がぎっしり！500コイン獲得。',
-  },
+
   // 装備品
   
 
