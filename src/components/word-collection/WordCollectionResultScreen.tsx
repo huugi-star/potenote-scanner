@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronDown, Sword } from 'lucide-react';
+import { ChevronLeft, ChevronDown, Sword, Coins } from 'lucide-react';
 import { vibrateLight } from '@/lib/haptics';
 import type { WordEnemy } from '@/types';
 
@@ -20,6 +20,7 @@ interface WordCollectionResultScreenProps {
   capturedWords: WordEnemy[];
   defeatedWords: WordEnemy[];
   defeatedCount: number;
+  earnedCoins: number;
   misses: number;
   missedWords: MissedWord[];
   onContinue: () => void;
@@ -119,6 +120,7 @@ export const WordCollectionResultScreen = ({
   capturedWords,
   defeatedWords,
   defeatedCount,
+  earnedCoins,
   misses,
   missedWords,
   onContinue,
@@ -161,6 +163,16 @@ export const WordCollectionResultScreen = ({
             className="text-2xl font-bold text-gray-100"
           >
             撃破 <span className="text-3xl text-gray-100">{displayDefeatedCount}</span> 回
+          </motion.p>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2, delay: GET_DISPLAY_DELAY + 0.2 }}
+            className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-amber-400/40 bg-amber-500/10 px-2.5 py-1 text-sm font-semibold text-amber-300"
+          >
+            <Coins className="w-4 h-4" />
+            今回獲得 +{earnedCoins} コイン
           </motion.p>
 
           {/* ミス（小） */}

@@ -41,6 +41,7 @@ function WordCollectionContent() {
   const getWordCollectionScanById = useGameStore((s) => s.getWordCollectionScanById);
   const refillActiveEnemies = useGameStore((s) => s.refillActiveEnemies);
   const saveAdventureSnapshot = useGameStore((s) => s.saveAdventureSnapshot);
+  const addCoins = useGameStore((s) => s.addCoins);
 
   const scansForDisplay: ScanCardData[] = wordCollectionScans.map((scan) => {
     // 冒険ログは「完了時のスナップショット」を最優先で表示（続きを探索しても崩れない）
@@ -220,6 +221,12 @@ function WordCollectionContent() {
         questMode={questMode}
         retryPriorityWords={questMode === 'retry' ? retryPriorityWords : []}
         onComplete={(result) => {
+          // 単コレ報酬: 正解1回ごとに1コイン
+          const earnedCoins = Math.max(0, result.defeatedCount);
+          if (earnedCoins > 0) {
+            addCoins(earnedCoins);
+          }
+
           // Save an immutable adventure snapshot using latest store state
           // (HP=0 を捕獲として集計し、分母は固定値を維持)
           const latestScan = getWordCollectionScanById(selectedScan.id) ?? selectedScan;
@@ -255,6 +262,7 @@ function WordCollectionContent() {
         capturedWords={battleResult.capturedWords}
         defeatedWords={battleResult.defeatedWords}
         defeatedCount={battleResult.defeatedCount}
+        earnedCoins={Math.max(0, battleResult.defeatedCount)}
         misses={battleResult.misses}
         missedWords={battleResult.missedWords ?? []}
         onContinue={() => {
