@@ -1323,20 +1323,38 @@ export const ALL_ITEMS: Item[] = [
   },
   // ===== SSR レアリティ (スーパースーパーレア) =====
   {
-    id: 'advisor_crown',
-    name: '特別顧問の冠',
+    id: 'ssr_body_inspector_coat',
+    name: '特別監察官コート',
     type: 'equipment',
-    category: 'head',
+    category: 'body',
     rarity: 'SSR',
     dropWeight: 0,
   
     gachaExcluded: true,
     specialItem: true,
-    grantSource: 'advisor',
+    grantSource: 'inspector',
   
-    visual: { type: 'image', value: '/items/head/advisor_crown.png' },
-    thumbnail: { size: '180%', position: '50% 50%' },
-    description: '研究所を支える特別顧問の証。',
+    visual: { type: 'image', value: '/items/body/inspector_coat.png' },
+    thumbnail: { size: '240%', position: '50% 80%' },
+  
+    description: '研究所を監督する特別監察官の証。',
+  },
+  {
+    id: 'sr_body_researcher_coat',
+    name: '研究員コート',
+    type: 'equipment',
+    category: 'body',
+    rarity: 'SR',
+    dropWeight: 0,
+  
+    gachaExcluded: true,
+    specialItem: true,
+    grantSource: 'researcher',
+  
+    visual: { type: 'image', value: '/items/body/researcher_coat.png' },
+    thumbnail: { size: '240%', position: '50% 80%' },
+  
+    description: '研究所の研究員に与えられる白衣コート。',
   },
 
   // ===== SSR レアリティ (スーパースーパーレア) =====
