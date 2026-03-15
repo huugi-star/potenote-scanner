@@ -65,7 +65,7 @@ function WordCollectionContent() {
       .filter((w) => w !== undefined) as Array<typeof scan.words[0]>;
 
     const capturedInActive = activeWordsData.filter((w) => w.hp === 0).length;
-    const defeatedInActive = activeWordsData.filter((w) => w.hp === 1 || w.hp === 2).length;
+    const defeatedInActive = activeWordsData.filter((w) => w.hp === 1).length;
     const remainingInActive = Math.max(0, activeTotal - capturedInActive - defeatedInActive);
 
     return {
@@ -229,7 +229,7 @@ function WordCollectionContent() {
             .map((w) => latestScan.words.find((sw) => sw.word === w))
             .filter((w) => w !== undefined) as Array<typeof latestScan.words[0]>;
           const capturedCount = activeWordsData.filter((w) => w.hp === 0).length;
-          const defeatedCount = activeWordsData.filter((w) => w.hp === 1 || w.hp === 2).length;
+          const defeatedCount = activeWordsData.filter((w) => w.hp === 1).length;
           const remainingCount = Math.max(0, total - capturedCount - defeatedCount);
           saveAdventureSnapshot(selectedScan.id, {
             timestamp: new Date().toISOString(),
@@ -238,7 +238,7 @@ function WordCollectionContent() {
             remainingCount,
             total: total > 0 ? total : 1,
             capturedWords: activeWordsData.filter((w) => w.hp === 0),
-            defeatedWords: activeWordsData.filter((w) => w.hp === 1 || w.hp === 2),
+            defeatedWords: activeWordsData.filter((w) => w.hp === 1),
           });
           setBattleResult(result);
           setView('result');
@@ -272,7 +272,7 @@ function WordCollectionContent() {
           // 同じスキャンで再チャレンジ（retry モード）
           const latestScan = getWordCollectionScanById(selectedScanId);
           const damagedWords = (latestScan?.words ?? [])
-            .filter((w) => w.hp > 0 && w.hp < 3)
+            .filter((w) => w.hp > 0 && w.hp < 2)
             .map((w) => w.word);
           const mergedPriorityWords = Array.from(
             new Set([...(battleResult.askedWords ?? []), ...damagedWords])

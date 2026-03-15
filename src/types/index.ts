@@ -192,7 +192,7 @@ export interface WordEnemy {
   pos?: string;       // 品詞ヒント（Natural Language API の tag）
   surfaceVariants?: string[];  // 出現形一覧（図鑑表示用）
   exampleSentence?: string;    // 例文（図鑑表示用）
-  hp: number;         // 3=未討伐, 0=捕獲
+  hp: number;         // 2=未討伐, 0=捕獲
   asked: boolean;    // 出題済みか（asked=false を優先して出題）
   wrongCount: number; // 不正解回数（wrongCount高い順で出題）
 }

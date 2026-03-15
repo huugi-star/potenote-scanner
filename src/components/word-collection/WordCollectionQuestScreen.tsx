@@ -14,6 +14,7 @@ import type { WordEnemy, WordCollectionScan } from '@/types';
 
 const QUESTIONS_PER_ROUND = 7;
 const TIME_LIMIT_SEC = 5.0;
+const WORD_HP_MAX = 2;
 
 // ===== Types =====
 
@@ -85,8 +86,8 @@ function selectQuestions(
       const bInPriority = bPriority !== undefined;
       if (aInPriority !== bInPriority) return aInPriority ? -1 : 1;
       if (aInPriority && bInPriority && aPriority !== bPriority) return (aPriority as number) - (bPriority as number);
-      const aDamaged = a.hp < 3;
-      const bDamaged = b.hp < 3;
+      const aDamaged = a.hp < WORD_HP_MAX;
+      const bDamaged = b.hp < WORD_HP_MAX;
       if (aDamaged !== bDamaged) return aDamaged ? -1 : 1;
       if (a.hp !== b.hp) return a.hp - b.hp;
       if ((a.wrongCount ?? 0) !== (b.wrongCount ?? 0)) return (b.wrongCount ?? 0) - (a.wrongCount ?? 0);
@@ -191,10 +192,11 @@ export const WordCollectionQuestScreen = ({
   const correctIndex = currentItem?.correctIndex ?? -1;
 
   const isCorrectAnswer = selectedAnswer !== null && selectedAnswer !== -1 && selectedAnswer === correctIndex;
+  const currentWordHpNormalized = currentWord ? Math.min(currentWord.hp, WORD_HP_MAX) : 0;
   const displayHp =
     showResult && isCorrectAnswer && currentWord
-      ? Math.max(0, currentWord.hp - 1)
-      : (currentWord?.hp ?? 0);
+      ? Math.max(0, currentWordHpNormalized - 1)
+      : currentWordHpNormalized;
 
   const handleSelect = useCallback(
     (idx: number) => {
@@ -206,7 +208,7 @@ export const WordCollectionQuestScreen = ({
 
       setBattleLog({
         text: isCorrect
-          ? (currentWord!.hp === 1 ? '封印した！' : 'ワードカード！')
+          ? (currentWordHpNormalized === 1 ? '封印した！' : 'ワードカード！')
           : 'はじかれた…',
         key: Date.now(),
       });
@@ -216,18 +218,17 @@ export const WordCollectionQuestScreen = ({
         vibrateSuccess();
         // 成功時は撃破カウントを増やす（捕獲時も数値として残す）
         setDefeatedCount((d) => d + 1);
-        const newHp = Math.max(0, currentWord!.hp - 1);
-        if (currentWord!.hp === 1) {
+        const newHp = Math.max(0, currentWordHpNormalized - 1);
+        if (currentWordHpNormalized === 1) {
           setCapturedWords((c) => [...c, { ...currentWord!, hp: 0 }]);
         } else {
           setDefeatedWords((d) =>
-            d.some((w) => w.word === currentWord!.word) ? d : [...d, { ...currentWord!, hp: currentWord!.hp - 1 }]
+            d.some((w) => w.word === currentWord!.word) ? d : [...d, { ...currentWord!, hp: newHp }]
           );
         }
         // 二回目の倒す演出（'split'）を一回目から表示する
-        if (currentWord!.hp === 3) setHitType('split');
-        else if (currentWord!.hp === 2) setHitType('split');
-        else if (currentWord!.hp === 1) setHitType('seal');
+        if (currentWordHpNormalized > 1) setHitType('split');
+        else setHitType('seal');
         updateWordEnemyState(scan.id, currentWord!.word, {
           hp: newHp,
           asked: true,
@@ -253,7 +254,7 @@ export const WordCollectionQuestScreen = ({
         setCardThrow({ isCorrect, key: Date.now() });
       }
     },
-    [showResult, selectedAnswer, correctIndex, currentWord, scan.id, updateWordEnemyState]
+    [showResult, selectedAnswer, correctIndex, currentWord, currentWordHpNormalized, scan.id, updateWordEnemyState]
   );
 
   const goNext = useCallback(() => {
@@ -387,7 +388,7 @@ export const WordCollectionQuestScreen = ({
 
   const timePct = (timeLeft / TIME_LIMIT_SEC) * 100;
   const isTimeWarning = timeLeft <= 1;
-  const hpBarPct = displayHp / 3;
+  const hpBarPct = Math.min(displayHp, WORD_HP_MAX) / WORD_HP_MAX;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#0a0e17] to-[#0d1321] p-4">

@@ -23,7 +23,7 @@ function getWordBestState(word: string, scans: WordCollectionScan[]): 'captured'
     const w = scan.words.find((x) => x.word === word);
     if (!w) continue;
     if (w.hp === 0) return 'captured';
-    if (w.hp < 3) return 'defeated';
+    if (w.hp < 2) return 'defeated';
   }
   return 'undefeated';
 }

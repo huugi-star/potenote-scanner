@@ -957,7 +957,7 @@ export const useGameStore = create<GameStore>()(
             pos: w.pos ? String(w.pos).toLowerCase() : undefined,
             surfaceVariants: Array.isArray(w.surfaceVariants) ? w.surfaceVariants : undefined,
             exampleSentence: w.exampleSentence && String(w.exampleSentence).trim() ? String(w.exampleSentence).trim() : undefined,
-            hp: 3,
+            hp: 2,
             asked: false,
             wrongCount: 0,
           })).filter((w) => w.word);
@@ -987,7 +987,7 @@ export const useGameStore = create<GameStore>()(
           words = wordsRaw.map((w) => ({
             word: w,
             meaning: vocabMap.get(w) || undefined,
-            hp: 3,
+            hp: 2,
             asked: false,
             wrongCount: 0,
           }));
@@ -2094,8 +2094,15 @@ export const useGameStore = create<GameStore>()(
           state.lectureHistory = state.lectureHistory.slice(0, LIMITS.LECTURE_HISTORY.MAX_ITEMS);
         }
         // NOTE:
-        // 過去の「hp:1 -> hp:3」マイグレーションは現在の仕様ではHP巻き戻りの原因になるため無効化。
-        // 以後は保存された hp をそのまま信頼して復元する。
+        // 単語HPの最大値を 2 に統一するため、復元時に上限をクランプする。
+        if (state && Array.isArray(state.wordCollectionScans)) {
+          state.wordCollectionScans = state.wordCollectionScans.map((scan) => ({
+            ...scan,
+            words: Array.isArray(scan.words)
+              ? scan.words.map((w) => ({ ...w, hp: Math.max(0, Math.min(2, Number(w.hp ?? 0))) }))
+              : [],
+          }));
+        }
         if (state && !Array.isArray(state.wordDexOrder)) {
           state.wordDexOrder = [];
           useGameStore.setState({ wordDexOrder: [] });

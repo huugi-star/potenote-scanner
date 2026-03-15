@@ -27,7 +27,7 @@ function getWordInfo(word: string, scans: WordCollectionScan[]) {
     const w = scan.words.find((x) => x.word === word);
     if (!w) continue;
     if (w.hp === 0) state = 'captured';
-    else if (w.hp < 3 && state === 'undefeated') state = 'defeated';
+    else if (w.hp < 2 && state === 'undefeated') state = 'defeated';
     if (w.meaning) meaning = w.meaning;
   }
   return { state, meaning };
