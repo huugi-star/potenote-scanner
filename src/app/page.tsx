@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Scan, Gem, Map, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword, Users } from 'lucide-react';
+import { Gem, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword, Users } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 import { auth } from '@/lib/firebase';
@@ -21,7 +21,6 @@ import { ScanningScreen } from '@/components/screens/ScanningScreen';
 import { QuizGameScreen, type QuizMode } from '@/components/screens/QuizGameScreen';
 import { ResultScreen } from '@/components/screens/ResultScreen';
 import { GachaScreen } from '@/components/screens/GachaScreen';
-import { MapScreen } from '@/components/screens/MapScreen';
 import { ResearcherDexScreen } from '@/components/screens/ResearcherDexScreen';
 import { DressUpScreen } from '@/components/screens/DressUpScreen';
 import { FreeQuestScreen } from '@/components/screens/FreeQuestScreen';
@@ -30,11 +29,11 @@ import { TranslationResultScreen } from '@/components/screens/TranslationResultS
 import { TranslationHistoryScreen } from '@/components/screens/TranslationHistoryScreen';
 import { LectureScreen } from '@/components/screens/LectureScreen';
 import { LectureHistoryScreen } from '@/components/screens/LectureHistoryScreen';
+import { SuhimochiRoomScreen } from '@/components/screens/SuhimochiRoomScreen';
 
 // UI Components
 import { LoginBonusModal } from '@/components/ui/LoginBonusModal';
 // import { ShopModal } from '@/components/ui/ShopModal'; // 一時的に非表示
-import { BannerAd } from '@/components/ui/BannerAd';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AuthButton } from '@/components/ui/AuthButton';
@@ -48,13 +47,14 @@ import { vibrateLight } from '@/lib/haptics';
 
 type GamePhase = 
   | 'home'
+  | 'suhimochi_room'
+  | 'adventure_menu'
   | 'scanning'
   | 'mode_select'
   | 'translation_mode_select' // 翻訳モード選択画面
   | 'quiz'
   | 'result'
   | 'gacha'
-  | 'map'
   | 'researcher_dex' // 研究員図鑑
   | 'dressup'
   | 'freequest'
@@ -105,6 +105,79 @@ const TranslationResultScreenWrapper = ({ onBack }: { onBack: () => void }) => {
 };
 
 /**
+ * 冒険メニュー画面
+ * - 単コレ
+ * - スキャンして冒険
+ * - 英文解釈
+ */
+const AdventureMenuScreen = ({
+  onBack,
+  onOpenScanAdventure,
+  onOpenEnglishReading,
+}: {
+  onBack: () => void;
+  onOpenScanAdventure: () => void;
+  onOpenEnglishReading: () => void;
+}) => {
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4 pb-24">
+      <div className="max-w-md mx-auto pt-6">
+        <h2 className="text-2xl font-bold text-white mb-2 text-center">ことばを集める</h2>
+        <p className="text-gray-400 text-sm text-center mb-6">遊び方を選んでください</p>
+
+        <div className="space-y-3">
+          <Link href="/word-collection" onClick={() => vibrateLight()}>
+            <motion.div
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Sword className="w-5 h-5" />
+              単コレ
+            </motion.div>
+          </Link>
+
+          <motion.button
+            onClick={() => {
+              vibrateLight();
+              onOpenScanAdventure();
+            }}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            スキャンして冒険
+          </motion.button>
+
+          <motion.button
+            onClick={() => {
+              vibrateLight();
+              onOpenEnglishReading();
+            }}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <Languages className="w-5 h-5" />
+            英文解釈
+          </motion.button>
+        </div>
+
+        <button
+          onClick={() => {
+            vibrateLight();
+            onBack();
+          }}
+          className="mt-8 w-full py-3 text-gray-400 hover:text-white transition-colors"
+        >
+          戻る
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/**
  * ホーム画面
  */
 const HomeScreen = ({
@@ -116,9 +189,6 @@ const HomeScreen = ({
 }) => {
   const coins = useGameStore(state => state.coins);
   const isVIP = useGameStore(state => state.isVIP);
-  const totalDistance = useGameStore(state => state.journey.totalDistance);
-  const totalQuizzes = useGameStore(state => state.totalQuizzes);
-  const translationHistoryCount = useGameStore(state => state.translationHistory.length);
   const equipment = useGameStore(state => state.equipment);
   // const [showShop, setShowShop] = useState(false); // 一時的に非表示
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
@@ -187,14 +257,10 @@ const HomeScreen = ({
         </div>
 
         {/* ステータスバー */}
-        <div className="flex items-center gap-3 mb-8">
-          <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
+        <div className="mb-8">
+          <div className="flex items-center gap-2 px-4 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
             <Coins className="w-5 h-5 text-yellow-400" />
             <span className="text-white font-bold">{coins}</span>
-          </div>
-          <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
-            <Map className="w-5 h-5 text-cyan-400" />
-            <span className="text-white font-bold">{totalDistance.toFixed(1)}<span className="text-xs text-gray-400">km</span></span>
           </div>
         </div>
 
@@ -219,66 +285,38 @@ const HomeScreen = ({
           </div>
         </motion.button>
 
-        {/* 統計 */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 text-center">
-            <p className="text-3xl font-bold text-white">{totalQuizzes}</p>
-            <p className="text-sm text-gray-400">クイズ完了</p>
-          </div>
-          <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 text-center">
-            <p className="text-3xl font-bold text-white">
-              {Math.floor(totalDistance / 100)}
-            </p>
-            <p className="text-sm text-gray-400">到達した島</p>
-          </div>
-        </div>
-
-        {/* 単コレボタン */}
-        <Link href="/word-collection" onClick={() => vibrateLight()}>
-          <motion.div
-            className="w-full py-5 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold text-xl flex flex-col items-center justify-center gap-1 shadow-lg shadow-amber-500/25"
+        {/* 主導線（中央の大ボタン2つ） */}
+        <div className="space-y-3">
+          <motion.button
+            onClick={() => {
+              vibrateLight();
+              onNavigate('suhimochi_room');
+            }}
+            className="w-full py-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <div className="flex items-center gap-3">
-              <Sword className="w-7 h-7" />
-              単コレで冒険する
-            </div>
-            <span className="text-sm font-medium text-amber-100/90">単語を討伐・捕獲</span>
-          </motion.div>
-        </Link>
+            <Languages className="w-7 h-7" />
+            すうひもちと会話する（開発中）
+          </motion.button>
 
-        {/* スキャン翻訳ボタン */}
-        <motion.button
-          onClick={() => {
-            vibrateLight();
-            onNavigate('translation_mode_select');
-          }}
-          className="w-full mt-3 py-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <Languages className="w-7 h-7" />
-          英文解釈・翻訳
-        </motion.button>
-
-        {/* メインアクション */}
-        <motion.button
-          onClick={() => {
-            vibrateLight();
-            useGameStore.getState().setScanType('quiz');
-            onNavigate('scanning');
-          }}
-          className="w-full mt-3 py-5 rounded-2xl bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-cyan-500/25"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <Scan className="w-7 h-7" />
-          スキャンして冒険する
-        </motion.button>
+          <motion.button
+            onClick={() => {
+              vibrateLight();
+              onNavigate('adventure_menu');
+            }}
+            className="w-full py-5 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-amber-500/25"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <Sword className="w-7 h-7" />
+            ことばを集める
+          </motion.button>
+        </div>
 
         {/* サブアクション */}
-        <div className="grid grid-cols-2 gap-3 mt-4">
+        {/* ガチャ & 研究員図鑑（並列） */}
+        <div className="mt-4 grid grid-cols-2 gap-3">
           <motion.button
             onClick={() => {
               vibrateLight();
@@ -295,51 +333,16 @@ const HomeScreen = ({
           <motion.button
             onClick={() => {
               vibrateLight();
-              onNavigate('map');
+              onNavigate('researcher_dex');
             }}
-            className="py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-bold flex items-center justify-center gap-2"
+            className="py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <Map className="w-5 h-5" />
-            マップ
+            <Users className="w-5 h-5" />
+            研究員図鑑
           </motion.button>
         </div>
-
-        {/* 研究員図鑑（2行目） */}
-        <motion.button
-          onClick={() => {
-            vibrateLight();
-            onNavigate('researcher_dex');
-          }}
-          className="w-full mt-3 py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <Users className="w-5 h-5" />
-          研究員図鑑
-        </motion.button>
-
-        {/* 翻訳履歴ボタン */}
-        {translationHistoryCount > 0 && (
-          <motion.button
-            onClick={() => {
-              vibrateLight();
-              onNavigate('translation_history');
-            }}
-            className="w-full mt-3 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-medium flex items-center justify-center gap-2"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <Languages className="w-5 h-5" />
-            翻訳履歴を見る
-            <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
-              {translationHistoryCount}
-            </span>
-          </motion.button>
-        )}
 
         {/* 開発者支援セクション */}
         <DeveloperSupport />
@@ -362,15 +365,39 @@ const HomeScreen = ({
 const TranslationModeSelectScreen = ({
   onSelectMode,
   onBack,
+  onOpenHistory,
 }: {
   onSelectMode: (mode: 'english_learning' | 'multilang') => void;
   onBack: () => void;
+  onOpenHistory: () => void;
 }) => {
+  const translationHistoryCount = useGameStore(state => state.translationHistory.length);
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4 pb-24">
       <div className="max-w-md mx-auto pt-6">
         <h2 className="text-2xl font-bold text-white mb-2 text-center">翻訳モードを選択</h2>
-        <p className="text-gray-400 text-sm text-center mb-8">目的に合わせてモードを選んでください</p>
+        <p className="text-gray-400 text-sm text-center mb-6">目的に合わせてモードを選んでください</p>
+
+        {/* 翻訳履歴へのショートカット */}
+        {translationHistoryCount > 0 && (
+          <div className="mb-4 flex justify-center">
+            <motion.button
+              onClick={() => {
+                vibrateLight();
+                onOpenHistory();
+              }}
+              className="px-3 py-1.5 rounded-full bg-blue-600/20 border border-blue-500/40 text-blue-200 text-xs flex items-center gap-2"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              <Languages className="w-3 h-3" />
+              翻訳履歴を見る
+              <span className="ml-1 px-2 py-0.5 bg-white/10 rounded-full text-[10px]">
+                {translationHistoryCount}
+              </span>
+            </motion.button>
+          </div>
+        )}
 
         <div className="space-y-4">
           {/* 英語学習・構造解析モード */}
@@ -741,7 +768,41 @@ const AppContent = () => {
                 handleNavigate('scanning');
               }}
               onBack={() => handleNavigate('home')}
+              onOpenHistory={() => handleNavigate('translation_history')}
             />
+          </motion.div>
+        )}
+
+        {phase === 'adventure_menu' && (
+          <motion.div
+            key="adventure_menu"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <AdventureMenuScreen
+              onBack={() => handleNavigate('home')}
+              onOpenScanAdventure={() => {
+                useGameStore.getState().setScanType('quiz');
+                handleNavigate('scanning');
+              }}
+              onOpenEnglishReading={() => {
+                useGameStore.getState().setTranslationMode('english_learning');
+                useGameStore.getState().setScanType('translation');
+                handleNavigate('scanning');
+              }}
+            />
+          </motion.div>
+        )}
+
+        {phase === 'suhimochi_room' && (
+          <motion.div
+            key="suhimochi_room"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <SuhimochiRoomScreen onBack={handleBackToHome} />
           </motion.div>
         )}
 
@@ -812,7 +873,6 @@ const AppContent = () => {
               onContinue={handleBackToHome}
               onContinueFreeQuest={quizSession.isFreeQuest ? () => setPhase('freequest') : undefined}
               onOpenWordDex={() => setPhase('worddex')}
-              onViewMap={() => setPhase('map')}
               isFreeQuest={quizSession.isFreeQuest}
               batchId={quizSession.batchId}
               attempts={quizSession.attempts}
@@ -843,17 +903,6 @@ const AppContent = () => {
             exit={{ opacity: 0, x: -20 }}
           >
             <GachaScreen onBack={handleBackToHome} />
-          </motion.div>
-        )}
-
-        {phase === 'map' && (
-          <motion.div
-            key="map"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-          >
-            <MapScreen onBack={handleBackToHome} />
           </motion.div>
         )}
 
@@ -941,11 +990,6 @@ const AppContent = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* バナー広告（Freeユーザー・ホーム画面のみ） */}
-      <BannerAd
-        isVisible={!isVIP && phase === 'home'}
-      />
 
       {/* ログインボーナスモーダル */}
       <LoginBonusModal

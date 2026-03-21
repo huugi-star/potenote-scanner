@@ -9,7 +9,7 @@ import React from 'react';
 
 // リンク先（後で定数ファイルに移動してもOK）
 // TODO: 実際のnote記事URLに差し替えてください
-const NOTE_URL = "https://note.com/aoi_potenote/n/n4b5b56006637"; // ここにnote記事のURLを入れる
+const NOTE_URL = "https://note.com/aoi_potenote/n/n938994859678"; // ここにnote記事のURLを入れる
 
 export const DeveloperSupport = () => {
   return (

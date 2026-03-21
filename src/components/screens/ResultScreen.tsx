@@ -6,11 +6,10 @@
  */
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   Trophy, 
   Coins, 
-  MapPin, 
   Play, 
   Crown, 
   CheckCircle,
@@ -27,8 +26,6 @@ import { AdsModal } from '@/components/ui/AdsModal';
 import { AffiliateSection } from '@/components/ui/AffiliateSection';
 import { useToast } from '@/components/ui/Toast';
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
-import { confettiIslandClear } from '@/lib/confetti';
-import { DISTANCE } from '@/lib/constants';
 import type { QuizRaw, QuizResult, StructuredOCR, QuizQuestionAttempt } from '@/types';
 
 // ===== Types =====
@@ -40,7 +37,6 @@ interface ResultScreenProps {
   onContinue: () => void;
   onContinueFreeQuest?: () => void;
   onOpenWordDex?: () => void;
-  onViewMap: () => void;
   isFreeQuest?: boolean;
   batchId?: string;
   attempts?: QuizQuestionAttempt[];
@@ -52,8 +48,6 @@ interface ResultScreenProps {
 
 // ===== Constants =====
 
-const ISLAND_DISTANCE = 100;
-
 // ===== Main Component =====
 
 export const ResultScreen = ({
@@ -63,7 +57,6 @@ export const ResultScreen = ({
   onContinue,
   onContinueFreeQuest,
   onOpenWordDex,
-  onViewMap,
   isFreeQuest = false,
   batchId,
   attempts,
@@ -76,7 +69,6 @@ export const ResultScreen = ({
   const [showAdsModal, setShowAdsModal] = useState(false);
   const [adWatched, setAdWatched] = useState(false);
   const [result, setResult] = useState<QuizResult | null>(null);
-  const [showIslandClear, setShowIslandClear] = useState(false);
   const hasAppliedResult = useRef(false);
 
   // Store
@@ -88,11 +80,9 @@ export const ResultScreen = ({
     face: equipment.face ? getItemById(equipment.face) : undefined,
     accessory: equipment.accessory ? getItemById(equipment.accessory) : undefined,
   }), [equipment.head, equipment.body, equipment.face, equipment.accessory]);
-  const totalDistance = useGameStore(state => state.journey.totalDistance);
   const totalQuizClears = useGameStore(state => state.totalQuizClears);
   const calculateResult = useGameStore(state => state.calculateResult);
   const applyQuizResult = useGameStore(state => state.applyQuizResult);
-  const addFlag = useGameStore(state => state.addFlag);
   const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
   const applyQuizAttemptsToWordDex = useGameStore(state => state.applyQuizAttemptsToWordDex);
   const updateSpeedRushBestTime = useGameStore(state => state.updateSpeedRushBestTime);
@@ -124,16 +114,15 @@ export const ResultScreen = ({
     let quizResult: QuizResult;
     
     if (isFreeQuest) {
-      // フリークエスト: 基本3コイン、満点+2、正解1km、満点+3km
+      // フリークエスト: 基本3コイン、満点+2（距離報酬なし）
       const coins = isPerfect ? (3 + 2) : 3;
-      const distance = correctCount * DISTANCE.CORRECT_ANSWER + (isPerfect ? DISTANCE.PERFECT_BONUS : 0);
       quizResult = {
         quizId: `freequest_${Date.now()}`,
         correctCount,
         totalQuestions,
         isPerfect,
         earnedCoins: coins,
-        earnedDistance: Math.round(distance * 100) / 100,
+        earnedDistance: 0,
         isDoubled: false,
         timestamp: new Date(),
       };
@@ -149,39 +138,20 @@ export const ResultScreen = ({
     }
     
     if (isFreeQuest) {
-      // フリークエスト: コインと距離のみ付与
+      // フリークエスト: コインのみ付与
       useGameStore.getState().addCoins(quizResult.earnedCoins);
-      const state = useGameStore.getState();
-      useGameStore.setState({
-        journey: {
-          ...state.journey,
-          totalDistance: state.journey.totalDistance + quizResult.earnedDistance,
-        },
-        totalDistance: state.totalDistance + quizResult.earnedDistance,
-        totalQuizClears: state.totalQuizClears + 1, // クリア回数もカウント
-      });
-      // 距離・クリア回数の更新をクラウドへ同期
+      useGameStore.setState((state) => ({
+        totalQuizClears: state.totalQuizClears + 1, // クリア回数はカウント
+      }));
       void useGameStore.getState().syncWithCloud();
       // フリークエストでも開始元履歴IDがあれば同一履歴を上書き更新する
       saveQuizHistory(quiz, quizResult, ocrText, structuredOCR);
     } else {
       // 通常クエスト: 結果を適用（1回のみ）
       applyQuizResult(quizResult);
-      
-      // フラッグを追加
-      addFlag(quizResult.quizId, quiz.keywords, quizResult.earnedDistance);
-      
+
       // クイズ履歴を保存（構造化OCR付き）
       saveQuizHistory(quiz, quizResult, ocrText, structuredOCR);
-      
-      // 島クリア判定
-      const newTotalDistance = totalDistance + quizResult.earnedDistance;
-      if (totalDistance < ISLAND_DISTANCE && newTotalDistance >= ISLAND_DISTANCE) {
-        setTimeout(() => {
-          setShowIslandClear(true);
-          confettiIslandClear();
-        }, 1500);
-      }
     }
 
     if (batchId && attempts && attempts.length > 0) {
@@ -189,7 +159,7 @@ export const ResultScreen = ({
     }
     
     hasAppliedResult.current = true;
-  }, [mode, speedRushTotalTime, updateSpeedRushBestTime, isFreeQuest, correctCount, totalQuestions, adWatched, calculateResult, applyQuizResult, addFlag, saveQuizHistory, applyQuizAttemptsToWordDex, batchId, attempts, quiz, ocrText, structuredOCR, totalDistance]); // 依存配列を更新
+  }, [mode, speedRushTotalTime, updateSpeedRushBestTime, isFreeQuest, correctCount, totalQuestions, adWatched, calculateResult, applyQuizResult, saveQuizHistory, applyQuizAttemptsToWordDex, batchId, attempts, quiz, ocrText, structuredOCR]); // 依存配列を更新
 
   // 広告視聴で2倍にする場合の追加コイン
   const handleAdRewardClaimed = () => {
@@ -216,54 +186,6 @@ export const ResultScreen = ({
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-indigo-900/30 to-gray-900 p-4">
-      {/* 島クリア演出 */}
-      <AnimatePresence>
-        {showIslandClear && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              className="text-center"
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', damping: 15 }}
-            >
-              <motion.div
-                className="text-8xl mb-6"
-                animate={{ 
-                  rotate: [0, 10, -10, 0],
-                  scale: [1, 1.1, 1]
-                }}
-                transition={{ duration: 1, repeat: 2 }}
-              >
-                🏝️
-              </motion.div>
-              <h2 className="text-3xl font-bold text-white mb-4">
-                島に到着！
-              </h2>
-              <p className="text-gray-300 mb-2">
-                累計 {ISLAND_DISTANCE}km を突破しました！
-              </p>
-              <div className="inline-block px-4 py-2 bg-cyan-500/20 rounded-full text-cyan-400 font-medium">
-                #{quiz.keywords[0]} の知識を獲得
-              </div>
-              
-              <motion.button
-                onClick={() => setShowIslandClear(false)}
-                className="block mx-auto mt-8 px-8 py-3 bg-white text-gray-900 rounded-xl font-bold"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                続ける
-              </motion.button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <div className="max-w-md mx-auto pt-8">
         {/* ヘッダー */}
         <motion.div
@@ -348,17 +270,6 @@ export const ResultScreen = ({
             </div>
           </div>
 
-          {/* 距離 */}
-          <div className="flex items-center justify-between py-3 border-b border-gray-700">
-            <div className="flex items-center gap-3">
-              <MapPin className="w-6 h-6 text-cyan-400" />
-              <span className="text-gray-300">移動距離</span>
-            </div>
-            <span className="text-xl font-bold text-cyan-400">
-              +{result.earnedDistance.toFixed(1)} km
-            </span>
-          </div>
-
           {/* Speed Rushタイム（speed rushモードの場合のみ表示） */}
           {mode === 'speed_rush' && speedRushTotalTime !== undefined && (
             <>
@@ -415,19 +326,13 @@ export const ResultScreen = ({
               <span>基本報酬</span>
               <span>3 コイン</span>
             </div>
-            {correctCount > 0 && (
-              <div className="flex justify-between">
-                <span>正解ボーナス</span>
-                <span>+{(correctCount * DISTANCE.CORRECT_ANSWER).toFixed(1)} km</span>
-              </div>
-            )}
             {isPerfect && (
               <div className="flex justify-between text-yellow-400">
                 <span className="flex items-center gap-1">
                   <Star className="w-4 h-4" />
                   パーフェクトボーナス
                 </span>
-                <span>+2 コイン + {DISTANCE.PERFECT_BONUS.toFixed(1)} km</span>
+                <span>+2 コイン</span>
               </div>
             )}
           </div>
@@ -516,17 +421,6 @@ export const ResultScreen = ({
           >
             戻る
             <ChevronRight className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={() => {
-              vibrateLight();
-              onViewMap();
-            }}
-            className="w-full py-3 rounded-xl bg-gray-700 text-white font-medium hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
-          >
-            <MapPin className="w-5 h-5" />
-            マップを見る
           </button>
 
           {onOpenWordDex && (

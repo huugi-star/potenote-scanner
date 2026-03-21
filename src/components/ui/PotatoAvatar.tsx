@@ -32,6 +32,8 @@ interface PotatoAvatarProps {
   className?: string;
   pose?     : AvatarPose;
   facing?   : AvatarFacing;
+  showShadow?: boolean;
+  armsInFrontOfHead?: boolean;
 }
 
 // ===== Arm image map =====
@@ -411,6 +413,8 @@ export const PotatoAvatar = ({
   className = '',
   pose      = 'idle',
   facing    = 'right',
+  showShadow = true,
+  armsInFrontOfHead = false,
 }: PotatoAvatarProps) => {
   const showSSREffect = ssrEffect;
 
@@ -439,6 +443,7 @@ export const PotatoAvatar = ({
   const activePose = waving ? 'up' : pose;
   const arms       = ARM_IMAGES[activePose];
   const faceSrc    = isBlinking ? '/avatar/face_close.svg' : '/avatar/face.svg';
+  const shouldArmsBeInFrontOfHead = armsInFrontOfHead;
 
   const flipStyle: React.CSSProperties = facing === 'left' ? { transform: 'scaleX(-1)' } : {};
 
@@ -469,23 +474,25 @@ export const PotatoAvatar = ({
           <EquipmentLayer item={equipped.accessory} size={size} pose={activePose} />
         )}
 
-        {/* Layer 3: 腕（左） */}
-        <img
-          src={arms.left}
-          alt="arm-left"
-          width={size}
-          height={size}
-          className="absolute inset-0 object-contain"
-        />
-
-        {/* Layer 4: 腕（右） */}
-        <img
-          src={arms.right}
-          alt="arm-right"
-          width={size}
-          height={size}
-          className="absolute inset-0 object-contain"
-        />
+        {/* Layer 3-4: 腕（通常は前半レイヤー） */}
+        {!shouldArmsBeInFrontOfHead && (
+          <>
+            <img
+              src={arms.left}
+              alt="arm-left"
+              width={size}
+              height={size}
+              className="absolute inset-0 object-contain"
+            />
+            <img
+              src={arms.right}
+              alt="arm-right"
+              width={size}
+              height={size}
+              className="absolute inset-0 object-contain"
+            />
+          </>
+        )}
 
         {/* Layer 5: 表情（まばたきで切替） */}
         <img
@@ -517,17 +524,39 @@ export const PotatoAvatar = ({
           )}
         </AnimatePresence>
 
+        {/* Layer 6.5: 腕（手上げ時はヘッドより前） */}
+        {shouldArmsBeInFrontOfHead && (
+          <>
+            <img
+              src={arms.left}
+              alt="arm-left"
+              width={size}
+              height={size}
+              className="absolute inset-0 object-contain"
+            />
+            <img
+              src={arms.right}
+              alt="arm-right"
+              width={size}
+              height={size}
+              className="absolute inset-0 object-contain"
+            />
+          </>
+        )}
+
         {/* Layer 7: 感情エフェクト（最前面） */}
         <AnimatePresence>
           <EmotionEffect key={emotion} emotion={emotion} size={size} />
         </AnimatePresence>
       </div>
 
-      {/* (3) 足元の影: アニメーションを削除して完全に静止した div に変更 */}
-      <div
-        className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-black/20"
-        style={{ width: size * 0.5, height: size * 0.06 }}
-      />
+      {/* (3) 足元の影 */}
+      {showShadow && (
+        <div
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-black/20"
+          style={{ width: size * 0.5, height: size * 0.06 }}
+        />
+      )}
     </div>
   );
 };

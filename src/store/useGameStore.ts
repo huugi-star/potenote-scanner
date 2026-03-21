@@ -8,7 +8,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult, QuizQuestionAttempt, WordDexDictionary, WordDexWord } from '@/types';
 import { ALL_ITEMS, getItemById } from '@/data/items';
-import { REWARDS, DISTANCE, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
+import { REWARDS, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { getJstDateString } from '@/lib/dateUtils';
 import { extractWords } from '@/lib/wordExtraction';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
@@ -1483,10 +1483,8 @@ export const useGameStore = create<GameStore>()(
         const shouldDouble = state.isVIP || isAdWatched;
         const earnedCoins = shouldDouble ? baseCoins * 2 : baseCoins;
         
-        // 距離: 正解1問につき +1km、パーフェクト時 +0.003km (3m)
-        const correctBonus = correctCount * DISTANCE.CORRECT_ANSWER;
-        const perfectBonus = isPerfect ? DISTANCE.PERFECT_BONUS : 0;
-        const earnedDistance = correctBonus + perfectBonus;
+        // マップ機能廃止: 冒険での距離報酬は付与しない
+        const earnedDistance = 0;
         
         return {
           quizId: `quiz_${Date.now()}`,
