@@ -35,7 +35,7 @@ import { SuhimochiRoomScreen } from '@/components/screens/SuhimochiRoomScreen';
 import { LoginBonusModal } from '@/components/ui/LoginBonusModal';
 // import { ShopModal } from '@/components/ui/ShopModal'; // 一時的に非表示
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
-import { ToastProvider, useToast } from '@/components/ui/Toast';
+import { ToastProvider } from '@/components/ui/Toast';
 import { AuthButton } from '@/components/ui/AuthButton';
 import { OnboardingOverlay } from '@/components/ui/OnboardingOverlay';
 import { ShareModal } from '@/components/ui/ShareModal';
@@ -187,14 +187,9 @@ const HomeScreen = ({
   onNavigate: (phase: GamePhase) => void;
   onShowShare: () => void;
 }) => {
-  const { addToast } = useToast();
   const coins = useGameStore(state => state.coins);
   const isVIP = useGameStore(state => state.isVIP);
   const equipment = useGameStore(state => state.equipment);
-  const isLocalHost =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  const canEnterSuhimochiRoom = process.env.NODE_ENV !== 'production' || isLocalHost;
   // const [showShop, setShowShop] = useState(false); // 一時的に非表示
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
@@ -295,14 +290,10 @@ const HomeScreen = ({
           <motion.button
             onClick={() => {
               vibrateLight();
-              if (!canEnterSuhimochiRoom) {
-                addToast('info', 'すうひもちの部屋は準備中です。しばらくお待ちください。');
-                return;
-              }
               onNavigate('suhimochi_room');
             }}
-            className={`w-full py-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25 ${!canEnterSuhimochiRoom ? 'opacity-70' : ''}`}
-            whileHover={canEnterSuhimochiRoom ? { scale: 1.02 } : undefined}
+            className="w-full py-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25"
+            whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
             <Languages className="w-7 h-7" />
@@ -590,10 +581,6 @@ const AppContent = () => {
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedLectureHistory, setSelectedLectureHistory] = useState<LectureHistory | null>(null);
 
-  const isLocalHost =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
   // Store
   const isVIP = useGameStore(state => state.isVIP);
   const setUserId = useGameStore(state => state.setUserId);
@@ -671,13 +658,6 @@ const AppContent = () => {
 
     return;
   }, [setUserId]);
-
-  // 本番ではすうひもちの部屋へ入れない（開発中）
-  useEffect(() => {
-    if (phase === 'suhimochi_room' && process.env.NODE_ENV === 'production' && !isLocalHost) {
-      setPhase('home');
-    }
-  }, [phase, isLocalHost]);
 
   // オンボーディング終了
   const handleDismissOnboarding = useCallback(() => {
@@ -821,7 +801,7 @@ const AppContent = () => {
           </motion.div>
         )}
 
-        {phase === 'suhimochi_room' && (process.env.NODE_ENV !== 'production' || isLocalHost) && (
+        {phase === 'suhimochi_room' && (
           <motion.div
             key="suhimochi_room"
             initial={{ opacity: 0, x: 20 }}
