@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, BookMarked, Star, Plus, MoreHorizontal, BookOpen, FlaskConical, Home, Globe, Gamepad2, HelpCircle, LockKeyhole, BookText } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
@@ -78,6 +78,7 @@ export const QuizWordDexScreen = ({ onBack }: QuizWordDexScreenProps) => {
   const [newDictionaryName, setNewDictionaryName] = useState('');
   const [newDictionaryIcon, setNewDictionaryIcon] = useState('book');
   const [newDictionaryTheme, setNewDictionaryTheme] = useState<ExtendedThemeKey>('forest');
+  const [initialDictionaryApplied, setInitialDictionaryApplied] = useState(false);
 
   const currentDictionary = useMemo(
     () => dictionaries.find((d) => d.id === selectedDictionaryId) ?? null,
@@ -115,6 +116,23 @@ export const QuizWordDexScreen = ({ onBack }: QuizWordDexScreenProps) => {
     () => withDisplayNo.find((w) => w.id === selectedWordId) ?? null,
     [withDisplayNo, selectedWordId]
   );
+
+  useEffect(() => {
+    if (initialDictionaryApplied) return;
+    if (typeof window === 'undefined') return;
+    const initialId = localStorage.getItem('worddex_initial_dictionary_id');
+    if (!initialId) {
+      setInitialDictionaryApplied(true);
+      return;
+    }
+    if (dictionaries.some((d) => d.id === initialId)) {
+      setSelectedDictionaryId(initialId);
+      setSelectedVol(null);
+      setSelectedPage(1);
+    }
+    localStorage.removeItem('worddex_initial_dictionary_id');
+    setInitialDictionaryApplied(true);
+  }, [dictionaries, initialDictionaryApplied]);
 
   const goBack = () => {
     vibrateLight();

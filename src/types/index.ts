@@ -55,6 +55,8 @@ export interface WordDexWord {
   id: string;
   name: string;
   description: string;
+  relatedFacts?: string[];
+  relations?: WordDexRelation[];
   dictionaryId: string;
   batchId: string;
   correctCount: number;
@@ -63,6 +65,14 @@ export interface WordDexWord {
   consecutiveCorrect: number;
   firstEncounterDate: string;
   lastAttemptDate: string;
+}
+
+/**
+ * ことば図鑑: 関連語リンク
+ */
+export interface WordDexRelation {
+  target: string;
+  relation: string;
 }
 
 /**

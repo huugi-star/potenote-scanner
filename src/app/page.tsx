@@ -191,7 +191,10 @@ const HomeScreen = ({
   const coins = useGameStore(state => state.coins);
   const isVIP = useGameStore(state => state.isVIP);
   const equipment = useGameStore(state => state.equipment);
-  const isSuhimochiRoomDevOnly = process.env.NODE_ENV !== 'production';
+  const isLocalHost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const canEnterSuhimochiRoom = process.env.NODE_ENV !== 'production' || isLocalHost;
   // const [showShop, setShowShop] = useState(false); // 一時的に非表示
   // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
@@ -292,18 +295,18 @@ const HomeScreen = ({
           <motion.button
             onClick={() => {
               vibrateLight();
-              if (!isSuhimochiRoomDevOnly) {
+              if (!canEnterSuhimochiRoom) {
                 addToast('info', 'すうひもちの部屋は準備中です。しばらくお待ちください。');
                 return;
               }
               onNavigate('suhimochi_room');
             }}
-            className={`w-full py-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25 ${!isSuhimochiRoomDevOnly ? 'opacity-70' : ''}`}
-            whileHover={isSuhimochiRoomDevOnly ? { scale: 1.02 } : undefined}
+            className={`w-full py-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25 ${!canEnterSuhimochiRoom ? 'opacity-70' : ''}`}
+            whileHover={canEnterSuhimochiRoom ? { scale: 1.02 } : undefined}
             whileTap={{ scale: 0.98 }}
           >
             <Languages className="w-7 h-7" />
-            すうひもちと会話する（開発中）
+            すうひもちと会話する
           </motion.button>
 
           <motion.button
@@ -579,12 +582,17 @@ const ModeSelectScreen = ({
 const AppContent = () => {
   // State
   const [phase, setPhase] = useState<GamePhase>('home');
+  const [wordDexBackPhase, setWordDexBackPhase] = useState<GamePhase>('scanning');
   const [quizSession, setQuizSession] = useState<QuizSession | null>(null);
   const [showLoginBonus, setShowLoginBonus] = useState(false);
   const [loginBonusData, setLoginBonusData] = useState({ coins: 0, days: 1 });
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedLectureHistory, setSelectedLectureHistory] = useState<LectureHistory | null>(null);
+
+  const isLocalHost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
   // Store
   const isVIP = useGameStore(state => state.isVIP);
@@ -666,10 +674,10 @@ const AppContent = () => {
 
   // 本番ではすうひもちの部屋へ入れない（開発中）
   useEffect(() => {
-    if (phase === 'suhimochi_room' && process.env.NODE_ENV === 'production') {
+    if (phase === 'suhimochi_room' && process.env.NODE_ENV === 'production' && !isLocalHost) {
       setPhase('home');
     }
-  }, [phase]);
+  }, [phase, isLocalHost]);
 
   // オンボーディング終了
   const handleDismissOnboarding = useCallback(() => {
@@ -737,6 +745,11 @@ const AppContent = () => {
   // ナビゲーション
   const handleNavigate = useCallback((newPhase: GamePhase) => {
     setPhase(newPhase);
+  }, []);
+
+  const handleOpenWordDex = useCallback((backPhase: GamePhase) => {
+    setWordDexBackPhase(backPhase);
+    setPhase('worddex');
   }, []);
 
   // ホームに戻る
@@ -808,7 +821,7 @@ const AppContent = () => {
           </motion.div>
         )}
 
-        {phase === 'suhimochi_room' && process.env.NODE_ENV !== 'production' && (
+        {phase === 'suhimochi_room' && (process.env.NODE_ENV !== 'production' || isLocalHost) && (
           <motion.div
             key="suhimochi_room"
             initial={{ opacity: 0, x: 20 }}
@@ -830,7 +843,7 @@ const AppContent = () => {
               onQuizReady={handleQuizReady}
               onTranslationReady={handleTranslationReady}
               onOpenFreeQuest={() => handleNavigate('freequest')}
-              onOpenWordDex={() => handleNavigate('worddex')}
+              onOpenWordDex={() => handleOpenWordDex('scanning')}
               onBack={handleBackToHome}
             />
           </motion.div>
@@ -885,7 +898,7 @@ const AppContent = () => {
               totalQuestions={quizSession.quiz.questions.length}
               onContinue={handleBackToHome}
               onContinueFreeQuest={quizSession.isFreeQuest ? () => setPhase('freequest') : undefined}
-              onOpenWordDex={() => setPhase('worddex')}
+              onOpenWordDex={() => handleOpenWordDex('scanning')}
               isFreeQuest={quizSession.isFreeQuest}
               batchId={quizSession.batchId}
               attempts={quizSession.attempts}
@@ -904,7 +917,7 @@ const AppContent = () => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            <QuizWordDexScreen onBack={() => setPhase('scanning')} />
+            <QuizWordDexScreen onBack={() => setPhase(wordDexBackPhase)} />
           </motion.div>
         )}
 

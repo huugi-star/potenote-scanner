@@ -6,7 +6,14 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult, QuizQuestionAttempt, WordDexDictionary, WordDexWord } from '@/types';
+import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult, QuizQuestionAttempt, WordDexDictionary, WordDexRelation, WordDexWord } from '@/types';
+import type {
+  AnataZukanEntry,
+  AnataZukanExtractedEntry,
+  SuhimochiKeyword,
+  SuhimochiTimelinePost,
+} from '@/lib/suhimochiConversationTypes';
+import type { GeminiMessage } from '@/lib/suhimochiConversationEngine'; 
 import { ALL_ITEMS, getItemById } from '@/data/items';
 import { REWARDS, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { getJstDateString } from '@/lib/dateUtils';
@@ -54,8 +61,64 @@ const DEFAULT_WORD_DEX_DICTIONARIES: WordDexDictionary[] = [
 
 const normalizeWordName = (value: string): string => value.trim().replace(/\s+/g, ' ');
 
+const normalizeSentence = (value: string): string => value.trim().replace(/\s+/g, ' ');
+
+const normalizeWordDexRelations = (relations: WordDexRelation[]): WordDexRelation[] => {
+  const seen = new Set<string>();
+  const out: WordDexRelation[] = [];
+  for (const r of relations) {
+    const target = normalizeWordName(String(r.target ?? ''));
+    const relation = normalizeSentence(String(r.relation ?? ''));
+    if (!target || !relation) continue;
+    const key = `${target.toLowerCase()}::${relation.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ target, relation });
+  }
+  return out;
+};
+
+const buildWordDexContextFromQuestion = (
+  term: string,
+  question: QuizRaw['questions'][number]
+): { description: string; relatedFacts: string[]; relations: WordDexRelation[] } => {
+  const qText = normalizeSentence(question.q || '');
+  const explanation = normalizeSentence(question.explanation || '');
+  const description = explanation || qText || `${term}に関する語`;
+
+  const relatedFacts = Array.from(
+    new Set([qText, explanation].filter((v) => !!v && v.length >= 4))
+  ).slice(0, 3);
+
+  const otherOptions = Array.from(
+    new Set(
+      (question.options || [])
+        .map((o) => normalizeWordName(String(o || '')))
+        .filter((o) => o && o !== term)
+    )
+  );
+
+  const relationLabel = /誰|だれ|人物|キャラ|登場人物/.test(qText)
+    ? '関連する人物'
+    : /術式|能力|技|魔法/.test(qText)
+      ? '関連する術式・能力'
+      : '関連語';
+
+  const relations = normalizeWordDexRelations(
+    otherOptions.slice(0, 3).map((target) => ({
+      target,
+      relation: relationLabel,
+    }))
+  );
+
+  return { description, relatedFacts, relations };
+};
+
 const mergeDefaultDictionaries = (dictionaries?: WordDexDictionary[]): WordDexDictionary[] => {
-  const current = Array.isArray(dictionaries) ? dictionaries : [];
+  // あなた図鑑は独立管理へ移行したため、ことば図鑑一覧から除外する
+  const current = Array.isArray(dictionaries)
+    ? dictionaries.filter((d) => d.id !== 'dex_anata')
+    : [];
   const byId = new Map(current.map((d) => [d.id, d] as const));
   const merged = [...current];
   for (const def of DEFAULT_WORD_DEX_DICTIONARIES) {
@@ -160,6 +223,30 @@ interface GameState extends UserState {
   
   // Speed Rushモードのベストタイム（クイズIDをキーとして保存）
   speedRushBestTimes: Record<string, number>; // { quizId: bestTimeInSeconds }
+
+  // すうひもち SNS タイムライン MVP
+  suhimochiInterests: string[];
+  suhimochiKeywords: SuhimochiKeyword[];
+  suhimochiTimeline: SuhimochiTimelinePost[];
+
+  // すうひもち 親密度（永続化）
+  suhimochiIntimacy: {
+    points: number;
+    level: 1 | 2 | 3 | 4 | 5;
+    totalMessages: number;
+  };
+
+  // すうひもち 会話履歴（永続化・直近20ターン）
+  suhimochiGeminiHistory: GeminiMessage[];
+
+  // すうひもち 最後のメッセージ（開口メッセージ生成用）
+  suhimochiLastMessage: string;
+
+  // すうひもち 最終訪問日時
+  suhimochiLastVisitedAt: number;
+
+  // あなた図鑑（独立）
+  anataZukanEntries: AnataZukanEntry[];
 }
 
 interface GameActions {
@@ -217,6 +304,10 @@ interface GameActions {
   renameWordDexDictionary: (dictionaryId: string, nextName: string) => void;
   deleteWordDexDictionary: (dictionaryId: string) => void;
   registerQuizBatchToWordDex: (quiz: QuizRaw, batchId: string, dictionaryId?: string) => void;
+  upsertWordDexWordContext: (
+    wordId: string,
+    patch: Partial<Pick<WordDexWord, 'description' | 'relatedFacts' | 'relations'>>
+  ) => void;
   applyQuizAttemptsToWordDex: (batchId: string, attempts: QuizQuestionAttempt[]) => void;
   moveWordDexBatch: (batchId: string, toDictionaryId: string) => void;
 
@@ -262,6 +353,21 @@ interface GameActions {
   checkAndUnlockIsland: () => Island | null;
   
   setHasLaunched: () => void;
+
+  // すうひもち SNS タイムライン MVP
+  setSuhimochiInterests: (interests: string[]) => void;
+  addSuhimochiKeywords: (words: string[], source?: 'user' | 'system') => void;
+  decaySuhimochiKeywords: () => void;
+  addSuhimochiTimelinePost: (post: SuhimochiTimelinePost) => void;
+
+  updateSuhimochiIntimacy: (gain: number) => { newLevel: number; leveledUp: boolean };
+  appendSuhimochiGeminiHistory: (userText: string, reply: string) => void;
+  setSuhimochiOpeningHistory: (openingText: string) => void;
+  clearSuhimochiGeminiHistory: () => void;
+  updateSuhimochiLastVisit: (message: string) => void;
+  registerAnataZukanWords: (entries: AnataZukanExtractedEntry[]) => void;
+  updateAnataZukanEntry: (id: string, patch: Partial<Pick<AnataZukanEntry, 'name' | 'relation' | 'category'>>) => void;
+  deleteAnataZukanEntry: (id: string) => void;
   
   reset: () => void;
   resetPreserveGuestUsage: () => void;
@@ -352,6 +458,16 @@ const initialState: GameState = {
   lastScanQuizId: null,
   
   speedRushBestTimes: {},
+
+  suhimochiInterests: [],
+  suhimochiKeywords: [],
+  suhimochiTimeline: [],
+
+  suhimochiIntimacy: { points: 0, level: 1, totalMessages: 0 },
+  suhimochiGeminiHistory: [],
+  suhimochiLastMessage: '',
+  suhimochiLastVisitedAt: 0,
+  anataZukanEntries: [],
 };
 
 // ===== Store Implementation =====
@@ -1322,21 +1438,33 @@ export const useGameStore = create<GameStore>()(
         quiz.questions.forEach((q, idx) => {
           const term = normalizeWordName(q.options[q.a] || q.q);
           if (!term) return;
+          const generated = buildWordDexContextFromQuestion(term, q);
 
           const wordId = `${batchId}_${idx}`;
           const existingIndex = currentWords.findIndex((w) => w.id === wordId);
           if (existingIndex >= 0) {
+            const prev = currentWords[existingIndex];
             currentWords[existingIndex] = {
-              ...currentWords[existingIndex],
+              ...prev,
               name: term,
-              description: currentWords[existingIndex].description || q.q,
-              dictionaryId: currentWords[existingIndex].dictionaryId || targetDictionaryId,
+              // 既存説明がなければ、問題文/解説由来の説明を補完
+              description: prev.description || generated.description,
+              // 既存がなければ関連情報を自動補完
+              relatedFacts:
+                prev.relatedFacts && prev.relatedFacts.length > 0
+                  ? prev.relatedFacts
+                  : generated.relatedFacts,
+              relations:
+                prev.relations && prev.relations.length > 0 ? prev.relations : generated.relations,
+              dictionaryId: prev.dictionaryId || targetDictionaryId,
             };
           } else {
             currentWords.push({
               id: wordId,
               name: term,
-              description: q.q || '',
+              description: generated.description,
+              relatedFacts: generated.relatedFacts,
+              relations: generated.relations,
               dictionaryId: targetDictionaryId,
               batchId,
               correctCount: 0,
@@ -1358,6 +1486,28 @@ export const useGameStore = create<GameStore>()(
           wordDexDictionaries: dictionaries,
           wordDexWords: currentWords,
           wordDexOrder: order,
+        });
+      },
+
+      upsertWordDexWordContext: (wordId, patch) => {
+        const state = get();
+        const description = normalizeSentence(String(patch.description ?? ''));
+        const relatedFacts = Array.from(
+          new Set((patch.relatedFacts ?? []).map((f) => normalizeSentence(String(f ?? ''))).filter(Boolean))
+        ).slice(0, 8);
+        const relations = normalizeWordDexRelations(patch.relations ?? []).slice(0, 8);
+
+        set({
+          wordDexWords: state.wordDexWords.map((word) =>
+            word.id !== wordId
+              ? word
+              : {
+                  ...word,
+                  description: description || word.description,
+                  relatedFacts: relatedFacts.length > 0 ? relatedFacts : word.relatedFacts,
+                  relations: relations.length > 0 ? relations : word.relations,
+                }
+          ),
         });
       },
 
@@ -2060,7 +2210,189 @@ export const useGameStore = create<GameStore>()(
       setHasLaunched: () => {
         set({ hasLaunched: true });
       },
-      
+
+      // ===== すうひもち SNS タイムライン MVP =====
+
+      setSuhimochiInterests: (interests) => {
+        set({ suhimochiInterests: interests });
+      },
+
+      addSuhimochiKeywords: (words, source = 'user') => {
+        const now = Date.now();
+        const list = get().suhimochiKeywords ?? [];
+        const kwMap = new Map(list.map((k) => [k.word, k]));
+        for (const word of words) {
+          if (!word || word.length < 2) continue;
+          const existing = kwMap.get(word);
+          if (existing) {
+            kwMap.set(word, { ...existing, weight: Math.min(100, existing.weight + 10), lastUsed: now });
+          } else {
+            kwMap.set(word, { word, weight: 30, lastUsed: now, source });
+          }
+        }
+        set({ suhimochiKeywords: Array.from(kwMap.values()) });
+      },
+
+      decaySuhimochiKeywords: () => {
+        const DECAY_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // 7日
+        const now = Date.now();
+        const updated = (get().suhimochiKeywords ?? [])
+          .map((k) =>
+            now - k.lastUsed >= DECAY_THRESHOLD_MS && k.weight > 0
+              ? { ...k, weight: Math.max(0, k.weight - 5) }
+              : k
+          )
+          .filter((k) => k.weight > 0);
+        set({ suhimochiKeywords: updated });
+      },
+
+      addSuhimochiTimelinePost: (post) => {
+        set((state) => ({
+          suhimochiTimeline: [post, ...(state.suhimochiTimeline ?? [])].slice(0, 50),
+        }));
+      },
+
+      updateSuhimochiIntimacy: (gain) => {
+        const state = get();
+        const prev = state.suhimochiIntimacy ?? {
+          points: 0,
+          level: 1 as const,
+          totalMessages: 0,
+        };
+        const newPoints = Math.min(100, prev.points + gain);
+        const calcLevel = (pts: number): 1 | 2 | 3 | 4 | 5 => {
+          if (pts >= 85) return 5;
+          if (pts >= 65) return 4;
+          if (pts >= 40) return 3;
+          if (pts >= 20) return 2;
+          return 1;
+        };
+        const newLevel = calcLevel(newPoints);
+        const leveledUp = newLevel > prev.level;
+        set({
+          suhimochiIntimacy: {
+            points: newPoints,
+            level: newLevel,
+            totalMessages: prev.totalMessages + 1,
+          },
+        });
+        return { newLevel, leveledUp };
+      },
+
+      appendSuhimochiGeminiHistory: (userText, reply) => {
+        const MAX_TURNS = 20; // 直近20往復を保持
+        const state = get();
+        const next: GeminiMessage[] = [
+          ...state.suhimochiGeminiHistory,
+          { role: 'user', parts: [{ text: userText }] },
+          { role: 'model', parts: [{ text: reply }] },
+        ];
+        // 上限を超えたら古いものから削除（2件ずつ = 1往復単位で削除）
+        const trimmed =
+          next.length > MAX_TURNS * 2 ? next.slice(next.length - MAX_TURNS * 2) : next;
+        set({ suhimochiGeminiHistory: trimmed });
+      },
+
+      setSuhimochiOpeningHistory: (_openingText) => {
+        // 意図的に何もしない（空実装）
+        // 開口メッセージを履歴に追加すると訪問ごとにmodelメッセージが積み重なるため
+      },
+
+      clearSuhimochiGeminiHistory: () => {
+        set({ suhimochiGeminiHistory: [] });
+      },
+
+      updateSuhimochiLastVisit: (message) => {
+        set({
+          suhimochiLastMessage: message,
+          suhimochiLastVisitedAt: Date.now(),
+        });
+      },
+
+      registerAnataZukanWords: (entries) => {
+        const state = get();
+        const now = new Date().toISOString();
+        const current = Array.isArray(state.anataZukanEntries) ? state.anataZukanEntries : [];
+        const byKey = new Map<string, AnataZukanEntry>(
+          current.map((e) => [e.normalizedName, e] as const),
+        );
+
+        const normalizeName = (v: string): string =>
+          v
+            .normalize('NFKC')
+            .toLowerCase()
+            .replace(/\s+/g, '_')
+            .replace(/[^\p{L}\p{N}_-]/gu, '')
+            .slice(0, 40);
+
+        for (const raw of entries ?? []) {
+          const name = String(raw.name ?? '').trim();
+          if (!name || name.length < 2) continue;
+          if (raw.confidence < 0.7) continue;
+
+          const normalizedName = normalizeName(name);
+          if (!normalizedName) continue;
+          const key = normalizedName;
+          const prev = byKey.get(key);
+
+          if (prev) {
+            byKey.set(key, {
+              ...prev,
+              relation: raw.confidence >= prev.confidence ? raw.relation : prev.relation,
+              category: raw.confidence >= prev.confidence ? raw.category : prev.category,
+              confidence: Math.max(prev.confidence, raw.confidence),
+              sourceText: raw.sourceText || prev.sourceText,
+              mentionCount: prev.mentionCount + 1,
+              updatedAt: now,
+            });
+          } else {
+            byKey.set(key, {
+              id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              name,
+              normalizedName,
+              relation: raw.relation,
+              category: raw.category,
+              confidence: raw.confidence,
+              sourceText: raw.sourceText,
+              mentionCount: 1,
+              createdAt: now,
+              updatedAt: now,
+            });
+          }
+        }
+
+        set({ anataZukanEntries: Array.from(byKey.values()) });
+      },
+
+      updateAnataZukanEntry: (id, patch) => {
+        set((state) => ({
+          anataZukanEntries: state.anataZukanEntries.map((e) => {
+            if (e.id !== id) return e;
+            const nextName = patch.name !== undefined ? String(patch.name).trim() : e.name;
+            const nextNormalized = nextName
+              .normalize('NFKC')
+              .toLowerCase()
+              .replace(/\s+/g, '_')
+              .replace(/[^\p{L}\p{N}_-]/gu, '')
+              .slice(0, 40) || e.normalizedName;
+            return {
+              ...e,
+              name: nextName || e.name,
+              normalizedName: nextNormalized,
+              relation: patch.relation ?? e.relation,
+              category: patch.category ?? e.category,
+              updatedAt: new Date().toISOString(),
+            };
+          }),
+        }));
+      },
+
+      deleteAnataZukanEntry: (id) => {
+        set((state) => ({
+          anataZukanEntries: state.anataZukanEntries.filter((e) => e.id !== id),
+        }));
+      },
+
       // ===== Utility =====
       
       reset: () => {
@@ -2121,6 +2453,37 @@ export const useGameStore = create<GameStore>()(
           state.inventory = DEV_INVENTORY;
           useGameStore.setState({ inventory: DEV_INVENTORY });
         }
+        // すうひもち: 旧永続データにフィールドが無いと append/update 時に例外になり、会話UIが誤ってエラー表示する
+        if (state) {
+          const patch: Partial<GameState> = {};
+          if (!state.suhimochiIntimacy || typeof state.suhimochiIntimacy.points !== 'number') {
+            patch.suhimochiIntimacy = { points: 0, level: 1, totalMessages: 0 };
+          }
+          if (!Array.isArray(state.suhimochiGeminiHistory)) {
+            patch.suhimochiGeminiHistory = [];
+          }
+          if (typeof state.suhimochiLastMessage !== 'string') {
+            patch.suhimochiLastMessage = '';
+          }
+          if (typeof state.suhimochiLastVisitedAt !== 'number') {
+            patch.suhimochiLastVisitedAt = 0;
+          }
+          if (!Array.isArray(state.suhimochiInterests)) {
+            patch.suhimochiInterests = [];
+          }
+          if (!Array.isArray(state.suhimochiKeywords)) {
+            patch.suhimochiKeywords = [];
+          }
+          if (!Array.isArray(state.suhimochiTimeline)) {
+            patch.suhimochiTimeline = [];
+          }
+          if (!Array.isArray(state.anataZukanEntries)) {
+            patch.anataZukanEntries = [];
+          }
+          if (Object.keys(patch).length > 0) {
+            useGameStore.setState(patch);
+          }
+        }
       },
       partialize: (state) => ({
         coins: state.coins,
@@ -2163,6 +2526,15 @@ export const useGameStore = create<GameStore>()(
         scanOcrText: state.scanOcrText,
         scanStructuredOCR: state.scanStructuredOCR,
         lastScanQuizId: state.lastScanQuizId,
+
+        suhimochiIntimacy: state.suhimochiIntimacy,
+        suhimochiGeminiHistory: state.suhimochiGeminiHistory,
+        suhimochiLastMessage: state.suhimochiLastMessage,
+        suhimochiLastVisitedAt: state.suhimochiLastVisitedAt,
+        suhimochiInterests: state.suhimochiInterests,
+        suhimochiKeywords: state.suhimochiKeywords,
+        suhimochiTimeline: state.suhimochiTimeline,
+        anataZukanEntries: state.anataZukanEntries,
       }),
     }
   )

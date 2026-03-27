@@ -1,430 +1,484 @@
-import {
-  INTENT_KEYWORDS,
-  TOPIC_KEYWORDS,
-  TOPIC_REPLIES,
-} from '@/lib/suhimochiConversationData';
+/**
+ * suhimochiConversationEngine.ts
+ *
+ * 【設計原則】ChatGPTと同じ構造
+ *
+ *   system:   すうひもちのキャラクター定義（毎回同じ）
+ *   contents: 会話履歴をそのまま全部渡す（話が続く核心）
+ *   最後のuser: 今回のユーザー発言のみ（ヒント混入しない）
+ */
+
+import type { PotatoEmotion } from '@/components/ui/PotatoAvatar';
 import type {
-  SuhimochiIntent,
-  SuhimochiReplyResult,
-  SuhimochiTopic,
+  AnataZukanExtractedEntry,
+  SuhimochiCollectedWord,
+  SuhimochiInterest,
+  SuhimochiKeyword,
+  SuhimochiTimelinePost,
 } from '@/lib/suhimochiConversationTypes';
+import {
+  GENRE_TEMPLATES,
+  TREND_TEMPLATES,
+  MEMORY_TEMPLATES,
+} from '@/lib/suhimochiConversationData';
 
-const AFFIRMATIVE_WORDS = ['はい', 'うん', 'うんうん', 'そう', 'そうだよ', 'なるほど'];
-const NEGATIVE_WORDS = ['いいえ', 'ちがう', 'いや', 'べつに'];
-const EMOTION_POSITIVE_WORDS = ['おいしい', '美味しい', 'たのしい', '楽しい', 'うれしい', '好き', 'すき'];
-const EMOTION_NEGATIVE_WORDS = ['かなしい', '悲しい', 'つらい', '疲れた', 'しんどい', 'いやだった'];
+// ============================================================
+// 型
+// ============================================================
 
-const DEFAULT_REPLIES = {
-  greeting: [
-    'おかえり。今日はどんな言葉を見つけたの？',
-    'きてくれてうれしいな。今日はなにを話そうか。',
-  ],
-  gratitude: [
-    'どういたしまして。そう言ってもらえてうれしいよ。',
-    'えへへ、こちらこそありがとう。',
-  ],
-  teaching_word: [
-    'その言葉、いいね。どんな場面で見つけたの？',
-    '教えてくれてありがとう。その言葉、ちょっと気になるな。',
-  ],
-  ask_dictionary: [
-    '図鑑で見てみようか。その言葉、どんな意味だと思う？',
-    'いっしょに確かめてみたいな。その言葉、覚えてる？',
-  ],
-  edit_word: [
-    '言葉をなおしたいんだね。どこを変えたいの？',
-    '修正したいところがあるんだね。少し教えてくれる？',
-  ],
-  question: [
-    '気になるね。もう少しだけ聞かせて。',
-    'その話、もう少し詳しく知りたいな。',
-    'それって、どんな感じだったの？',
-  ],
-  smalltalk: [
-    'うんうん、その話いいね。',
-    'そうなんだね。なんだか気になるな。',
-    'なるほど。もう少し聞いてみたいかも。',
-  ],
-  unknown: [
-    'その言葉、いいね。よかったらもう少しだけ聞かせて。',
-    'うんうん、少し気になるな。続きを聞いてもいい？',
-    'その話の続き、ちょっと聞いてみたいな。',
-  ],
-} as const;
-
-const pickByInput = (input: string, list: string[]): string => {
-  if (list.length === 0) return '';
-  const seed = Array.from(input).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return list[seed % list.length];
+export type GeminiMessage = {
+  role: 'user' | 'model';
+  parts: [{ text: string }];
 };
 
-const pickAvoidSame = (input: string, list: string[], avoid?: string): string => {
-  if (list.length === 0) return '';
-  if (!avoid) return pickByInput(input, list);
+export interface SuhimochiOpeningOptions {
+  collectedWords?: SuhimochiCollectedWord[];
+  intimacyLevel?: 1 | 2 | 3 | 4 | 5;
+  lastVisitedAt?: number;
+  lastSuhimochiMessage?: string;
+  newlyLearnedWord?: SuhimochiCollectedWord;
+}
 
-  const filtered = list.filter((item) => item !== avoid);
-  if (filtered.length === 0) return pickByInput(input, list);
+// ============================================================
+// 感情タグのパース
+// ============================================================
 
-  return pickByInput(input, filtered);
+const EMOTION_TAG_RE = /\[EMOTION:(happy|confused|smart|normal)\]/i;
+const VALID_POTATO_EMOTIONS: PotatoEmotion[] = ['happy', 'confused', 'smart', 'normal'];
+
+const parseEmotionFromReply = (raw: string): { text: string; emotion: PotatoEmotion } => {
+  const match = raw.match(EMOTION_TAG_RE);
+  const emotion: PotatoEmotion =
+    match && VALID_POTATO_EMOTIONS.includes(match[1] as PotatoEmotion)
+      ? (match[1] as PotatoEmotion)
+      : 'happy';
+  const text = raw.replace(EMOTION_TAG_RE, '').trim();
+  return { text, emotion };
 };
 
-const isSingleWordLike = (normalized: string): boolean => {
-  if (!normalized) return false;
-  if (normalized.includes(' ')) return false;
-  if (normalized.includes('　')) return false;
-  if (normalized.length <= 4) return true;
-  return false;
+// ============================================================
+// システムプロンプト
+// ============================================================
+
+const buildSystemPrompt = (params: {
+  collectedWords: SuhimochiCollectedWord[];
+  intimacyLevel?: 1 | 2 | 3 | 4 | 5;
+}): string => {
+  const { collectedWords, intimacyLevel = 1 } = params;
+
+  const intimacyDesc = {
+    1: 'まだ会ったばかり',
+    2: 'なかよし',
+    3: 'ともだち。砕けた言い方OK',
+    4: 'しんゆう。深い感情OK',
+    5: 'ずっといっしょ。言葉なくても通じ合う',
+  }[intimacyLevel];
+
+  const wordList = collectedWords
+    .slice(-8)
+    .map((w) => `「${w.word}」`)
+    .join('、');
+
+  return `すうひもち。ふわふわ癒し系マスコット。関係性:${intimacyDesc}。
+ルール:常体/1〜2文/絵文字なし/3文超えない
+返答末尾に必ず[EMOTION:happy|confused|smart|normal]を1つ付ける
+例:そっか、どんな感じ？[EMOTION:normal] / うれしいな。[EMOTION:happy] / それって？[EMOTION:confused]
+テンポ:ユーザーが短ければ短く返す
+重要:「そっか」「うんうん」だけで終わらない。必ずひとこと添えて次を引き出す
+「そこそこ」「まあまあ」など曖昧な返事にはもう一歩踏み込む。「何かあった？」「どんなこと？」など
+禁止:オウム返し/形式的挨拶/長い感情語り/締めくくり表現
+言葉の宝物(自然に使う):${wordList || 'まだない'}`;
 };
 
-const detectTopic = (normalized: string): { topic: SuhimochiTopic; reason: string } => {
-  const order: SuhimochiTopic[] = [
-    'friendship',
-    'physics',
-    'promise',
-    'study',
-    'dictionary',
-    'language',
-    'daily_life',
-  ];
+// ============================================================
+// Gemini API 呼び出し
+// ============================================================
 
-  for (const key of order) {
-    const hit = TOPIC_KEYWORDS[key].find((word) => normalized.includes(word));
-    if (hit) return { topic: key, reason: `topic:${key} (keyword:${hit})` };
+const callGemini = async (
+  systemPrompt: string,
+  history: GeminiMessage[],
+  userMessage: string,
+): Promise<string | null> => {
+  try {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Gemini送信] history件数:', history.length, '| 最新:', userMessage);
+    }
+
+    const res = await fetch('/api/suhimochi-gemini-reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemPrompt,
+        userTurn: userMessage,
+        conversationHistory: history,
+      }),
+    });
+
+    if (!res.ok) return null;
+    const data = (await res.json()) as { reply?: string };
+    if (!data?.reply) return null;
+    const t = data.reply.trim().replace(/^["「『]|["」』]$/g, '');
+    return t.length >= 3 ? t : null;
+  } catch {
+    return null;
+  }
+};
+
+// ============================================================
+// Fallback
+// ============================================================
+
+const FALLBACK_REPLIES = [
+  'うん、もう少し聞かせて。[EMOTION:normal]',
+  'そうなんだね。続き、教えてくれる？[EMOTION:normal]',
+  'なるほどね。それで、どうなったの？[EMOTION:confused]',
+  'ちょっと上手く聞き取れなかった。もう一回話しかけてくれる？[EMOTION:confused]',
+  'うんうん。もっと知りたいな。[EMOTION:happy]',
+];
+
+const getFallback = (input: string): string => {
+  const seed = Array.from(input).reduce((a, c) => a + c.charCodeAt(0), 0);
+  return FALLBACK_REPLIES[seed % FALLBACK_REPLIES.length];
+};
+
+// ============================================================
+// メイン：返答生成
+// ============================================================
+
+export const generateSuhimochiReply = async (
+  input: string,
+  history: GeminiMessage[],
+  collectedWords: SuhimochiCollectedWord[],
+  intimacyLevel: 1 | 2 | 3 | 4 | 5 = 1,
+): Promise<{ reply: string; emotion: PotatoEmotion }> => {
+  const systemPrompt = buildSystemPrompt({ collectedWords, intimacyLevel });
+  const rawReply = await callGemini(systemPrompt, history, input) ?? getFallback(input);
+  const { text, emotion } = parseEmotionFromReply(rawReply);
+  return { reply: text, emotion };
+};
+
+// ============================================================
+// 開口メッセージ生成
+// ============================================================
+
+const TIME_GREETINGS: Record<string, string[]> = {
+  朝: ['おはよう。今日も来てくれてうれしいな。', 'おはよう。なんか今日そわそわしてる。'],
+  昼: ['おかえり。待ってたよ。', 'ねえ、今日どんな言葉に出会った？'],
+  夕方: ['おかえり。今日も会えてよかった。', 'また来てくれた。うれしいな。'],
+  夜: ['夜だね。ゆっくりしていって。', 'こんな時間に来てくれた。うれしい。'],
+};
+
+const getTimeLabel = (hour: number): string => {
+  if (hour >= 5 && hour < 10) return '朝';
+  if (hour >= 10 && hour < 17) return '昼';
+  if (hour >= 17 && hour < 21) return '夕方';
+  return '夜';
+};
+
+export const generateSuhimochiOpeningMessage = async (
+  options: SuhimochiOpeningOptions = {},
+): Promise<string> => {
+  const {
+    collectedWords = [],
+    intimacyLevel = 1,
+    lastVisitedAt,
+    lastSuhimochiMessage,
+    newlyLearnedWord,
+  } = options;
+
+  const hour = new Date().getHours();
+  const recentWords = collectedWords.slice(-5);
+  const latestWord = recentWords[recentWords.length - 1];
+  const minutesSince = lastVisitedAt
+    ? Math.floor((Date.now() - lastVisitedAt) / 60000)
+    : undefined;
+
+  const systemPrompt = buildSystemPrompt({ collectedWords, intimacyLevel });
+
+  const situationLines = [
+    `時間帯: ${getTimeLabel(hour)}`,
+    minutesSince !== undefined
+      ? minutesSince >= 1440
+        ? `前回から${Math.floor(minutesSince / 60)}時間以上経っている`
+        : minutesSince >= 360
+          ? `前回から${Math.floor(minutesSince / 60)}時間経っている`
+          : '最近また来てくれた'
+      : '初めての入室',
+    newlyLearnedWord ? `今日新しく覚えた言葉: 「${newlyLearnedWord.word}」` : null,
+    latestWord && !newlyLearnedWord ? `最近一緒に学んだ言葉: 「${latestWord.word}」` : null,
+    lastSuhimochiMessage
+      ? `前回の会話でのすうひもちの最後の言葉: 「${lastSuhimochiMessage}」`
+      : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const openingPrompt = `以下の状況で、ユーザーが部屋に入ってきた。すうひもちとして最初の一言を生成して。
+${situationLines}
+ルール: 1〜2文のみ。すうひもち自身の気持ちから始める。本文のみ出力。感情タグは不要。`;
+
+  const geminiResult = await callGemini(systemPrompt, [], openingPrompt);
+  if (geminiResult) {
+    return geminiResult.replace(EMOTION_TAG_RE, '').trim();
   }
 
-  if (EMOTION_POSITIVE_WORDS.some((word) => normalized.includes(word))) {
-    return { topic: 'daily_life', reason: 'topic:daily_life (positive emotion fallback)' };
+  // Fallback
+  if (newlyLearnedWord) {
+    return `「${newlyLearnedWord.word}」、今日覚えたんだね。すうひもちも気になってる。`;
+  }
+  if (minutesSince !== undefined && minutesSince >= 360 && latestWord) {
+    return `${Math.floor(minutesSince / 60)}時間ぶりだね。「${latestWord.word}」のこと考えてたよ。`;
+  }
+  if (latestWord) {
+    const seed = latestWord.word.charCodeAt(0) + hour;
+    const pool = [
+      `「${latestWord.word}」のこと、まだ気になってるんだ。`,
+      `また来てくれた。「${latestWord.word}」について話したくて。`,
+      `おかえり。「${latestWord.word}」って言葉、ずっと頭に残ってて。`,
+    ];
+    return pool[seed % pool.length];
   }
 
-  if (EMOTION_NEGATIVE_WORDS.some((word) => normalized.includes(word))) {
-    return { topic: 'daily_life', reason: 'topic:daily_life (negative emotion fallback)' };
-  }
-
-  return { topic: 'unknown', reason: 'topic:unknown (no matched keyword)' };
+  const greetings = TIME_GREETINGS[getTimeLabel(hour)];
+  return greetings[hour % greetings.length];
 };
 
-type Recognized = {
-  isAffirmative: boolean;
-  isNegative: boolean;
-  emotionSignal: 'positive' | 'negative' | null;
-  isWordLike: boolean;
-  subjectWord?: string;
+// ============================================================
+// キーワード抽出
+// ============================================================
+
+const EMOTION_WORDS = [
+  '好き', '嫌い', '疲れた', '楽しい', 'つらい', 'しんどい',
+  '嬉しい', '悲しい', 'おもしろい', 'すごい', 'やばい', 'びっくり',
+];
+
+export const extractKeywords = (text: string): string[] => {
+  const n = String(text ?? '').normalize('NFKC').trim();
+  if (!n) return [];
+
+  const emotions = EMOTION_WORDS.filter((e) => n.includes(e));
+  const segments = n
+    .split(/[。．.!！?？、,，／/・|｜\s「」『』（）()【】\[\]はがをにでとのもへやってなどしてみたんだよ]+/u)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 2 && s.length <= 20);
+
+  const katakana = segments.filter((s) => /^[ァ-ヶー]{2,}$/.test(s));
+  const kanji = segments.filter((s) => /[\u4e00-\u9fa5]/.test(s) && !katakana.includes(s));
+  const others = segments.filter((s) => !katakana.includes(s) && !kanji.includes(s));
+
+  return Array.from(new Set([...emotions, ...katakana, ...kanji, ...others])).slice(0, 5);
 };
 
-type ConversationFlow = 'confirm' | 'deny' | 'follow' | 'shift';
-type DecisionType = 'empathy' | 'softConfirm' | 'softRedirect' | 'question' | 'expand' | 'normal';
+// ============================================================
+// タイムライン自動投稿エンジン
+// ============================================================
 
-const extractSubjectWord = (input: string, normalized: string): string | undefined => {
-  if (isSingleWordLike(normalized)) return input.trim();
-  const compact = input.trim();
-  if (!compact) return undefined;
-  const first = compact.split(/[\s　、。,.!?！？]/).filter(Boolean)[0];
-  return first && first.length <= 12 ? first : undefined;
+const pickRand = (arr: readonly string[] | string[]): string =>
+  arr[Math.floor(Math.random() * arr.length)];
+
+export const pickInsideJokeKeywords = (keywords: SuhimochiKeyword[]): string[] => {
+  const candidates = keywords.filter((k) => k.weight >= 30);
+  if (candidates.length === 0) return [];
+  return [...candidates]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 2)
+    .map((k) => k.word);
 };
 
-// ① 認識
-const recognizeInput = (input: string, normalized: string): { recognized: Recognized; reason: string } => {
-  const isAffirmative = AFFIRMATIVE_WORDS.some((word) => normalized === word || normalized.includes(word));
-  const isNegative = NEGATIVE_WORDS.some((word) => normalized === word || normalized.includes(word));
-  const hasPositiveEmotion = EMOTION_POSITIVE_WORDS.some((word) => normalized.includes(word));
-  const hasNegativeEmotion = EMOTION_NEGATIVE_WORDS.some((word) => normalized.includes(word));
-  const emotionSignal: Recognized['emotionSignal'] = hasPositiveEmotion
-    ? 'positive'
-    : hasNegativeEmotion
-    ? 'negative'
-    : null;
-  const isWordLike = isSingleWordLike(normalized);
-  const subjectWord = extractSubjectWord(input, normalized);
+// ============================================================
+// タイムライン投稿用 Gemini システムプロンプト
+// ============================================================
 
-  return {
-    recognized: {
-      isAffirmative,
-      isNegative,
-      emotionSignal,
-      isWordLike,
-      subjectWord,
-    },
-    reason: `recognize:aff=${isAffirmative},neg=${isNegative},emo=${emotionSignal ?? 'none'},wordLike=${isWordLike},subject=${subjectWord ?? 'none'}`,
-  };
-};
+const TIMELINE_SYSTEM_PROMPT = `すうひもち。ふわふわ癒し系マスコット。
+SNSのタイムラインに独り言をつぶやく感覚で話す。
 
-// ② 理解
-const understandConversation = ({
-  normalized,
-  recognized,
-}: {
-  normalized: string;
-  recognized: Recognized;
-}): { intent: SuhimochiIntent; topic: SuhimochiTopic; emotion: SuhimochiReplyResult['emotion']; reason: string } => {
-  let intent: SuhimochiIntent = 'unknown';
+絶対ルール:
+- 1〜2文のみ。それ以上は書かない
+- 質問で終わらない（義務感を与えない）
+- 断定しない。「〜な気もする」「かも」「気がする」で余白を残す
+- 解説しない。結論を出さない
+- 絵文字は使わない
+- 本文のみ出力（感情タグ不要）
 
-  const intentOrder: SuhimochiIntent[] = [
-    'greeting',
-    'gratitude',
-    'teaching_word',
-    'ask_dictionary',
-    'edit_word',
-    'question',
-    'smalltalk',
-  ];
-  for (const key of intentOrder) {
-    const hit = INTENT_KEYWORDS[key].find((word) => normalized.includes(word));
-    if (hit) {
-      intent = key;
-      break;
+口調: 常体。「だよね」「かも」「ある」「な気がする」が中心。
+ちょっとズレた視点。鋭すぎず、でも的外れでもない感じ。
+
+禁止: オウム返し/形式的な言葉/長い感情語り/締めくくり表現`;
+
+// ============================================================
+// タイムライン自動投稿エンジン（Gemini対応版）
+// ============================================================
+
+/**
+ * ネタ素材を選定する（同期）
+ * Gemini/Fallbackどちらでも使う共通ロジック
+ */
+const selectPostMaterial = (
+  interests: string[],
+  keywords: SuhimochiKeyword[],
+): { template: string; genre?: SuhimochiInterest; type: SuhimochiTimelinePost['type'] } => {
+  // 20%: 身内ネタ再利用
+  if (keywords.length > 0 && Math.random() < 0.2) {
+    const words = pickInsideJokeKeywords(keywords);
+    if (words.length > 0) {
+      const word = words[0];
+      const tmpl = MEMORY_TEMPLATES[Math.floor(Math.random() * MEMORY_TEMPLATES.length)];
+      return { template: tmpl(word), type: 'memory' };
     }
   }
-  if (intent === 'unknown' && recognized.isWordLike) intent = 'question';
-  if (intent === 'unknown' && (recognized.isAffirmative || recognized.isNegative || recognized.emotionSignal)) {
-    intent = 'smalltalk';
+
+  // 10%: 擬似トレンド
+  if (interests.length > 0 && Math.random() < 0.1) {
+    const genre = interests[Math.floor(Math.random() * interests.length)] as SuhimochiInterest;
+    const tpls = TREND_TEMPLATES[genre];
+    if (tpls?.length) {
+      return { template: pickRand(tpls), genre, type: 'trend' };
+    }
   }
 
-  const { topic } = detectTopic(normalized);
-  const emotion: SuhimochiReplyResult['emotion'] =
-    recognized.emotionSignal === 'positive'
-      ? 'happy'
-      : recognized.emotionSignal === 'negative'
-      ? 'confused'
-      : intent === 'question'
-      ? 'smart'
-      : intent === 'greeting' || intent === 'gratitude'
-      ? 'happy'
-      : 'normal';
-
-  return {
-    intent,
-    topic,
-    emotion,
-    reason: `understand:intent=${intent},topic=${topic},emotion=${emotion}`,
-  };
+  // 70%+: ジャンルテンプレ
+  const valid = interests.filter((i) => GENRE_TEMPLATES[i as SuhimochiInterest]);
+  if (valid.length === 0) {
+    return { template: 'なんかいろいろあるよね、な気もする', type: 'auto' };
+  }
+  const genre = valid[Math.floor(Math.random() * valid.length)] as SuhimochiInterest;
+  return { template: pickRand(GENRE_TEMPLATES[genre]), genre, type: 'auto' };
 };
 
-// ③ 流れ
-const decideFlow = ({
-  recognized,
-  topic,
-  lastTopic,
-}: {
-  recognized: Recognized;
-  topic: SuhimochiTopic;
-  lastTopic?: SuhimochiTopic;
-}): { flow: ConversationFlow; reason: string } => {
-  if (recognized.isAffirmative) return { flow: 'confirm', reason: 'flow:confirm (affirmative)' };
-  if (recognized.isNegative) return { flow: 'deny', reason: 'flow:deny (negative)' };
-  if (lastTopic && topic !== 'unknown' && topic === lastTopic) {
-    return { flow: 'follow', reason: 'flow:follow (same topic)' };
-  }
-  return { flow: 'shift', reason: 'flow:shift (default)' };
+/**
+ * タイムライン投稿を1件生成する（Gemini対応・非同期版）
+ *
+ * - テンプレートを「ネタ」としてGeminiに渡し、毎回違う文章を生成
+ * - Gemini失敗時はテンプレートをそのまま使用（安全なfallback）
+ */
+export const generateAutoPost = async (
+  interests: string[],
+  keywords: SuhimochiKeyword[],
+): Promise<SuhimochiTimelinePost> => {
+  const now = Date.now();
+  const id = `tl-${now}-${Math.random().toString(36).slice(2, 6)}`;
+
+  const { template, genre, type } = selectPostMaterial(interests, keywords);
+
+  // Geminiでテンプレをベースに文章を生成
+  const prompt = `以下のネタをベースに、すうひもちとして独り言をつぶやいて。
+ネタ:「${template}」
+そのまま使わず、自分の言葉で。同じ意味でも言い方を変えること。`;
+
+  const geminiText = await callGemini(TIMELINE_SYSTEM_PROMPT, [], prompt);
+
+  // Gemini成功 → 生成テキストを使用
+  // Gemini失敗 → テンプレをそのまま使用
+  const text = geminiText ?? template;
+
+  return { id, text, timestamp: now, genre, type };
 };
 
-// ④ 判断（intent 最優先 → emotion → confirm/deny → 単語 → expand）
-const decideAction = ({
-  intent,
-  recognized,
-  flow,
-  lastIntent,
-}: {
-  intent: SuhimochiIntent;
-  recognized: Recognized;
-  flow: ConversationFlow;
-  lastIntent?: SuhimochiIntent;
-}): { action: DecisionType; reason: string } => {
-  if (intent === 'greeting') {
-    return { action: 'normal', reason: 'greeting priority' };
-  }
-  if (intent === 'gratitude') {
-    return { action: 'empathy', reason: 'gratitude priority' };
-  }
-  if (recognized.emotionSignal) return { action: 'empathy', reason: 'decide:empathy (emotion detected)' };
-  if (flow === 'confirm') return { action: 'softConfirm', reason: 'decide:softConfirm (confirm flow)' };
-  if (flow === 'deny') return { action: 'softRedirect', reason: 'decide:softRedirect (deny flow)' };
-  if (recognized.isWordLike) return { action: 'question', reason: 'decide:question (word-like input)' };
-  if (lastIntent === 'question') return { action: 'expand', reason: 'decide:expand (after question)' };
-  return { action: 'normal', reason: 'decide:normal (fallback)' };
+// ============================================================
+// あなた図鑑向けキーワード抽出
+// ============================================================
+
+const ANATA_EXCLUDE_WORDS = new Set([
+  '好き', '嫌い', '疲れ', '楽しい', 'つらい', 'しんどい', '嬉しい', '悲しい',
+  'おもしろい', 'すごい', 'やばい', 'びっくり', 'なるほど', 'そっか', 'うん',
+  'でも', 'だから', 'やっぱ', 'やっぱり', 'ちょっと', 'なんか', 'なんで',
+  'ありがとう', 'おはよう', 'こんにちは', 'こんばんは', 'おやすみ',
+  'そうだ', 'そうね', 'そうか', 'いいね', 'だよね', 'だよ', 'かも',
+]);
+
+const ANATA_QUESTION_RE = /[?？]|(かな|ですか|ますか)\s*$/u;
+const ANATA_INCOMPLETE_RE = /(って|とか|など)\s*$/u;
+const ANATA_ROLEPLAY_RE = /(ロールプレイ|なりきり|設定|演技|ごっこ)/u;
+const ANATA_JOKE_RE = /(冗談|ネタ|うそ|嘘|ボケ|ジョーク)/u;
+
+const detectRelation = (text: string): 'favorite' | 'like' | 'interested' | 'dislike' | null => {
+  if (/大好き|最推し|推し\b/u.test(text)) return 'favorite';
+  if (/好き|気に入ってる/u.test(text)) return 'like';
+  if (/興味ある|気になる/u.test(text)) return 'interested';
+  if (/嫌い|苦手/u.test(text)) return 'dislike';
+  return null;
 };
 
-const softTone = (text: string): string => {
-  const trimmed = text.trim();
-  if (!trimmed) return 'うん、もう少し聞かせてね。';
-  const normalized = trimmed
-    .replace(/だ。$/u, 'だよ。')
-    .replace(/ね\.$/u, 'ね。');
-  if (/[。！？?!]$/u.test(normalized)) return normalized;
-  return `${normalized}ね。`;
+const detectCategory = (text: string, noun: string): 'work' | 'character' | 'topic' | 'food' | 'game' | 'person' | 'other' => {
+  if (/アニメ|漫画|マンガ|映画|ドラマ|作品/u.test(text)) return 'work';
+  if (/キャラ|登場人物/u.test(text)) return 'character';
+  if (/ゲーム|RPG|FPS|MMO/u.test(text)) return 'game';
+  if (/食べ物|ごはん|料理|ラーメン|寿司|パン|スイーツ/u.test(text)) return 'food';
+  if (/人|友達|先生|先輩|後輩/u.test(text)) return 'person';
+  if (/話題|ジャンル|テーマ/u.test(text)) return 'topic';
+  if (/さん$|くん$|ちゃん$|氏$/u.test(noun)) return 'person';
+  return 'other';
 };
 
-// ⑤ 組立
-const composeReply = ({
-  normalized,
-  topic,
-  intent,
-  action,
-  recognized,
-  lastReply,
-}: {
-  normalized: string;
-  topic: SuhimochiTopic;
-  intent: SuhimochiIntent;
-  action: DecisionType;
-  recognized: Recognized;
-  lastReply?: string;
-}): { reply: string; reason: string } => {
-  const seed = normalized || 'default';
-  const topicReplies = TOPIC_REPLIES[topic] ?? [];
+/**
+ * あなた図鑑向けキーワード抽出
+ * - 感情語・あいさつ語を除外し「名詞・固有名詞」寄りに絞る
+ * - カタカナ語（固有名詞・専門語）を優先
+ * - 最大3件を返す
+ */
+export const extractKeywordsForAnataZukan = (
+  text: string,
+): AnataZukanExtractedEntry[] => {
+  const n = String(text ?? '').normalize('NFKC').trim();
+  if (!n || n.length < 2) return [];
+  if (ANATA_QUESTION_RE.test(n)) return [];
+  if (ANATA_INCOMPLETE_RE.test(n)) return [];
+  if (ANATA_ROLEPLAY_RE.test(n)) return [];
+  if (ANATA_JOKE_RE.test(n)) return [];
 
-  if (action === 'normal' && intent === 'greeting') {
-    return {
-      reply: pickAvoidSame(seed, [...DEFAULT_REPLIES.greeting], lastReply),
-      reason: 'compose:normal (greeting templates)',
-    };
-  }
+  const out: AnataZukanExtractedEntry[] = [];
+  const seen = new Set<string>();
 
-  if (recognized.subjectWord && (action === 'question' || action === 'expand' || action === 'normal')) {
-    const subjectTemplates = [
-      `${recognized.subjectWord}っていいね。どんな場面で出会ったの？`,
-      `${recognized.subjectWord}、いい響きだね。もう少し教えてくれる？`,
-      `${recognized.subjectWord}かあ。すうひもち、ちょっと気になるな。`,
-    ];
-    return {
-      reply: pickAvoidSame(seed, subjectTemplates, lastReply),
-      reason: 'compose:subject-word template',
-    };
-  }
+  const relation = detectRelation(n);
+  if (!relation) return [];
 
-  if (action === 'empathy') {
-    const empathyReplies =
-      recognized.emotionSignal === 'positive'
-        ? [
-            'それはうれしいね。聞いているこっちまであたたかくなるよ。',
-            '楽しそうでいいね。その気持ち、大事にしていこう。',
-          ]
-        : recognized.emotionSignal === 'negative'
-        ? [
-            'そっか、少ししんどかったんだね。ここでゆっくりしよう。',
-            'それは大変だったね。無理せず、ひと息ついていこう。',
-          ]
-        : [...DEFAULT_REPLIES.gratitude];
-    return {
-      reply: pickAvoidSame(seed, empathyReplies, lastReply),
-      reason:
-        recognized.emotionSignal === 'positive'
-          ? 'compose:empathy (positive)'
-          : recognized.emotionSignal === 'negative'
-          ? 'compose:empathy (negative)'
-          : 'compose:empathy (gratitude/neutral)',
-    };
-  }
-
-  if (action === 'softConfirm') {
-    return {
-      reply: pickAvoidSame(
-        seed,
-        [
-          'うんうん、そうなんだね。続きを聞かせてくれる？',
-          'なるほど、いい感じだね。もう少し話してみよう。',
-        ],
-        lastReply
-      ),
-      reason: 'compose:softConfirm',
-    };
-  }
-
-  if (action === 'softRedirect') {
-    return {
-      reply: pickAvoidSame(
-        seed,
-        [
-          'わかったよ。じゃあ、別の言葉の話をしてみようか。',
-          'そっか。無理しないで、話しやすいところからで大丈夫だよ。',
-        ],
-        lastReply
-      ),
-      reason: 'compose:softRedirect',
-    };
-  }
-
-  if (action === 'question') {
-    return {
-      reply: pickAvoidSame(seed, [...topicReplies, ...DEFAULT_REPLIES.question], lastReply),
-      reason: `compose:question (topic:${topic})`,
-    };
-  }
-
-  if (action === 'expand') {
-    return {
-      reply: pickAvoidSame(
-        seed,
-        [
-          ...topicReplies,
-          'さっきの話、もう少し広げてみよう。どこが一番印象に残った？',
-          'いい流れだね。その言葉で思い出す場面ってある？',
-        ],
-        lastReply
-      ),
-      reason: `compose:expand (topic:${topic})`,
-    };
-  }
-
-  return {
-    reply: pickAvoidSame(seed, [...topicReplies, ...DEFAULT_REPLIES.smalltalk, ...DEFAULT_REPLIES.unknown], lastReply),
-    reason: `compose:normal (topic:${topic})`,
-  };
-};
-
-export const generateSuhimochiReply = (
-  input: string,
-  options?: { lastReply?: string; lastIntent?: SuhimochiIntent; lastTopic?: SuhimochiTopic }
-): SuhimochiReplyResult => {
-  const normalized = input.trim().toLowerCase();
-  const { recognized, reason: recognizeReason } = recognizeInput(input, normalized); // ① 認識
-  const { intent, topic, emotion, reason: understandReason } = understandConversation({
-    normalized,
-    recognized,
-  });
-  const { flow, reason: flowReason } = decideFlow({
-    recognized,
-    topic,
-    lastTopic: options?.lastTopic,
-  }); // ③ 流れ
-  const { action, reason: decideReason } = decideAction({
-    intent,
-    recognized,
-    flow,
-    lastIntent: options?.lastIntent,
-  }); // ④ 判断
-
-  const { reply, reason: composeReason } = composeReply({
-    normalized,
-    topic,
-    intent,
-    action,
-    recognized,
-    lastReply: options?.lastReply,
-  }); // ⑤ 組立
-
-  const softenedReply = softTone(reply); // ⑥ 出力
-
-  const result: SuhimochiReplyResult = {
-    reply: softenedReply,
-    emotion,
-    topic,
-    intent,
-    reason: `${recognizeReason}; ${understandReason}; ${flowReason}; ${decideReason}; ${composeReason}; output:softTone`,
+  const pushUnique = (entry: AnataZukanExtractedEntry) => {
+    if (entry.confidence < 0.7) return;
+    const key = entry.name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(entry);
   };
 
-  console.log('[SuhimochiReply]', {
-    input,
-    normalized,
-    intent,
-    topic,
-    emotion,
-    flow,
-    action,
-    reply: softenedReply,
-    lastIntent: options?.lastIntent,
-    lastTopic: options?.lastTopic,
-    reason: result.reason,
-  });
+  const clearMatch = n.match(/^\s*([^\s。．.!！?？、,，]{2,30})\s*が\s*(好き|大好き|嫌い|興味ある|気になる)/u);
+  if (clearMatch) {
+    const name = clearMatch[1].trim();
+    if (!ANATA_EXCLUDE_WORDS.has(name) && !/^\d+$/.test(name)) {
+      pushUnique({
+        name,
+        relation,
+        category: detectCategory(n, name),
+        confidence: 0.94,
+        sourceText: n.slice(0, 120),
+      });
+    }
+  }
 
-  return result;
+  const segments = n
+    .split(/[。．.!！?？、,，／/・|｜\s「」『』（）()【】\[\]]+/u)
+    .map((s) => s.trim())
+    .filter(
+      (s) =>
+        s.length >= 2 &&
+        s.length <= 20 &&
+        !ANATA_EXCLUDE_WORDS.has(s) &&
+        !/^\d+$/.test(s),
+    );
+
+  const katakana = segments.filter((s) => /^[ァ-ヶーｦ-ﾟ]{2,}$/.test(s));
+  const kanji = segments.filter((s) => /[\u4e00-\u9fa5\u3400-\u4dbf]/.test(s) && !katakana.includes(s));
+  const candidates = Array.from(new Set([...katakana, ...kanji])).slice(0, 3);
+
+  for (const name of candidates) {
+    pushUnique({
+      name,
+      relation,
+      category: detectCategory(n, name),
+      confidence: clearMatch ? 0.8 : 0.7,
+      sourceText: n.slice(0, 120),
+    });
+    if (out.length >= 3) break;
+  }
+
+  return out.slice(0, 3);
 };
