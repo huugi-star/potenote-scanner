@@ -63,8 +63,7 @@ export interface SuhimochiTimelinePost {
 // ─── あなた図鑑（独立） ────────────────────────────────────────────────────
 
 export type AnataRelation = 'favorite' | 'like' | 'interested' | 'dislike';
-export type AnataCategory = 'work' | 'character' | 'topic' | 'food' | 'game' | 'person' | 'other';
-
+export type AnataCategory = 'work' | 'character' | 'topic' | 'food' | 'game' | 'person' | 'sport' | 'music' | 'place' | 'animal' | 'other';
 export interface AnataZukanEntry {
   id: string;
   name: string;

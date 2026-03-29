@@ -10,18 +10,29 @@ import { useRoomStore } from '@/store/useRoomStore';
 import {
   generateSuhimochiReply,
   generateSuhimochiOpeningMessage,
+  generateSuhimochiTodayState,
+  generateSuhimochiRequest,
+  isWordRegisteredInAnataZukan,
   generateAutoPost,
   extractKeywords,
   extractKeywordsForAnataZukan,
+  isValidAnataZukanEntryName,
+  SUHIMOCHI_REQUEST_GEMINI_BRIDGE_USER,
+  sanitizeSuhimochiDisplayText,
 } from '@/lib/suhimochiConversationEngine';
 import type { SuhimochiOpeningOptions } from '@/lib/suhimochiConversationEngine';
 import type {
   AnataCategory,
+  AnataRelation,
   AnataZukanEntry,
   ConversationChatMessage,
   SuhimochiCollectedWord,
   SuhimochiInterest,
 } from '@/lib/suhimochiConversationTypes';
+
+const ANATA_RELATIONS: readonly AnataRelation[] = ['favorite', 'like', 'interested', 'dislike'];
+const isAnataRelation = (s: string): s is AnataRelation =>
+  (ANATA_RELATIONS as readonly string[]).includes(s);
 import { getItemById } from '@/data/items';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
 import { useToast } from '@/components/ui/Toast';
@@ -65,10 +76,12 @@ const INTEREST_OPTIONS: Array<{ value: SuhimochiInterest; icon: string }> = [
 ];
 
 const INTIMACY_POINTS = {
-  message: 3,
-  usedLearnedWord: 8,
-  longMessage: 2,
-  positiveEmotion: 3,
+  message: 1,
+  usedLearnedWord: 2,
+  longMessage: 1,
+  positiveEmotion: 1,
+  /** すうひもちの「お願い」に答えたとき */
+  answeredSuhimochiRequest: 3,
 } as const;
 
 // 無効語フィルタ
@@ -84,6 +97,21 @@ const isValidWord = (word: string): boolean => {
   return true;
 };
 
+/** 最近の言葉チップ用（1文字の和語も図鑑に載るため落とさない） */
+const JAPANESE_OR_CJK = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff\u3400-\u4dbf]/;
+
+const isPlausibleDexTagWord = (word: string): boolean => {
+  const w = word.trim();
+  if (!w) return false;
+  const lower = w.toLowerCase();
+  if (INVALID_WORDS.has(lower)) return false;
+  if (/^\d+$/.test(w)) return false;
+  if (JAPANESE_OR_CJK.test(w)) return true;
+  return w.length >= 2;
+};
+
+const normDexTagKey = (s: string): string => String(s ?? '').normalize('NFKC').trim().toLowerCase();
+
 // ============================================================
 // ユーティリティ
 // ============================================================
@@ -94,6 +122,43 @@ const formatTimelineTimestamp = (ts: number): string => {
   if (diff < 3_600_000)  return `${Math.floor(diff / 60_000)}分前`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}時間前`;
   return `${Math.floor(diff / 86_400_000)}日前`;
+};
+
+const BUBBLE_MAX_CHARS_PER_PAGE = 22;
+const BUBBLE_TYPING_INTERVAL_MS = 55;
+const BUBBLE_PAGE_HOLD_MS = 1800;
+
+const splitSuhimochiBubblePages = (text: string, pageMax = BUBBLE_MAX_CHARS_PER_PAGE): string[] => {
+  const src = String(text ?? '').trim();
+  if (!src) return [];
+  const pages: string[] = [];
+  const paragraphs = src.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+
+  const findSplitIndex = (chunk: string): number => {
+    if (chunk.length <= pageMax) return chunk.length;
+    const head = chunk.slice(0, pageMax);
+    const breakables = ['。', '！', '？', '!', '?', '、', '，', ',', ' '];
+    const threshold = Math.floor(pageMax * 0.55);
+    let best = -1;
+    for (const mark of breakables) {
+      const idx = head.lastIndexOf(mark);
+      if (idx >= threshold) best = Math.max(best, idx + 1);
+    }
+    return best > 0 ? best : pageMax;
+  };
+
+  for (const p of paragraphs) {
+    let rest = p;
+    while (rest.length > pageMax) {
+      const cut = findSplitIndex(rest);
+      const page = rest.slice(0, cut).trim();
+      if (page) pages.push(page);
+      rest = rest.slice(cut).trim();
+    }
+    if (rest) pages.push(rest);
+  }
+
+  return pages.length > 0 ? pages : [src];
 };
 
 const calcIntimacyGain = (
@@ -121,6 +186,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const equipment           = useGameStore((s) => s.equipment);
   const wordCollectionScans = useGameStore((s) => s.wordCollectionScans);
   const wordDexWords        = useGameStore((s) => s.wordDexWords);
+  const wordDexOrder        = useGameStore((s) => s.wordDexOrder);
   const placedItems         = useRoomStore((s) => s.placedItems);
   const inventory           = useRoomStore((s) => s.inventory);
   const addFurnitureToRoom      = useRoomStore((s) => s.addFurnitureToRoom);
@@ -131,8 +197,17 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const suhimochiGeminiHistory = useGameStore((s) => s.suhimochiGeminiHistory);
   const suhimochiLastMessage   = useGameStore((s) => s.suhimochiLastMessage);
   const suhimochiLastVisitedAt = useGameStore((s) => s.suhimochiLastVisitedAt);
+  const suhimochiTodayState       = useGameStore((s) => s.suhimochiTodayState);
+  const suhimochiCurrentRequest   = useGameStore((s) => s.suhimochiCurrentRequest);
+  const answerSuhimochiRequest    = useGameStore((s) => s.answerSuhimochiRequest);
   const updateSuhimochiIntimacy      = useGameStore((s) => s.updateSuhimochiIntimacy);
   const appendSuhimochiGeminiHistory = useGameStore((s) => s.appendSuhimochiGeminiHistory);
+  const appendSuhimochiGeminiLetterReplyHistory = useGameStore(
+    (s) => s.appendSuhimochiGeminiLetterReplyHistory,
+  );
+  const appendSuhimochiGeminiRequestPreamble = useGameStore(
+    (s) => s.appendSuhimochiGeminiRequestPreamble,
+  );
   const updateSuhimochiLastVisit     = useGameStore((s) => s.updateSuhimochiLastVisit);
 
   const suhimochiInterests       = useGameStore((s) => s.suhimochiInterests);
@@ -145,12 +220,15 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const updateAnataZukanEntry    = useGameStore((s) => s.updateAnataZukanEntry);
   const deleteAnataZukanEntry    = useGameStore((s) => s.deleteAnataZukanEntry);
   const decaySuhimochiKeywords   = useGameStore((s) => s.decaySuhimochiKeywords);
-  const addSuhimochiTimelinePost = useGameStore((s) => s.addSuhimochiTimelinePost);
+  const addSuhimochiTimelinePost    = useGameStore((s) => s.addSuhimochiTimelinePost);
+  const removeSuhimochiTimelinePost = useGameStore((s) => s.removeSuhimochiTimelinePost);
 
   const scrollRef      = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
   const openingInitRef = useRef(false);
+  /** お願いの前置きを二重で履歴に足さない（連打対策） */
+  const requestPreambleLockRef = useRef<string | null>(null);
 
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [charPosition, setCharPosition] = useState(400);
@@ -169,13 +247,15 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const [intimacyVisible, setIntimacyVisible] = useState(
     suhimochiIntimacy.totalMessages > 0
   );
+  const [bubblePageIndex, setBubblePageIndex] = useState(0);
+  const [bubbleTypedChars, setBubbleTypedChars] = useState(0);
+  /** 「答える」で会話・吹き出しに載せたお願いの id（カード非表示・API二重挿入防止） */
+  const [requestLineInChatId, setRequestLineInChatId] = useState<string | null>(null);
 
   // セッションをまたいだ会話ログ復元（ログ表示用）
   const [talkMessages, setTalkMessages] = useState<ConversationChatMessage[]>(() => {
     const history = suhimochiGeminiHistory;
     if (history.length === 0) return [];
-
-    // 直近6件（3往復）を表示用に変換
     const recentHistory = history.slice(-6);
     return recentHistory.map((msg, i) => ({
       id: `history-${i}`,
@@ -205,7 +285,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
     for (const scan of wordCollectionScans) {
       for (const w of scan.words ?? []) {
         const word = String(w.word ?? '').trim().toLowerCase();
-        if (!isValidWord(word) || seen.has(word)) continue; // ★ 無効語フィルタ
+        if (!isValidWord(word) || seen.has(word)) continue;
         seen.add(word);
         out.push({
           word, source: 'word_collection', level: w.meaning ? 3 : 2,
@@ -230,7 +310,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
     };
     for (const w of sortedDex) {
       const word = String(w.name ?? '').trim().toLowerCase();
-      if (!isValidWord(word) || seen.has(word)) continue; // ★ 無効語フィルタ
+      if (!isValidWord(word) || seen.has(word)) continue;
       seen.add(word);
       out.push({
         word, source: 'word_dex', level: toLevel(w),
@@ -244,7 +324,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
       if (out.length >= MAX) break;
       for (const rel of w.relations ?? []) {
         const target = String(rel.target ?? '').trim().toLowerCase();
-        if (!isValidWord(target) || seen.has(target)) continue; // ★ 無効語フィルタ
+        if (!isValidWord(target) || seen.has(target)) continue;
         seen.add(target);
         out.push({
           word: target, source: 'word_dex_relation', level: 1,
@@ -260,6 +340,63 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
     }
     return out;
   }, [wordCollectionScans, wordDexWords]);
+
+  const recentDexWordsForTags = useMemo(() => {
+    const order = wordDexOrder ?? [];
+    const orderKeySet = new Set(order.map((t) => normDexTagKey(String(t))));
+    const seen = new Set<string>();
+    const labels: string[] = [];
+
+    const push = (raw: string): boolean => {
+      const w = String(raw ?? '').trim();
+      if (!w || !isPlausibleDexTagWord(w)) return false;
+      const k = normDexTagKey(w);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      labels.push(w);
+      return labels.length >= 5;
+    };
+
+    for (const raw of order.slice(-24).reverse()) {
+      if (push(raw)) break;
+    }
+
+    if (labels.length < 5) {
+      const sortedDex = [...wordDexWords].sort((a, b) => {
+        const ad = Date.parse(a.lastAttemptDate || a.firstEncounterDate || '');
+        const bd = Date.parse(b.lastAttemptDate || b.firstEncounterDate || '');
+        return (Number.isNaN(bd) ? 0 : bd) - (Number.isNaN(ad) ? 0 : ad);
+      });
+      for (const x of sortedDex) {
+        if (push(String(x.name ?? ''))) break;
+      }
+    }
+
+    if (labels.length < 5) {
+      const scans = [...wordCollectionScans].sort(
+        (a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''),
+      );
+      for (const scan of scans) {
+        const withMeaning = (scan.words ?? []).filter((w) => String(w.meaning ?? '').trim());
+        const ranked = [...withMeaning].sort((a, b) => {
+          const aIn = orderKeySet.has(normDexTagKey(a.word)) ? 1 : 0;
+          const bIn = orderKeySet.has(normDexTagKey(b.word)) ? 1 : 0;
+          if (aIn !== bIn) return bIn - aIn;
+          const ac = a.hp === 0 ? 1 : 0;
+          const bc = b.hp === 0 ? 1 : 0;
+          if (ac !== bc) return bc - ac;
+          return 0;
+        });
+        for (const w of ranked) {
+          const inOrder = orderKeySet.has(normDexTagKey(w.word));
+          if (!inOrder && w.hp !== 0) continue;
+          if (push(w.word)) return labels;
+        }
+      }
+    }
+
+    return labels.slice(0, 5);
+  }, [wordDexOrder, wordDexWords, wordCollectionScans]);
 
   const equippedDetails = useMemo(() => ({
     head:      equipment.head      ? getItemById(equipment.head)      : undefined,
@@ -282,10 +419,14 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
       lastVisitedAt: suhimochiLastVisitedAt > 0 ? suhimochiLastVisitedAt : undefined,
       lastSuhimochiMessage: suhimochiLastMessage || undefined,
       newlyLearnedWord,
+      // ★ あなた図鑑・会話回数を渡して「記憶を持つ存在」感を演出
+      //   - anataZukanEntries: 最近の好み上位5件（開口メッセージで「〇〇のこと話したかった」に使う）
+      //   - totalMessages: 積み上がり感の表現（5/20/50/100回のマイルストーン）
+      anataZukanEntries: anataZukanEntries.slice(0, 5),
+      totalMessages: suhimochiIntimacy.totalMessages,
     };
 
     generateSuhimochiOpeningMessage(opts).then((text) => {
-      // 過去ログは残しつつ、開口メッセージを末尾に追加
       setTalkMessages((prev) => {
         if (prev.some((m) => m.id === 'init-suhimochi')) return prev;
         return [...prev, { id: 'init-suhimochi', role: 'suhimochi', text }];
@@ -293,11 +434,43 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
     });
 
     decaySuhimochiKeywords();
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const { suhimochiTodayState: todaySnap, setSuhimochiTodayState: setToday } = useGameStore.getState();
+    if (!todaySnap || todaySnap.date !== todayStr) {
+      void (async () => {
+        const { mood, message } = await generateSuhimochiTodayState();
+        setToday({ date: todayStr, mood, message });
+      })();
+    }
+
+    const st0 = useGameStore.getState();
+    const cur = st0.suhimochiCurrentRequest;
+    if (
+      cur &&
+      !cur.answered &&
+      cur.targetWord &&
+      isWordRegisteredInAnataZukan(cur.targetWord, anataZukanEntries)
+    ) {
+      st0.setSuhimochiCurrentRequest(null);
+    }
+    const { suhimochiCurrentRequest: reqSnap, setSuhimochiCurrentRequest: setReq } =
+      useGameStore.getState();
+    if (!reqSnap || reqSnap.answered) {
+      void (async () => {
+        const anataForReq = [...anataZukanEntries].sort(
+          (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
+        );
+        const req = await generateSuhimochiRequest(collectedWordsForTalk, anataForReq);
+        if (req) setReq(req);
+      })();
+    }
+
     if (suhimochiInterests.length > 0) {
       const lastPost = suhimochiTimeline[0];
       if (!lastPost || Date.now() - lastPost.timestamp > 60 * 60 * 1000) {
         void (async () => {
-          const post = await generateAutoPost(suhimochiInterests, suhimochiKeywords);
+          const post = await generateAutoPost(suhimochiInterests, suhimochiKeywords, anataZukanEntries);
           addSuhimochiTimelinePost(post);
         })();
       }
@@ -309,6 +482,11 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   }, [talkMessages, isLogOpen]);
 
   useEffect(() => {
+    setRequestLineInChatId(null);
+    requestPreambleLockRef.current = null;
+  }, [suhimochiCurrentRequest?.id]);
+
+  useEffect(() => {
     if (scrollRef.current) {
       const c = scrollRef.current;
       c.scrollLeft = (c.scrollWidth - c.clientWidth) / 2;
@@ -318,7 +496,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const handleConfirmInterests = useCallback(async () => {
     if (selectedInterests.length < 2) return;
     setSuhimochiInterests(selectedInterests);
-    const post = await generateAutoPost(selectedInterests, suhimochiKeywords);
+    const post = await generateAutoPost(selectedInterests, suhimochiKeywords, anataZukanEntries);
     addSuhimochiTimelinePost(post);
   }, [selectedInterests, suhimochiKeywords, setSuhimochiInterests, addSuhimochiTimelinePost]);
 
@@ -344,28 +522,46 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const handleSendTalk = useCallback(async () => {
     const userText = talkInput.trim();
     if (!userText || isReplying) return;
+    const pendingRequest = useGameStore.getState().suhimochiCurrentRequest;
     vibrateLight();
+    const replyingToLetterId = replyTargetPost?.id ?? null;
+    const replyingToLetterText = replyTargetPost?.text?.trim() || null;
     setTalkInput('');
     setIsReplying(true);
 
     setTalkMessages((prev) => [
       ...prev,
+      ...(replyingToLetterText
+        ? [{ id: `letter-context-${Date.now()}`, role: 'suhimochi' as const, text: replyingToLetterText }]
+        : []),
       { id: `user-${Date.now()}`, role: 'user', text: userText },
     ]);
 
     try {
-      const historyForReply = replyTargetPost
+      const historyForReply = replyingToLetterText
         ? [
             ...suhimochiGeminiHistory,
-            { role: 'model' as const, parts: [{ text: replyTargetPost.text }] as [{ text: string }] },
+            { role: 'model' as const, parts: [{ text: replyingToLetterText }] as [{ text: string }] },
           ]
         : suhimochiGeminiHistory;
 
-      const { reply, emotion } = await generateSuhimochiReply(
+      const activeRequestCtx =
+        pendingRequest && !pendingRequest.answered
+          ? {
+              type: pendingRequest.type,
+              question: pendingRequest.question,
+              targetWord: pendingRequest.targetWord,
+              questionAlreadyInHistory: requestLineInChatId === pendingRequest.id,
+            }
+          : null;
+
+      const { reply, emotion, anataEntry } = await generateSuhimochiReply(
         userText,
         historyForReply,
         collectedWordsForTalk,
         suhimochiIntimacy.level,
+        anataZukanEntries,
+        activeRequestCtx,
       );
 
       setTalkMessages((prev) => [
@@ -376,22 +572,53 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
       setCurrentEmotion(emotion);
       setIntimacyVisible(true);
       setReplyTargetPost(null);
+      if (replyingToLetterId) {
+        removeSuhimochiTimelinePost(replyingToLetterId);
+      }
 
       try {
-        appendSuhimochiGeminiHistory(userText, reply);
+        if (replyingToLetterText) {
+          appendSuhimochiGeminiLetterReplyHistory(replyingToLetterText, userText, reply);
+        } else {
+          appendSuhimochiGeminiHistory(userText, reply);
+        }
         updateSuhimochiLastVisit(reply);
 
         const kws = extractKeywords(userText);
         if (kws.length > 0) addSuhimochiKeywords(kws, 'user');
 
-        // あなた図鑑への自動登録（サイレント）
-        const anataKws = extractKeywordsForAnataZukan(userText);
+        if (
+          anataEntry &&
+          isAnataRelation(anataEntry.relation) &&
+          isValidAnataZukanEntryName(anataEntry.name)
+        ) {
+          const cleanName = anataEntry.name.trim();
+          if (cleanName.length <= 20 && !(cleanName.includes(' ') && cleanName.length > 12)) {
+            registerAnataZukanWords([{
+              name: cleanName,
+              relation: anataEntry.relation,
+              category: 'other',
+              confidence: 0.85,
+              sourceText: userText,
+            }]);
+          }
+        }
+        const anataKws = extractKeywordsForAnataZukan(userText).filter((e) =>
+          isValidAnataZukanEntryName(e.name),
+        );
         if (anataKws.length > 0) registerAnataZukanWords(anataKws);
 
-        const gain = calcIntimacyGain(userText, collectedWordsForTalk, emotion);
+        let gain = calcIntimacyGain(userText, collectedWordsForTalk, emotion);
+        if (pendingRequest && !pendingRequest.answered) {
+          gain += INTIMACY_POINTS.answeredSuhimochiRequest;
+        }
         const { newLevel, leveledUp } = updateSuhimochiIntimacy(gain);
         if (leveledUp) {
           addToast('success', `なかよし度が上がった！「${INTIMACY_LEVEL_LABELS[newLevel as IntimacyLevel]}」になったよ`);
+        }
+
+        if (pendingRequest && !pendingRequest.answered) {
+          answerSuhimochiRequest();
         }
       } catch (e) {
         if (process.env.NODE_ENV === 'development') {
@@ -410,9 +637,12 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   }, [
     talkInput, isReplying,
     suhimochiGeminiHistory, suhimochiIntimacy.level, replyTargetPost,
-    collectedWordsForTalk,
-    appendSuhimochiGeminiHistory, updateSuhimochiIntimacy,
+    collectedWordsForTalk, anataZukanEntries,
+    appendSuhimochiGeminiHistory, appendSuhimochiGeminiLetterReplyHistory, updateSuhimochiIntimacy,
     updateSuhimochiLastVisit, addSuhimochiKeywords, registerAnataZukanWords,
+    removeSuhimochiTimelinePost,
+    answerSuhimochiRequest,
+    requestLineInChatId,
     addToast,
   ]);
 
@@ -421,12 +651,23 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   // ============================================================
 
   const latestSuhimochiMessage = useMemo(() => {
-    // 口元吹き出しには過去ログ(history-*)を表示しない
     const latest = [...talkMessages]
       .reverse()
       .find((m) => m.role === 'suhimochi' && !m.id.startsWith('history-'));
-    return latest?.text ?? '';
+    if (!latest?.text) return null;
+    return {
+      id: latest.id,
+      text: sanitizeSuhimochiDisplayText(latest.text),
+    };
   }, [talkMessages]);
+
+  const bubblePages = useMemo(
+    () => splitSuhimochiBubblePages(latestSuhimochiMessage?.text ?? ''),
+    [latestSuhimochiMessage?.id, latestSuhimochiMessage?.text],
+  );
+  const activeBubblePage = bubblePages[bubblePageIndex] ?? '';
+  const bubbleVisibleText = activeBubblePage.slice(0, bubbleTypedChars);
+  const hasBubbleMorePages = bubblePageIndex < bubblePages.length - 1;
 
   const bubbleLeft    = Math.max(16, Math.min(charPosition - 170, 800 - 340));
   const logMessages   = useMemo(() => talkMessages, [talkMessages]);
@@ -436,15 +677,13 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   );
   const anataZukanByCategory = useMemo(() => {
     const groups: Record<AnataCategory, AnataZukanEntry[]> = {
-      work: [],
-      character: [],
-      topic: [],
-      food: [],
-      game: [],
-      person: [],
-      other: [],
+      work: [], character: [], person: [], game: [], sport: [],
+      music: [], food: [], place: [], animal: [], topic: [], other: [],
     };
-    const validCategories: AnataCategory[] = ['work', 'character', 'topic', 'food', 'game', 'person', 'other'];
+    const validCategories: AnataCategory[] = [
+      'work', 'character', 'person', 'game', 'sport',
+      'music', 'food', 'place', 'animal', 'topic', 'other',
+    ];
     for (const e of sortedAnataZukanEntries) {
       const key = validCategories.includes(e.category as AnataCategory)
         ? (e.category as AnataCategory)
@@ -456,6 +695,27 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const intimacyLevel  = suhimochiIntimacy.level as IntimacyLevel;
   const intimacyPoints = suhimochiIntimacy.points;
   const totalMessages  = suhimochiIntimacy.totalMessages;
+
+  useEffect(() => {
+    setBubblePageIndex(0);
+    setBubbleTypedChars(0);
+  }, [latestSuhimochiMessage?.id]);
+
+  useEffect(() => {
+    if (!activeBubblePage) return;
+    if (bubbleTypedChars < activeBubblePage.length) {
+      const t = window.setTimeout(() => {
+        setBubbleTypedChars((n) => Math.min(n + 1, activeBubblePage.length));
+      }, BUBBLE_TYPING_INTERVAL_MS);
+      return () => window.clearTimeout(t);
+    }
+    if (!hasBubbleMorePages) return;
+    const t = window.setTimeout(() => {
+      setBubblePageIndex((p) => p + 1);
+      setBubbleTypedChars(0);
+    }, BUBBLE_PAGE_HOLD_MS);
+    return () => window.clearTimeout(t);
+  }, [activeBubblePage, bubbleTypedChars, hasBubbleMorePages]);
 
   // ============================================================
   // 時間帯による窓の背景
@@ -562,14 +822,8 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                         onClick={() => {
                           vibrateLight();
                           setIsMenuOpen(false);
-                          if (item.isEdit) {
-                            setIsEditMode(true);
-                            return;
-                          }
-                          if (item.label === '図鑑を見る') {
-                            setIsAnataZukanOpen(true);
-                            return;
-                          }
+                          if (item.isEdit) { setIsEditMode(true); return; }
+                          if (item.label === '図鑑を見る') { setIsAnataZukanOpen(true); return; }
                           addToast('info', `「${item.label}」は準備中です`);
                         }}
                         className={`flex w-full items-center gap-3 border-b border-amber-100 px-4 py-3 text-sm font-medium last:border-0 hover:bg-amber-50 ${item.color}`}
@@ -584,13 +838,11 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
           </div>
         </div>
 
-        {/* あなた図鑑モーダル（図鑑を見るからのみ開く） */}
+        {/* あなた図鑑モーダル */}
         <AnimatePresence>
           {isAnataZukanOpen && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
             >
               <motion.div
@@ -601,12 +853,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
               >
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-lg font-bold text-rose-900">あなた図鑑</h2>
-                  <button
-                    onClick={() => setIsAnataZukanOpen(false)}
-                    className="rounded-lg px-2 py-1 text-sm text-rose-700 hover:bg-rose-50"
-                  >
-                    閉じる
-                  </button>
+                  <button onClick={() => setIsAnataZukanOpen(false)} className="rounded-lg px-2 py-1 text-sm text-rose-700 hover:bg-rose-50">閉じる</button>
                 </div>
                 {sortedAnataZukanEntries.length === 0 ? (
                   <div className="rounded-2xl border border-rose-100 bg-rose-50/60 p-4 text-sm text-rose-700">
@@ -615,13 +862,17 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                 ) : (
                   <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
                     {[
-                      { key: 'work' as const, title: '好きな作品' },
+                      { key: 'work' as const,      title: '好きな作品' },
                       { key: 'character' as const, title: '好きなキャラ' },
-                      { key: 'person' as const, title: '好きな人' },
-                      { key: 'game' as const, title: '好きなゲーム' },
-                      { key: 'food' as const, title: '好きな食べ物' },
-                      { key: 'topic' as const, title: '気になる話題' },
-                      { key: 'other' as const, title: 'その他' },
+                      { key: 'person' as const,    title: '好きな人・アイドル' },
+                      { key: 'game' as const,      title: '好きなゲーム' },
+                      { key: 'sport' as const,     title: '好きなスポーツ・選手' },
+                      { key: 'music' as const,     title: '好きな音楽・アーティスト' },
+                      { key: 'food' as const,      title: '好きな食べ物' },
+                      { key: 'place' as const,     title: '気になる場所・地名' },
+                      { key: 'animal' as const,    title: '好きな動物・ペット' },
+                      { key: 'topic' as const,     title: '気になる話題' },
+                      { key: 'other' as const,     title: 'その他' },
                     ].map((section) => {
                       const items = anataZukanByCategory[section.key];
                       if (items.length === 0) return null;
@@ -633,65 +884,35 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                               <div key={e.id} className="rounded-xl border border-rose-100 bg-white px-3 py-2">
                                 {editingAnataId === e.id ? (
                                   <div className="space-y-2">
-                                    <input
-                                      value={editingAnataName}
-                                      onChange={(ev) => setEditingAnataName(ev.target.value)}
-                                      className="w-full rounded-lg border border-rose-200 bg-white px-2 py-1 text-sm text-rose-900 outline-none"
-                                    />
-                                    <select
-                                      value={editingAnataCategory}
-                                      onChange={(ev) => setEditingAnataCategory(ev.target.value as AnataCategory)}
-                                      className="w-full rounded-lg border border-rose-200 bg-white px-2 py-1 text-sm text-rose-900 outline-none"
-                                    >
+                                    <input value={editingAnataName} onChange={(ev) => setEditingAnataName(ev.target.value)}
+                                      className="w-full rounded-lg border border-rose-200 bg-white px-2 py-1 text-sm text-rose-900 outline-none" />
+                                    <select value={editingAnataCategory} onChange={(ev) => setEditingAnataCategory(ev.target.value as AnataCategory)}
+                                      className="w-full rounded-lg border border-rose-200 bg-white px-2 py-1 text-sm text-rose-900 outline-none">
                                       <option value="work">作品</option>
                                       <option value="character">キャラ</option>
-                                      <option value="person">人</option>
+                                      <option value="person">人・アイドル</option>
                                       <option value="game">ゲーム</option>
+                                      <option value="sport">スポーツ・選手</option>
+                                      <option value="music">音楽・アーティスト</option>
                                       <option value="food">食べ物</option>
+                                      <option value="place">場所・地名</option>
+                                      <option value="animal">動物・ペット</option>
                                       <option value="topic">話題</option>
                                       <option value="other">その他</option>
                                     </select>
                                     <div className="flex justify-end gap-2">
-                                      <button
-                                        onClick={() => setEditingAnataId(null)}
-                                        className="rounded-lg px-2 py-1 text-xs text-rose-600 hover:bg-rose-50"
-                                      >
-                                        キャンセル
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          updateAnataZukanEntry(e.id, {
-                                            name: editingAnataName.trim() || e.name,
-                                            category: editingAnataCategory,
-                                          });
-                                          setEditingAnataId(null);
-                                        }}
-                                        className="rounded-lg bg-rose-500 px-2 py-1 text-xs text-white"
-                                      >
-                                        保存
-                                      </button>
+                                      <button onClick={() => setEditingAnataId(null)} className="rounded-lg px-2 py-1 text-xs text-rose-600 hover:bg-rose-50">キャンセル</button>
+                                      <button onClick={() => { updateAnataZukanEntry(e.id, { name: editingAnataName.trim() || e.name, category: editingAnataCategory }); setEditingAnataId(null); }}
+                                        className="rounded-lg bg-rose-500 px-2 py-1 text-xs text-white">保存</button>
                                     </div>
                                   </div>
                                 ) : (
                                   <div className="flex items-center justify-between gap-2">
                                     <p className="text-sm font-medium text-rose-900">{e.name}</p>
                                     <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => {
-                                          setEditingAnataId(e.id);
-                                          setEditingAnataName(e.name);
-                                          setEditingAnataCategory((e.category as AnataCategory) || 'other');
-                                        }}
-                                        className="text-xs text-rose-600 hover:underline"
-                                      >
-                                        編集
-                                      </button>
-                                      <button
-                                        onClick={() => deleteAnataZukanEntry(e.id)}
-                                        className="text-xs text-rose-500 hover:underline"
-                                      >
-                                        削除
-                                      </button>
+                                      <button onClick={() => { setEditingAnataId(e.id); setEditingAnataName(e.name); setEditingAnataCategory((e.category as AnataCategory) || 'other'); }}
+                                        className="text-xs text-rose-600 hover:underline">編集</button>
+                                      <button onClick={() => deleteAnataZukanEntry(e.id)} className="text-xs text-rose-500 hover:underline">削除</button>
                                     </div>
                                   </div>
                                 )}
@@ -711,10 +932,8 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
         {/* 親密度バー */}
         <AnimatePresence>
           {intimacyVisible && (
-            <motion.div
-              initial={{ opacity: 0, y: -8, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }}
-              transition={{ duration: 0.4 }} className="overflow-hidden"
-            >
+            <motion.div initial={{ opacity: 0, y: -8, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }}
+              transition={{ duration: 0.4 }} className="overflow-hidden">
               <div className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
@@ -725,18 +944,13 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                     {([1,2,3,4,5] as IntimacyLevel[]).map((lv) => (
                       <motion.div key={lv}
                         className={`rounded-full transition-all duration-500 ${lv <= intimacyLevel ? 'h-2.5 w-2.5 bg-rose-400' : 'h-2 w-2 bg-amber-200'}`}
-                        animate={lv === intimacyLevel ? { scale: [1, 1.3, 1] } : {}}
-                        transition={{ duration: 0.4 }}
-                      />
+                        animate={lv === intimacyLevel ? { scale: [1, 1.3, 1] } : {}} transition={{ duration: 0.4 }} />
                     ))}
                   </div>
                 </div>
                 <div className="h-3 w-full overflow-hidden rounded-full bg-amber-100 shadow-inner">
-                  <motion.div
-                    className={`h-full rounded-full bg-gradient-to-r ${INTIMACY_LEVEL_COLORS[intimacyLevel]} shadow-sm`}
-                    animate={{ width: `${intimacyPoints}%` }}
-                    transition={{ duration: 0.7, ease: [0.34, 1.56, 0.64, 1] }}
-                  />
+                  <motion.div className={`h-full rounded-full bg-gradient-to-r ${INTIMACY_LEVEL_COLORS[intimacyLevel]} shadow-sm`}
+                    animate={{ width: `${Math.min(100, (intimacyPoints / 1000) * 100)}%` }} transition={{ duration: 0.7, ease: [0.34, 1.56, 0.64, 1] }} />
                 </div>
                 <div className="mt-1.5 flex justify-between text-xs text-amber-600/60">
                   <span>{totalMessages}回会話した</span>
@@ -747,35 +961,72 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
           )}
         </AnimatePresence>
 
+        {/* 今日のすうひもち */}
+        {suhimochiTodayState && (
+          <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+            className="mt-2 flex items-center gap-3 rounded-2xl border border-amber-100 bg-white/60 px-4 py-2.5">
+            <span className="text-lg" aria-hidden>🌤</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-amber-500/70">今日のすうひもち</p>
+              <p className="truncate text-sm font-medium text-amber-900">{suhimochiTodayState.message}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">{suhimochiTodayState.mood}</span>
+          </motion.div>
+        )}
+
+        {/* すうひもちからのお願い */}
+        {suhimochiCurrentRequest && !suhimochiCurrentRequest.answered && requestLineInChatId !== suhimochiCurrentRequest.id && (
+          <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+            className="mt-2 rounded-2xl border-2 border-rose-200 bg-rose-50/80 px-4 py-3">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-100 text-base" aria-hidden>🧸</div>
+              <div className="min-w-0 flex-1">
+                <p className="mb-1 text-xs font-semibold text-rose-500">すうひもちからのお願い</p>
+                <p className="text-sm leading-relaxed text-rose-900">{sanitizeSuhimochiDisplayText(suhimochiCurrentRequest.question)}</p>
+                <button type="button"
+                  onClick={() => {
+                    const req = suhimochiCurrentRequest;
+                    if (!req || req.answered) return;
+                    if (requestLineInChatId === req.id || requestPreambleLockRef.current === req.id) { inputRef.current?.focus(); return; }
+                    requestPreambleLockRef.current = req.id;
+                    vibrateLight();
+                    const qSafe = sanitizeSuhimochiDisplayText(req.question);
+                    setTalkMessages((prev) => {
+                      if (prev.some((m) => m.id === `suhimochi-request-${req.id}`)) return prev;
+                      return [...prev, { id: `suhimochi-request-${req.id}`, role: 'suhimochi', text: qSafe }];
+                    });
+                    appendSuhimochiGeminiRequestPreamble(SUHIMOCHI_REQUEST_GEMINI_BRIDGE_USER, qSafe);
+                    setRequestLineInChatId(req.id);
+                    setCurrentEmotion('normal');
+                    inputRef.current?.focus();
+                  }}
+                  className="mt-2 text-xs font-medium text-rose-500 transition-all hover:text-rose-700 active:scale-95">
+                  答える →
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* 部屋セクション */}
         <section className={`relative h-[420px] shrink-0 overflow-hidden rounded-3xl border-2 shadow-lg transition-colors ${isEditMode ? 'border-amber-400 bg-[#f0ebd9]' : 'border-amber-900/10 bg-[#e8e4d9]'}`}>
           <div ref={scrollRef} className="absolute inset-0 overflow-x-auto overflow-y-hidden overscroll-x-contain [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <div className="relative h-full w-[800px]">
-
-              {/* 壁 */}
               <div className="absolute inset-0 z-0 pointer-events-none">
-                <div className="absolute top-6 left-1/2 -translate-x-1/2 h-32 w-32 overflow-hidden rounded-full border-4 border-[#7a5c43] shadow-inner">
-                  {windowBg}
-                </div>
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 h-32 w-32 overflow-hidden rounded-full border-4 border-[#7a5c43] shadow-inner">{windowBg}</div>
                 <div className="absolute top-48 left-0 right-0 h-3 bg-[#7a5c43] shadow-sm" />
                 <div className="absolute bottom-0 top-0 left-4 w-3 bg-[#7a5c43]" />
                 <div className="absolute bottom-0 top-0 left-[260px] w-2 bg-[#7a5c43] opacity-50" />
                 <div className="absolute bottom-0 top-0 right-[260px] w-2 bg-[#7a5c43] opacity-50" />
                 <div className="absolute bottom-0 top-0 right-4 w-3 bg-[#7a5c43]" />
               </div>
-
-              {/* 床 */}
               <div className="absolute bottom-0 left-0 right-0 h-52 bg-[#cddb9b] border-t-4 border-[#7a5c43] z-10 pointer-events-none">
                 <div className="absolute top-0 bottom-0 left-1/3 w-1 bg-[#5a6b31] opacity-30" />
                 <div className="absolute top-0 bottom-0 right-1/3 w-1 bg-[#5a6b31] opacity-30" />
                 <div className="absolute top-1/2 left-0 right-0 h-1 bg-[#5a6b31] opacity-30" />
                 {isEditMode && <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+CjxyZWN0IHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utb3BhY2l0eT0iMC4zIiBzdHJva2Utd2lkdGg9IjEiIC8+Cjwvc3ZnPg==')] opacity-50" />}
               </div>
-
-              {/* タップ判定 */}
               <div className={`absolute bottom-0 left-0 right-0 h-52 z-20 ${isEditMode ? 'pointer-events-none' : 'cursor-pointer pointer-events-auto'}`} onClick={handleFloorClick} />
-
-              {/* 家具 */}
               <div className="absolute inset-0 z-20 pointer-events-none">
                 <AnimatePresence>
                   {placedItems.map((item) => (
@@ -783,8 +1034,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                       initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1, x: item.x, y: item.y }} exit={{ scale: 0, opacity: 0 }}
                       className={`absolute flex items-center justify-center ${isEditMode ? 'pointer-events-auto cursor-grab' : 'pointer-events-none'}`}
                       onDragEnd={(_, info) => moveFurnitureByOffset(item.id, info.offset.x, info.offset.y)}
-                      style={{ zIndex: Math.floor(item.y || 0) }}
-                    >
+                      style={{ zIndex: Math.floor(item.y || 0) }}>
                       <div className="relative">
                         {isEditMode && (
                           <button onPointerDown={(e) => { e.stopPropagation(); vibrateLight(); removeFurnitureFromRoom(item); }}
@@ -800,46 +1050,46 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                   ))}
                 </AnimatePresence>
               </div>
-
-              {/* キャラクター */}
               <motion.div className="absolute bottom-14 left-0 z-30 pointer-events-none"
                 animate={{ x: charPosition - 120 }} transition={{ type: 'tween', duration: 1.2, ease: 'linear' }}>
                 <motion.div animate={hopControls}>
                   <PotatoAvatar equipped={equippedDetails} emotion={currentEmotion as any} size={240} ssrEffect={false} showShadow={false} />
                 </motion.div>
               </motion.div>
-
-              {/* 吹き出し */}
               {latestSuhimochiMessage && (
                 <div className="absolute bottom-[258px] z-40 w-[300px] pointer-events-none" style={{ left: bubbleLeft }}>
                   <div className="rounded-2xl border-2 border-amber-800/10 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-sm">
                     <AnimatePresence mode="wait">
-                      <motion.p key={latestSuhimochiMessage}
+                      <motion.p key={`${latestSuhimochiMessage.id}-${bubblePageIndex}`}
                         initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                        transition={{ duration: 0.25 }}
-                        className="text-sm font-medium leading-relaxed text-amber-900"
-                      >
-                        {latestSuhimochiMessage}
+                        transition={{ duration: 0.25 }} className="text-sm font-medium leading-relaxed text-amber-900">
+                        {bubbleVisibleText}
                       </motion.p>
                     </AnimatePresence>
+                    <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-amber-500/80">
+                      {hasBubbleMorePages && bubbleTypedChars >= activeBubblePage.length && (
+                        <motion.span
+                          animate={{ y: [0, 2, 0], opacity: [0.5, 1, 0.5] }}
+                          transition={{ duration: 0.9, repeat: Infinity }}
+                        >
+                          ▼
+                        </motion.span>
+                      )}
+                      {bubblePages.length > 1 && (
+                        <span>{bubblePageIndex + 1}/{bubblePages.length}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
-
-              {/* 模様替えオーバーレイ */}
               <AnimatePresence>
                 {isEditMode && (
                   <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
-                    className="absolute bottom-0 left-0 right-0 z-50 rounded-b-3xl border-t-2 border-amber-300 bg-amber-50/95 p-3 backdrop-blur-sm"
-                  >
+                    className="absolute bottom-0 left-0 right-0 z-50 rounded-b-3xl border-t-2 border-amber-300 bg-amber-50/95 p-3 backdrop-blur-sm">
                     <div className="mb-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-amber-900">
-                        <Box className="h-4 w-4" />
-                        <span className="text-sm font-bold">収納ボックス</span>
-                      </div>
+                      <div className="flex items-center gap-2 text-amber-900"><Box className="h-4 w-4" /><span className="text-sm font-bold">収納ボックス</span></div>
                       <motion.button onClick={() => { vibrateLight(); setIsEditMode(false); }}
-                        className="flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-bold text-white shadow-md"
-                        whileTap={{ scale: 0.95 }}>
+                        className="flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-bold text-white shadow-md" whileTap={{ scale: 0.95 }}>
                         <Check className="h-3 w-3" /> 完了
                       </motion.button>
                     </div>
@@ -862,38 +1112,28 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
         </section>
 
         {/* 最近の言葉タグ */}
-        {collectedWordsForTalk.length > 0 && (
+        {recentDexWordsForTags.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-amber-700/60 shrink-0">最近の言葉：</span>
-            {collectedWordsForTalk.slice(-5).map((w) => (
-              <button key={w.word}
-                onClick={() => {
-                  if (isReplying) return;
-                  vibrateLight();
-                  setTalkInput(w.word);
-                  inputRef.current?.focus();
-                }}
-                className={`rounded-full border border-amber-300 bg-amber-100/80 px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 active:scale-95 transition-all ${isReplying ? 'opacity-40 pointer-events-none' : ''}`}
-              >
-                {w.word}
+            {recentDexWordsForTags.map((label) => (
+              <button key={label.toLowerCase()}
+                onClick={() => { if (isReplying) return; vibrateLight(); setTalkInput(label); inputRef.current?.focus(); }}
+                className={`rounded-full border border-amber-300 bg-amber-100/80 px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 active:scale-95 transition-all ${isReplying ? 'opacity-40 pointer-events-none' : ''}`}>
+                {label}
               </button>
             ))}
           </div>
         )}
 
-        {/* ★ 会話ログ（セッションをまたいだ過去ログ含む） */}
+        {/* 会話ログ */}
         {logMessages.length > 0 && (
           <div className="rounded-2xl border border-amber-200 bg-white/60 overflow-hidden">
             <button onClick={() => { vibrateLight(); setIsLogOpen((p) => !p); }}
-              className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-amber-50/60"
-            >
+              className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-amber-50/60">
               <div className="flex items-center gap-2 text-amber-800">
                 <MessageCircle className="h-4 w-4 text-amber-500" />
                 <span className="text-xs font-semibold">会話ログ</span>
-                <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-bold text-amber-800">
-                  {logMessages.length}
-                </span>
-                {/* ★ 過去ログがある場合のラベル */}
+                <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-bold text-amber-800">{logMessages.length}</span>
                 {suhimochiGeminiHistory.length > 0 && (
                   <span className="text-xs text-amber-500/70">（前回の続き含む）</span>
                 )}
@@ -902,10 +1142,8 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
             </button>
             <AnimatePresence initial={false}>
               {isLogOpen && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.25, ease: 'easeInOut' }} className="overflow-hidden"
-                >
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }} className="overflow-hidden">
                   <div className="max-h-52 overflow-y-auto px-4 pt-1 pb-3 space-y-2 border-t border-amber-100">
                     {logMessages.map((msg) => (
                       <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-2`}>
@@ -913,14 +1151,9 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs mt-0.5">🧸</div>
                         )}
                         <div className={`max-w-[78%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${
-                          msg.role === 'user'
-                            ? 'bg-amber-400 text-white rounded-br-sm'
-                            : 'bg-amber-50 border border-amber-200 text-amber-900 rounded-bl-sm'
-                        } ${
-                          // ★ 過去ログは少し薄く表示
-                          msg.id.startsWith('history-') ? 'opacity-60' : ''
-                        }`}>
-                          {msg.text}
+                          msg.role === 'user' ? 'bg-amber-400 text-white rounded-br-sm' : 'bg-amber-50 border border-amber-200 text-amber-900 rounded-bl-sm'
+                        } ${msg.id.startsWith('history-') ? 'opacity-60' : ''}`}>
+                          {msg.role === 'suhimochi' ? sanitizeSuhimochiDisplayText(msg.text) : msg.text}
                         </div>
                       </div>
                     ))}
@@ -937,43 +1170,22 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
           <div className="rounded-2xl border border-amber-300 bg-white/90 shadow-md shadow-amber-100 overflow-hidden">
             {replyTargetPost && (
               <div className="flex items-center justify-between gap-2 border-b border-amber-100 bg-amber-50 px-3 py-2">
-                <p className="truncate text-xs text-amber-700">
-                  返信先: {replyTargetPost.text}
-                </p>
-                <button
-                  onClick={() => setReplyTargetPost(null)}
-                  className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-100"
-                >
-                  解除
-                </button>
+                <p className="truncate text-xs text-amber-700">返信先: {replyTargetPost.text}</p>
+                <button onClick={() => setReplyTargetPost(null)} className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-100">解除</button>
               </div>
             )}
             <div className="flex gap-2 items-center p-2">
-              <input
-                ref={inputRef}
-                value={talkInput}
-                onChange={(e) => setTalkInput(e.target.value)}
+              <input ref={inputRef} value={talkInput} onChange={(e) => setTalkInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSendTalk(); }}
-                placeholder={
-                  isReplying
-                    ? 'すうひもちが考えてる…'
-                    : replyTargetPost
-                      ? 'ひとり言への返事を書く'
-                      : 'すうひもちに話しかける'
-                }
+                placeholder={isReplying ? 'すうひもちが考えてる…' : replyTargetPost ? 'ひとり言への返事を書く' : 'すうひもちに話しかける'}
                 disabled={isReplying}
-                className="flex-1 bg-transparent px-3 py-2 text-sm text-amber-900 placeholder:text-amber-400 outline-none disabled:opacity-50"
-              />
-              <motion.button
-                onClick={handleSendTalk}
-                disabled={isReplying || !talkInput.trim()}
+                className="flex-1 bg-transparent px-3 py-2 text-sm text-amber-900 placeholder:text-amber-400 outline-none disabled:opacity-50" />
+              <motion.button onClick={handleSendTalk} disabled={isReplying || !talkInput.trim()}
                 className="shrink-0 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-orange-200 disabled:opacity-40"
-                whileHover={{ scale: isReplying ? 1 : 1.04 }}
-                whileTap={{ scale: isReplying ? 1 : 0.96 }}
-              >
-                {isReplying ? (
-                  <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.2, repeat: Infinity }} className="text-xs tracking-widest">···</motion.span>
-                ) : '送信'}
+                whileHover={{ scale: isReplying ? 1 : 1.04 }} whileTap={{ scale: isReplying ? 1 : 0.96 }}>
+                {isReplying
+                  ? <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.2, repeat: Infinity }} className="text-xs tracking-widest">···</motion.span>
+                  : '送信'}
               </motion.button>
             </div>
             {totalMessages > 0 && (
@@ -982,18 +1194,16 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
           </div>
         )}
 
-        {/* タイムライン */}
+        {/* タイムライン（すうひもちからの手紙） */}
         {suhimochiTimeline.length > 0 && suhimochiInterests.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-1.5 px-1">
               <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-              <span className="text-xs font-semibold text-amber-700/60">すうひもちのひとり言</span>
+              <span className="text-xs font-semibold text-amber-700/60">すうひもちからの手紙</span>
             </div>
             {suhimochiTimeline.slice(0, 5).map((post, i) => (
-              <motion.div key={post.id}
-                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3"
-              >
+              <motion.div key={post.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3">
                 <div className="flex items-start gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-base mt-0.5">🧸</div>
                   <div className="flex-1 min-w-0">
@@ -1004,15 +1214,8 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                         {post.genre && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-600">{post.genre}</span>}
                       </span>
                       <button
-                        onClick={() => {
-                          if (isReplying) return;
-                          vibrateLight();
-                          setReplyTargetPost({ id: post.id, text: post.text });
-                          setTalkInput('');
-                          inputRef.current?.focus();
-                        }}
-                        className={`text-xs font-medium text-amber-500 hover:text-amber-700 active:scale-95 transition-all ${isReplying ? 'opacity-40 pointer-events-none' : ''}`}
-                      >
+                        onClick={() => { if (isReplying) return; vibrateLight(); setReplyTargetPost({ id: post.id, text: post.text }); setTalkInput(''); inputRef.current?.focus(); }}
+                        className={`text-xs font-medium text-amber-500 hover:text-amber-700 active:scale-95 transition-all ${isReplying ? 'opacity-40 pointer-events-none' : ''}`}>
                         返事する
                       </button>
                     </div>

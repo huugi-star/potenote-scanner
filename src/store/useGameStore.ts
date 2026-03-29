@@ -13,7 +13,7 @@ import type {
   SuhimochiKeyword,
   SuhimochiTimelinePost,
 } from '@/lib/suhimochiConversationTypes';
-import type { GeminiMessage } from '@/lib/suhimochiConversationEngine'; 
+import type { GeminiMessage, SuhimochiRequest } from '@/lib/suhimochiConversationEngine'; 
 import { ALL_ITEMS, getItemById } from '@/data/items';
 import { REWARDS, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { getJstDateString } from '@/lib/dateUtils';
@@ -245,6 +245,16 @@ interface GameState extends UserState {
   // すうひもち 最終訪問日時
   suhimochiLastVisitedAt: number;
 
+  /** 今日のすうひもち（1日1回更新・日付が変わるまで固定） */
+  suhimochiTodayState: {
+    date: string;
+    mood: string;
+    message: string;
+  } | null;
+
+  /** すうひもちからのお願い（未回答の質問カード用） */
+  suhimochiCurrentRequest: SuhimochiRequest | null;
+
   // あなた図鑑（独立）
   anataZukanEntries: AnataZukanEntry[];
 }
@@ -359,12 +369,20 @@ interface GameActions {
   addSuhimochiKeywords: (words: string[], source?: 'user' | 'system') => void;
   decaySuhimochiKeywords: () => void;
   addSuhimochiTimelinePost: (post: SuhimochiTimelinePost) => void;
+  removeSuhimochiTimelinePost: (id: string) => void;
 
   updateSuhimochiIntimacy: (gain: number) => { newLevel: number; leveledUp: boolean };
   appendSuhimochiGeminiHistory: (userText: string, reply: string) => void;
+  /** 手紙返信：手紙(model) -> ユーザー返信(user) -> すうひもち返信(model) を履歴へ保存 */
+  appendSuhimochiGeminiLetterReplyHistory: (letterText: string, userText: string, reply: string) => void;
+  /** お願い：橋渡しuser + すうひもちの質問model（会話ログと揃える） */
+  appendSuhimochiGeminiRequestPreamble: (bridgeUserText: string, modelQuestion: string) => void;
   setSuhimochiOpeningHistory: (openingText: string) => void;
   clearSuhimochiGeminiHistory: () => void;
   updateSuhimochiLastVisit: (message: string) => void;
+  setSuhimochiTodayState: (state: { date: string; mood: string; message: string }) => void;
+  setSuhimochiCurrentRequest: (req: SuhimochiRequest | null) => void;
+  answerSuhimochiRequest: () => void;
   registerAnataZukanWords: (entries: AnataZukanExtractedEntry[]) => void;
   updateAnataZukanEntry: (id: string, patch: Partial<Pick<AnataZukanEntry, 'name' | 'relation' | 'category'>>) => void;
   deleteAnataZukanEntry: (id: string) => void;
@@ -467,6 +485,8 @@ const initialState: GameState = {
   suhimochiGeminiHistory: [],
   suhimochiLastMessage: '',
   suhimochiLastVisitedAt: 0,
+  suhimochiTodayState: null,
+  suhimochiCurrentRequest: null,
   anataZukanEntries: [],
 };
 
@@ -2252,6 +2272,12 @@ export const useGameStore = create<GameStore>()(
         }));
       },
 
+      removeSuhimochiTimelinePost: (id) => {
+        set((state) => ({
+          suhimochiTimeline: (state.suhimochiTimeline ?? []).filter((p) => p.id !== id),
+        }));
+      },
+
       updateSuhimochiIntimacy: (gain) => {
         const state = get();
         const prev = state.suhimochiIntimacy ?? {
@@ -2259,12 +2285,12 @@ export const useGameStore = create<GameStore>()(
           level: 1 as const,
           totalMessages: 0,
         };
-        const newPoints = Math.min(100, prev.points + gain);
+        const newPoints = Math.min(1000, prev.points + gain);
         const calcLevel = (pts: number): 1 | 2 | 3 | 4 | 5 => {
-          if (pts >= 85) return 5;
-          if (pts >= 65) return 4;
-          if (pts >= 40) return 3;
-          if (pts >= 20) return 2;
+          if (pts >= 850) return 5;
+          if (pts >= 650) return 4;
+          if (pts >= 400) return 3;
+          if (pts >= 200) return 2;
           return 1;
         };
         const newLevel = calcLevel(newPoints);
@@ -2293,6 +2319,34 @@ export const useGameStore = create<GameStore>()(
         set({ suhimochiGeminiHistory: trimmed });
       },
 
+      appendSuhimochiGeminiLetterReplyHistory: (letterText, userText, reply) => {
+        const MAX_MESSAGES = 41; // 通常40件(20往復) + 手紙文脈1件を許容
+        const state = get();
+        const normalizedLetter = String(letterText ?? '').trim();
+        const next: GeminiMessage[] = [
+          ...state.suhimochiGeminiHistory,
+          { role: 'model', parts: [{ text: normalizedLetter }] },
+          { role: 'user', parts: [{ text: userText }] },
+          { role: 'model', parts: [{ text: reply }] },
+        ];
+        const trimmed =
+          next.length > MAX_MESSAGES ? next.slice(next.length - MAX_MESSAGES) : next;
+        set({ suhimochiGeminiHistory: trimmed });
+      },
+
+      appendSuhimochiGeminiRequestPreamble: (bridgeUserText, modelQuestion) => {
+        const MAX_TURNS = 20;
+        const state = get();
+        const next: GeminiMessage[] = [
+          ...state.suhimochiGeminiHistory,
+          { role: 'user', parts: [{ text: bridgeUserText }] },
+          { role: 'model', parts: [{ text: modelQuestion }] },
+        ];
+        const trimmed =
+          next.length > MAX_TURNS * 2 ? next.slice(next.length - MAX_TURNS * 2) : next;
+        set({ suhimochiGeminiHistory: trimmed });
+      },
+
       setSuhimochiOpeningHistory: (_openingText) => {
         // 意図的に何もしない（空実装）
         // 開口メッセージを履歴に追加すると訪問ごとにmodelメッセージが積み重なるため
@@ -2307,6 +2361,18 @@ export const useGameStore = create<GameStore>()(
           suhimochiLastMessage: message,
           suhimochiLastVisitedAt: Date.now(),
         });
+      },
+
+      setSuhimochiTodayState: (todayState) => {
+        set({ suhimochiTodayState: todayState });
+      },
+
+      setSuhimochiCurrentRequest: (req) => {
+        set({ suhimochiCurrentRequest: req });
+      },
+
+      answerSuhimochiRequest: () => {
+        set({ suhimochiCurrentRequest: null });
       },
 
       registerAnataZukanWords: (entries) => {
@@ -2480,6 +2546,21 @@ export const useGameStore = create<GameStore>()(
           if (!Array.isArray(state.anataZukanEntries)) {
             patch.anataZukanEntries = [];
           }
+          if (state.suhimochiCurrentRequest === undefined) {
+            patch.suhimochiCurrentRequest = null;
+          } else if (state.suhimochiCurrentRequest !== null) {
+            const r = state.suhimochiCurrentRequest;
+            if (
+              typeof r !== 'object' ||
+              typeof r.id !== 'string' ||
+              typeof r.question !== 'string' ||
+              typeof r.timestamp !== 'number' ||
+              typeof r.answered !== 'boolean' ||
+              typeof r.type !== 'string'
+            ) {
+              patch.suhimochiCurrentRequest = null;
+            }
+          }
           if (Object.keys(patch).length > 0) {
             useGameStore.setState(patch);
           }
@@ -2531,6 +2612,8 @@ export const useGameStore = create<GameStore>()(
         suhimochiGeminiHistory: state.suhimochiGeminiHistory,
         suhimochiLastMessage: state.suhimochiLastMessage,
         suhimochiLastVisitedAt: state.suhimochiLastVisitedAt,
+        suhimochiTodayState: state.suhimochiTodayState,
+        suhimochiCurrentRequest: state.suhimochiCurrentRequest,
         suhimochiInterests: state.suhimochiInterests,
         suhimochiKeywords: state.suhimochiKeywords,
         suhimochiTimeline: state.suhimochiTimeline,
