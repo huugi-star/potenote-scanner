@@ -31,6 +31,40 @@ type RequestBody = {
   dynamicPrompt?: string;
 };
 
+// ============================================================
+// 入力トークン制限（最大3000文字）
+// ============================================================
+
+const MAX_INPUT_CHARS = 2500;
+
+/**
+ * systemPrompt + userTurn を優先して確保し、
+ * 残り枠を履歴に使う。履歴は新しい順に詰める。
+ */
+const trimHistoryToFit = (
+  systemPrompt: string,
+  conversationHistory: GeminiMessage[],
+  userTurn: string,
+): GeminiMessage[] => {
+  const fixedChars = systemPrompt.length + userTurn.length;
+  const budget = MAX_INPUT_CHARS - fixedChars;
+
+  if (budget <= 0) return [];
+
+  const result: GeminiMessage[] = [];
+  let used = 0;
+
+  for (let i = conversationHistory.length - 1; i >= 0; i--) {
+    const msg = conversationHistory[i];
+    const len = msg.parts[0]?.text?.length ?? 0;
+    if (used + len > budget) break;
+    result.unshift(msg);
+    used += len;
+  }
+
+  return result;
+};
+
 // ---- Gemini API 設定 ----
 const GEMINI_MODEL = 'gemini-2.5-flash-lite'; // コスト低・速度高。品質重視なら gemini-1.5-pro へ
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -44,7 +78,7 @@ const GENERATION_CONFIG = {
   temperature: 0.85,
   topP: 0.92,
   topK: 40,
-  maxOutputTokens: 150,
+  maxOutputTokens: 200,
   stopSequences: [], // 特定パターンで止めたい場合はここに追加
 };
 
@@ -66,8 +100,13 @@ export async function POST(req: Request) {
     // ★ 新シグネチャ：systemPrompt + userTurn + conversationHistory
     systemInstruction = body.systemPrompt;
     const history = body.conversationHistory ?? [];
+    const trimmedHistory = trimHistoryToFit(
+      body.systemPrompt,
+      history,
+      body.userTurn,
+    );
     contents = [
-      ...history,
+      ...trimmedHistory,
       { role: 'user', parts: [{ text: body.userTurn }] },
     ];
   } else if (body.basePrompt && body.dynamicPrompt) {

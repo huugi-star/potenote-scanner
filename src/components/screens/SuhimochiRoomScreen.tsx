@@ -124,39 +124,38 @@ const formatTimelineTimestamp = (ts: number): string => {
   return `${Math.floor(diff / 86_400_000)}日前`;
 };
 
-const BUBBLE_MAX_CHARS_PER_PAGE = 22;
-const BUBBLE_TYPING_INTERVAL_MS = 55;
-const BUBBLE_PAGE_HOLD_MS = 1800;
+const BUBBLE_TYPING_INTERVAL_MS = 65;
+const BUBBLE_PAGE_HOLD_MS = 3200;
 
-const splitSuhimochiBubblePages = (text: string, pageMax = BUBBLE_MAX_CHARS_PER_PAGE): string[] => {
+/** 吹き出し1ページあたりの最大文字数（約2行×21文字相当） */
+const BUBBLE_PAGE_CHARS = 60;
+
+/**
+ * 句点・感嘆符・疑問符で文に分け、BUBBLE_PAGE_CHARS まで同じページにまとめる。
+ */
+const splitSuhimochiBubblePages = (text: string): string[] => {
   const src = String(text ?? '').trim();
   if (!src) return [];
+
+  const sentences = src
+    .split(/(?<=[。！？!?](?:[」』）\]）〕]*))/u)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   const pages: string[] = [];
-  const paragraphs = src.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+  let buf = '';
 
-  const findSplitIndex = (chunk: string): number => {
-    if (chunk.length <= pageMax) return chunk.length;
-    const head = chunk.slice(0, pageMax);
-    const breakables = ['。', '！', '？', '!', '?', '、', '，', ',', ' '];
-    const threshold = Math.floor(pageMax * 0.55);
-    let best = -1;
-    for (const mark of breakables) {
-      const idx = head.lastIndexOf(mark);
-      if (idx >= threshold) best = Math.max(best, idx + 1);
+  for (const sentence of sentences) {
+    const candidate = buf ? buf + sentence : sentence;
+    if (candidate.length > BUBBLE_PAGE_CHARS && buf) {
+      pages.push(buf.trim());
+      buf = sentence;
+    } else {
+      buf = candidate;
     }
-    return best > 0 ? best : pageMax;
-  };
-
-  for (const p of paragraphs) {
-    let rest = p;
-    while (rest.length > pageMax) {
-      const cut = findSplitIndex(rest);
-      const page = rest.slice(0, cut).trim();
-      if (page) pages.push(page);
-      rest = rest.slice(cut).trim();
-    }
-    if (rest) pages.push(rest);
   }
+
+  if (buf.trim()) pages.push(buf.trim());
 
   return pages.length > 0 ? pages : [src];
 };
@@ -704,9 +703,12 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   useEffect(() => {
     if (!activeBubblePage) return;
     if (bubbleTypedChars < activeBubblePage.length) {
+      const currentChar = activeBubblePage[bubbleTypedChars - 1] ?? '';
+      const isPause = '。！？!?'.includes(currentChar);
+      const delay = isPause ? 600 : BUBBLE_TYPING_INTERVAL_MS;
       const t = window.setTimeout(() => {
         setBubbleTypedChars((n) => Math.min(n + 1, activeBubblePage.length));
-      }, BUBBLE_TYPING_INTERVAL_MS);
+      }, delay);
       return () => window.clearTimeout(t);
     }
     if (!hasBubbleMorePages) return;
@@ -1062,8 +1064,8 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                     <AnimatePresence mode="wait">
                       <motion.p key={`${latestSuhimochiMessage.id}-${bubblePageIndex}`}
                         initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                        transition={{ duration: 0.25 }} className="text-sm font-medium leading-relaxed text-amber-900">
-                        {bubbleVisibleText}
+                        transition={{ duration: 0.25 }} className="text-sm font-medium leading-relaxed text-amber-900 whitespace-pre-wrap">
+  {bubbleVisibleText.replace(/([。！？!?])/g, '$1\n').replace(/\n+/g, '\n').trim()}
                       </motion.p>
                     </AnimatePresence>
                     <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-amber-500/80">
@@ -1194,12 +1196,12 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
           </div>
         )}
 
-        {/* タイムライン（すうひもちからの手紙） */}
+        {/* タイムライン（） */}
         {suhimochiTimeline.length > 0 && suhimochiInterests.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-1.5 px-1">
               <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-              <span className="text-xs font-semibold text-amber-700/60">すうひもちからの手紙</span>
+              <span className="text-xs font-semibold text-amber-700/60">すうひもちのひとり言</span>
             </div>
             {suhimochiTimeline.slice(0, 5).map((post, i) => (
               <motion.div key={post.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
