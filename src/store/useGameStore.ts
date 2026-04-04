@@ -666,23 +666,50 @@ export const useGameStore = create<GameStore>()(
           academyQuestionsUnsubscribe = null;
         }
         if (db) {
+          const firestore = db;
+          const applyAcademySnapshot = (snap: import('firebase/firestore').QuerySnapshot) => {
+            const posted = snap.docs
+              .map((d) => normalizeAcademyQuestion(d.id, d.data()))
+              .filter((q): q is AcademyUserQuestion => q !== null && q.status === 'published');
+            useGameStore.setState({
+              academyUserQuestions: mergeSeedAndPostedAcademyQuestions(posted),
+            });
+          };
+          const subscribeWithoutOrderBy = () =>
+            onSnapshot(
+              query(
+                collection(firestore, ACADEMY_QUESTIONS_COLLECTION),
+                where('status', '==', 'published'),
+                fsLimit(300)
+              ),
+              applyAcademySnapshot,
+              (fallbackError) => {
+                console.error('[academy_questions] fallback snapshot error:', fallbackError);
+              }
+            );
+
+          let switchedToFallback = false;
           academyQuestionsUnsubscribe = onSnapshot(
             query(
-              collection(db, ACADEMY_QUESTIONS_COLLECTION),
+              collection(firestore, ACADEMY_QUESTIONS_COLLECTION),
               where('status', '==', 'published'),
               orderBy('createdAt', 'desc'),
               fsLimit(300)
             ),
-            (snap) => {
-              const posted = snap.docs
-                .map((d) => normalizeAcademyQuestion(d.id, d.data()))
-                .filter((q): q is AcademyUserQuestion => q !== null && q.status === 'published');
-              useGameStore.setState({
-                academyUserQuestions: mergeSeedAndPostedAcademyQuestions(posted),
-              });
-            },
+            applyAcademySnapshot,
             (error) => {
               console.error('[academy_questions] snapshot error:', error);
+              const code = String((error as { code?: string } | undefined)?.code ?? '');
+              const message = String((error as { message?: string } | undefined)?.message ?? '');
+              const isIndexMissing = code === 'failed-precondition' || /index/i.test(message);
+              if (switchedToFallback || !isIndexMissing) return;
+              switchedToFallback = true;
+              try {
+                academyQuestionsUnsubscribe?.();
+              } catch {
+                // ignore
+              }
+              academyQuestionsUnsubscribe = subscribeWithoutOrderBy();
             }
           );
         }

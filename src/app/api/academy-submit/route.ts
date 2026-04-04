@@ -34,9 +34,19 @@ const getBearerToken = (req: Request): string | null => {
 
 export async function POST(req: Request) {
   try {
-    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
+    const hasProjectId = !!process.env.FIREBASE_PROJECT_ID?.trim();
+    const hasClientEmail = !!process.env.FIREBASE_CLIENT_EMAIL?.trim();
+    const hasPrivateKey = !!process.env.FIREBASE_PRIVATE_KEY?.trim();
+    const privateKeyHasPem = (process.env.FIREBASE_PRIVATE_KEY ?? '').includes('BEGIN');
+    if (!hasProjectId || !hasClientEmail || !hasPrivateKey) {
       return NextResponse.json(
-        { error: 'FIREBASE_ADMIN_NOT_CONFIGURED' },
+        { error: `FIREBASE_ADMIN_NOT_CONFIGURED:pid=${hasProjectId},email=${hasClientEmail},key=${hasPrivateKey},pem=${privateKeyHasPem}` },
+        { status: 500 }
+      );
+    }
+    if (!privateKeyHasPem) {
+      return NextResponse.json(
+        { error: `FIREBASE_PRIVATE_KEY_INVALID:pem_header_missing,len=${process.env.FIREBASE_PRIVATE_KEY?.length ?? 0}` },
         { status: 500 }
       );
     }
