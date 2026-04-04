@@ -137,6 +137,41 @@ const mergeSeedAndPostedAcademyQuestions = (
     .slice(0, 200);
 };
 
+const submitAcademyQuestionViaApi = async (
+  payload: Omit<AcademyUserQuestion, 'id' | 'createdAt' | 'authorUid' | 'authorName'>
+): Promise<boolean> => {
+  try {
+    if (!auth?.currentUser) return false;
+    const idToken = await auth.currentUser.getIdToken();
+    const res = await fetch('/api/academy-submit', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        question: String(payload.question ?? '').trim(),
+        choices: Array.isArray(payload.choices)
+          ? payload.choices.map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 4)
+          : [],
+        answerIndex: Number.isInteger(payload.answerIndex) ? Math.max(0, Math.min(3, payload.answerIndex)) : 0,
+        explanation: String(payload.explanation ?? '').trim(),
+        keywords: Array.isArray(payload.keywords)
+          ? payload.keywords.map((k) => String(k ?? '').trim()).filter(Boolean).slice(0, 8)
+          : [],
+        bigCategory: payload.bigCategory,
+        subCategory: payload.subCategory,
+        subjectText: payload.subjectText,
+        detailText: payload.detailText,
+      }),
+    });
+    if (!res.ok) return false;
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const weightedRandom = <T extends { dropWeight: number }>(items: T[]): T => {
   const totalWeight = items.reduce((sum, item) => sum + item.dropWeight, 0);
   let random = Math.random() * totalWeight;
@@ -1746,6 +1781,11 @@ export const useGameStore = create<GameStore>()(
           return true;
         } catch (error) {
           console.error('[academy_questions] add failed:', error);
+          const code = String((error as { code?: string } | undefined)?.code ?? '');
+          if (code.includes('permission-denied')) {
+            // 本番で rules 未反映/反映差分があっても投稿不能にならないよう API フォールバック
+            return await submitAcademyQuestionViaApi(payload);
+          }
           return false;
         }
       },
