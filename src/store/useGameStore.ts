@@ -1709,8 +1709,11 @@ export const useGameStore = create<GameStore>()(
       // ===== すうひもちアカデミー =====
       addAcademyUserQuestion: async (payload) => {
         if (!db) return false;
-        const uid = get().uid;
+        const uid = get().uid ?? auth?.currentUser?.uid ?? null;
         if (!uid) return false;
+        if (get().uid !== uid) {
+          set({ uid });
+        }
 
         const questionRef = doc(collection(db, ACADEMY_QUESTIONS_COLLECTION));
         const normalizedChoices = Array.isArray(payload.choices)
@@ -1748,8 +1751,11 @@ export const useGameStore = create<GameStore>()(
       },
       updateAcademyUserQuestion: async (id, patch) => {
         if (!db) return false;
-        const uid = get().uid;
+        const uid = get().uid ?? auth?.currentUser?.uid ?? null;
         if (!uid) return false;
+        if (get().uid !== uid) {
+          set({ uid });
+        }
         const ref = doc(db, ACADEMY_QUESTIONS_COLLECTION, id);
         try {
           const snap = await getDoc(ref);
@@ -1788,8 +1794,11 @@ export const useGameStore = create<GameStore>()(
       },
       deleteAcademyUserQuestion: async (id) => {
         if (!db) return false;
-        const uid = get().uid;
+        const uid = get().uid ?? auth?.currentUser?.uid ?? null;
         if (!uid) return false;
+        if (get().uid !== uid) {
+          set({ uid });
+        }
         const ref = doc(db, ACADEMY_QUESTIONS_COLLECTION, id);
         try {
           const snap = await getDoc(ref);
