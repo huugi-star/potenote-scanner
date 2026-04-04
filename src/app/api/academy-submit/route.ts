@@ -39,8 +39,15 @@ export async function POST(req: Request) {
     if (!idToken) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    let decoded: { uid: string; name?: string };
+    try {
+      const verified = await adminAuth.verifyIdToken(idToken);
+      decoded = { uid: verified.uid, name: verified.name };
+    } catch (error) {
+      const code = String((error as { code?: string } | undefined)?.code ?? 'verify_failed');
+      return NextResponse.json({ error: `ID_TOKEN_VERIFY_FAILED:${code}` }, { status: 401 });
+    }
 
-    const decoded = await adminAuth.verifyIdToken(idToken);
     const parsed = BodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -58,28 +65,41 @@ export async function POST(req: Request) {
     const uid = decoded.uid;
     const data = parsed.data;
     const docRef = adminDb.collection('academy_questions').doc();
-
-    await docRef.set({
-      id: docRef.id,
-      status: 'published',
-      authorUid: uid,
-      authorName: decoded.name ?? '匿名ユーザー',
-      question: data.question.trim(),
-      choices: data.choices.map((c) => c.trim()),
-      answerIndex: data.answerIndex,
-      explanation: data.explanation.trim(),
-      keywords: (data.keywords ?? []).map((k) => k.trim()).filter(Boolean).slice(0, 8),
-      bigCategory: data.bigCategory?.trim() || null,
-      subCategory: data.subCategory?.trim() || null,
-      subjectText: data.subjectText?.trim() || null,
-      detailText: data.detailText?.trim() || null,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    try {
+      await docRef.set({
+        id: docRef.id,
+        status: 'published',
+        authorUid: uid,
+        authorName: decoded.name ?? '匿名ユーザー',
+        question: data.question.trim(),
+        choices: data.choices.map((c) => c.trim()),
+        answerIndex: data.answerIndex,
+        explanation: data.explanation.trim(),
+        keywords: (data.keywords ?? []).map((k) => k.trim()).filter(Boolean).slice(0, 8),
+        bigCategory: data.bigCategory?.trim() || null,
+        subCategory: data.subCategory?.trim() || null,
+        subjectText: data.subjectText?.trim() || null,
+        detailText: data.detailText?.trim() || null,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } catch (error) {
+      const code = String((error as { code?: string } | undefined)?.code ?? 'write_failed');
+      const message = String((error as { message?: string } | undefined)?.message ?? '');
+      return NextResponse.json(
+        { error: `ACADEMY_WRITE_FAILED:${code}${message ? `:${message.slice(0, 160)}` : ''}` },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ success: true, id: docRef.id });
   } catch (error) {
+    const code = String((error as { code?: string } | undefined)?.code ?? 'unknown');
+    const message = String((error as { message?: string } | undefined)?.message ?? '');
     console.error('[academy-submit] failed:', error);
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    return NextResponse.json(
+      { error: `INTERNAL_ERROR:${code}${message ? `:${message.slice(0, 160)}` : ''}` },
+      { status: 500 }
+    );
   }
 }

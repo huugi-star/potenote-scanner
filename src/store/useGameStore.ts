@@ -1762,6 +1762,10 @@ export const useGameStore = create<GameStore>()(
         // 本番はまず認証済み API 経由を優先（rules 差分や権限揺れの影響を受けにくい）
         const apiResult = await submitAcademyQuestionViaApi(payload);
         if (apiResult.ok) return { ok: true };
+        if (apiResult.reason?.startsWith('api_') || apiResult.reason === 'unauthenticated') {
+          // API に到達して失敗した場合は原因をそのまま返し、二重失敗ノイズを防ぐ
+          return { ok: false, reason: apiResult.reason };
+        }
 
         const questionRef = doc(collection(db, ACADEMY_QUESTIONS_COLLECTION));
         const normalizedChoices = Array.isArray(payload.choices)
@@ -1775,7 +1779,7 @@ export const useGameStore = create<GameStore>()(
           return { ok: false, reason: 'invalid_payload' };
         }
         try {
-          await setDoc(questionRef, {
+          const fallbackDoc: Record<string, unknown> = {
             id: questionRef.id,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -1787,12 +1791,16 @@ export const useGameStore = create<GameStore>()(
             choices: normalizedChoices,
             answerIndex: safeAnswerIndex,
             explanation: String(payload.explanation ?? '').trim(),
-            keywords: Array.isArray(payload.keywords) ? payload.keywords.map((k) => String(k ?? '').trim()).filter(Boolean).slice(0, 8) : [],
-            bigCategory: payload.bigCategory,
-            subCategory: payload.subCategory,
-            subjectText: payload.subjectText,
-            detailText: payload.detailText,
-          });
+            keywords: Array.isArray(payload.keywords)
+              ? payload.keywords.map((k) => String(k ?? '').trim()).filter(Boolean).slice(0, 8)
+              : [],
+          };
+          if (payload.bigCategory !== undefined) fallbackDoc.bigCategory = payload.bigCategory;
+          if (payload.subCategory !== undefined) fallbackDoc.subCategory = payload.subCategory;
+          if (payload.subjectText !== undefined) fallbackDoc.subjectText = payload.subjectText;
+          if (payload.detailText !== undefined) fallbackDoc.detailText = payload.detailText;
+
+          await setDoc(questionRef, fallbackDoc);
           return { ok: true };
         } catch (error) {
           console.error('[academy_questions] add failed:', error);
