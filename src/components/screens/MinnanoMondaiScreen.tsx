@@ -678,13 +678,14 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     return map;
   }, [academyUserQuestions]);
 
-  const recentQuestions = useMemo(
-    () =>
-      [...academyUserQuestions]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 3),
-    [academyUserQuestions]
-  );
+  const recentQuestions = useMemo(() => {
+    // 「最近追加された問題」はユーザー投稿を優先表示する
+    const posted = academyUserQuestions.filter((q) => !!q.authorUid);
+    const source = posted.length > 0 ? posted : academyUserQuestions;
+    return [...source]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3);
+  }, [academyUserQuestions]);
 
   const handleChallenge = (_questions: AcademyUserQuestion[]) => {
     alert('試験開始機能は実装予定です');
