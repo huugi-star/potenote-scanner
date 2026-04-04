@@ -139,10 +139,10 @@ const mergeSeedAndPostedAcademyQuestions = (
 
 const submitAcademyQuestionViaApi = async (
   payload: Omit<AcademyUserQuestion, 'id' | 'createdAt' | 'authorUid' | 'authorName'>
-): Promise<boolean> => {
+): Promise<{ ok: boolean; reason?: string }> => {
   try {
-    if (!auth?.currentUser) return false;
-    const idToken = await auth.currentUser.getIdToken();
+    if (!auth?.currentUser) return { ok: false, reason: 'unauthenticated' };
+    const idToken = await auth.currentUser.getIdToken(true);
     const res = await fetch('/api/academy-submit', {
       method: 'POST',
       headers: {
@@ -165,10 +165,19 @@ const submitAcademyQuestionViaApi = async (
         detailText: payload.detailText ? String(payload.detailText).slice(0, 1200) : undefined,
       }),
     });
-    if (!res.ok) return false;
-    return true;
-  } catch {
-    return false;
+    if (!res.ok) {
+      let errorText = '';
+      try {
+        const body = (await res.json()) as { error?: string };
+        errorText = body?.error ? `:${body.error}` : '';
+      } catch {
+        errorText = '';
+      }
+      return { ok: false, reason: `api_${res.status}${errorText}` };
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, reason: `api_exception:${String((error as Error)?.message ?? error)}` };
   }
 };
 
@@ -461,7 +470,7 @@ interface GameActions {
   moveWordDexBatch: (batchId: string, toDictionaryId: string) => void;
 
   // すうひもちアカデミー
-  addAcademyUserQuestion: (payload: Omit<AcademyUserQuestion, 'id' | 'createdAt' | 'authorUid' | 'authorName'>) => Promise<boolean>;
+  addAcademyUserQuestion: (payload: Omit<AcademyUserQuestion, 'id' | 'createdAt' | 'authorUid' | 'authorName'>) => Promise<{ ok: boolean; reason?: string }>;
   updateAcademyUserQuestion: (id: string, patch: Partial<Pick<AcademyUserQuestion, 'question' | 'choices' | 'answerIndex' | 'explanation'>>) => Promise<boolean>;
   deleteAcademyUserQuestion: (id: string) => Promise<boolean>;
   getAcademyUserQuestions: () => AcademyUserQuestion[];
@@ -1743,16 +1752,16 @@ export const useGameStore = create<GameStore>()(
 
       // ===== すうひもちアカデミー =====
       addAcademyUserQuestion: async (payload) => {
-        if (!db) return false;
+        if (!db) return { ok: false, reason: 'db_unavailable' };
         const uid = get().uid ?? auth?.currentUser?.uid ?? null;
-        if (!uid) return false;
+        if (!uid) return { ok: false, reason: 'unauthenticated' };
         if (get().uid !== uid) {
           set({ uid });
         }
 
         // 本番はまず認証済み API 経由を優先（rules 差分や権限揺れの影響を受けにくい）
-        const apiOk = await submitAcademyQuestionViaApi(payload);
-        if (apiOk) return true;
+        const apiResult = await submitAcademyQuestionViaApi(payload);
+        if (apiResult.ok) return { ok: true };
 
         const questionRef = doc(collection(db, ACADEMY_QUESTIONS_COLLECTION));
         const normalizedChoices = Array.isArray(payload.choices)
@@ -1762,7 +1771,9 @@ export const useGameStore = create<GameStore>()(
           ? Math.max(0, Math.min(3, payload.answerIndex))
           : 0;
         const safeQuestion = String(payload.question ?? '').trim();
-        if (!safeQuestion || normalizedChoices.length !== 4) return false;
+        if (!safeQuestion || normalizedChoices.length !== 4) {
+          return { ok: false, reason: 'invalid_payload' };
+        }
         try {
           await setDoc(questionRef, {
             id: questionRef.id,
@@ -1782,10 +1793,14 @@ export const useGameStore = create<GameStore>()(
             subjectText: payload.subjectText,
             detailText: payload.detailText,
           });
-          return true;
+          return { ok: true };
         } catch (error) {
           console.error('[academy_questions] add failed:', error);
-          return false;
+          const code = String((error as { code?: string } | undefined)?.code ?? 'firestore_add_failed');
+          return {
+            ok: false,
+            reason: `${apiResult.reason ?? 'api_failed'};${code}`,
+          };
         }
       },
       updateAcademyUserQuestion: async (id, patch) => {

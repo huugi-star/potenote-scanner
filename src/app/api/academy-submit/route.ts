@@ -28,6 +28,13 @@ const getBearerToken = (req: Request): string | null => {
 
 export async function POST(req: Request) {
   try {
+    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
+      return NextResponse.json(
+        { error: 'FIREBASE_ADMIN_NOT_CONFIGURED' },
+        { status: 500 }
+      );
+    }
+
     const idToken = getBearerToken(req);
     if (!idToken) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -1215,7 +1215,7 @@ if (subview === 'create_detail') {
                   onClick={async () => {
                     if (!canPublish) return;
                     if (draft) {
-                      const ok = await addAcademyUserQuestion({
+                      const result = await addAcademyUserQuestion({
                         question: draft.question,
                         choices: draft.choices,
                         answerIndex: draft.answerIndex,
@@ -1226,8 +1226,9 @@ if (subview === 'create_detail') {
                         subjectText: subjectText.trim() || undefined,
                         detailText: detailText.trim() || undefined,
                       });
-                      if (!ok) {
-                        addToast('error', '投稿に失敗しました（権限設定またはサーバー状態を確認してください）');
+                      if (!result.ok) {
+                        const reason = result.reason ? ` / ${result.reason}` : '';
+                        addToast('error', `投稿に失敗しました${reason}`);
                         return;
                       }
                     }
