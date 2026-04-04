@@ -1763,8 +1763,14 @@ export const useGameStore = create<GameStore>()(
         // 本番はまず認証済み API 経由を優先（rules 差分や権限揺れの影響を受けにくい）
         const apiResult = await submitAcademyQuestionViaApi(payload);
         if (apiResult.ok) return { ok: true };
-        if (apiResult.reason?.startsWith('api_') || apiResult.reason === 'unauthenticated') {
-          // API に到達して失敗した場合は原因をそのまま返し、二重失敗ノイズを防ぐ
+        if (apiResult.reason === 'unauthenticated') {
+          return { ok: false, reason: apiResult.reason };
+        }
+        // API 側が 401/500 で失敗する運用環境向けに、クライアント直書きへフォールバック
+        const shouldTryClientFallback =
+          typeof apiResult.reason === 'string' &&
+          (apiResult.reason.startsWith('api_401') || apiResult.reason.startsWith('api_500'));
+        if (!shouldTryClientFallback && apiResult.reason?.startsWith('api_')) {
           return { ok: false, reason: apiResult.reason };
         }
 
@@ -1808,7 +1814,7 @@ export const useGameStore = create<GameStore>()(
           const code = String((error as { code?: string } | undefined)?.code ?? 'firestore_add_failed');
           return {
             ok: false,
-            reason: `${apiResult.reason ?? 'api_failed'};${code}`,
+            reason: `${apiResult.reason ?? 'api_failed'};fallback_${code}`,
           };
         }
       },
