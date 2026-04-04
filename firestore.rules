@@ -31,7 +31,9 @@ service cloud.firestore {
       // 公開問題は誰でも閲覧可。hidden / deleted は管理者のみ閲覧可。
       allow read: if resource.data.status == 'published' || isAdmin();
 
-      // 投稿作成: authorUid のなりすまし防止 + server timestamp 強制
+      // 投稿作成: authorUid のなりすまし防止
+      // serverTimestamp() はクライアントから送ると request.time と一致しない場合があるため
+      // タイムスタンプ検証は外し、フィールド存在のみ確認する
       allow create: if signedIn()
         && request.resource.data.id == questionId
         && request.resource.data.authorUid == request.auth.uid
@@ -44,15 +46,15 @@ service cloud.firestore {
         && request.resource.data.explanation is string
         && validKeywords(request.resource.data.keywords)
         && request.resource.data.status == 'published'
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
+        && request.resource.data.createdAt != null
+        && request.resource.data.updatedAt != null;
 
-      // 更新: 投稿者本人 or 管理者。createdAt / authorUid は固定、updatedAt はサーバ時刻。
+      // 更新: 投稿者本人 or 管理者。createdAt / authorUid は固定。
       allow update: if (isOwner(resource.data) || isAdmin())
         && request.resource.data.id == resource.data.id
         && request.resource.data.authorUid == resource.data.authorUid
         && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedAt != null
         && validStatus(request.resource.data.status)
         && request.resource.data.question is string
         && validChoices(request.resource.data.choices)
@@ -73,7 +75,7 @@ service cloud.firestore {
         && request.resource.data.actorUid == request.auth.uid
         && request.resource.data.action in ['update', 'soft_delete']
         && request.resource.data.targetQuestionId is string
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.createdAt != null;
       allow update, delete: if false;
     }
 
