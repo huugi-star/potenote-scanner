@@ -148,6 +148,7 @@ const submitAcademyQuestionViaApi = async (
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${idToken}`,
+        'x-firebase-id-token': idToken,
       },
       body: JSON.stringify({
         question: String(payload.question ?? '').trim().slice(0, 1000),

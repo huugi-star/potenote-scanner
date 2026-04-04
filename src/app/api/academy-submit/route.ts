@@ -19,11 +19,17 @@ const BodySchema = z.object({
 });
 
 const getBearerToken = (req: Request): string | null => {
+  const explicitToken = req.headers.get('x-firebase-id-token');
+  if (explicitToken && explicitToken.trim()) {
+    return explicitToken.trim().replace(/^"|"$/g, '');
+  }
+
   const auth = req.headers.get('authorization');
   if (!auth) return null;
-  const [scheme, token] = auth.split(' ');
+  const normalized = auth.trim().replace(/^"|"$/g, '');
+  const [scheme, token] = normalized.split(' ');
   if (scheme?.toLowerCase() !== 'bearer' || !token) return null;
-  return token.trim();
+  return token.trim().replace(/^"|"$/g, '');
 };
 
 export async function POST(req: Request) {
@@ -38,6 +44,10 @@ export async function POST(req: Request) {
     const idToken = getBearerToken(req);
     if (!idToken) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const looksLikeJwt = idToken.split('.').length === 3;
+    if (!looksLikeJwt || idToken.includes('undefined') || idToken.length < 100) {
+      return NextResponse.json({ error: 'ID_TOKEN_MALFORMED' }, { status: 401 });
     }
     let decoded: { uid: string; name?: string };
     try {
