@@ -359,7 +359,7 @@ export async function generateQuizPDF(histories: QuizHistory[]): Promise<void> {
   
   // PDFをダウンロード
   const safeFileName = histories.length === 1
-    ? histories[0].quiz.summary.substring(0, 20).replace(/[^\w\s-]/g, '').trim()
+    ? (histories[0].quiz.title || histories[0].quiz.summary).substring(0, 20).replace(/[^\w\s-]/g, '').trim()
     : `複数クイズ_${histories.length}件`;
   const fileName = `クイズ_${safeFileName || '問題'}_${new Date().toISOString().split('T')[0]}.pdf`;
   pdf.save(fileName);

@@ -51,6 +51,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
   
   // Store
   const isVIP = useGameStore(state => state.isVIP);
+  const uid = useGameStore(state => state.uid);
   const quizHistory = useGameStore(state => state.quizHistory);
   const addQuestionsToHistory = useGameStore(state => state.addQuestionsToHistory);
   const deleteQuizHistory = useGameStore(state => state.deleteQuizHistory);
@@ -74,10 +75,17 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
     
     const query = searchQuery.toLowerCase();
     return quizHistory.filter(h => 
-      h.quiz.summary.toLowerCase().includes(query) ||
+              (h.quiz.title || h.quiz.summary).toLowerCase().includes(query) ||
       h.quiz.keywords.some(k => k.toLowerCase().includes(query))
     );
   }, [quizHistory, searchQuery]);
+
+  const canGenerateFromSeed = (history: QuizHistory): boolean =>
+    !!history.quiz?.summary?.trim() &&
+    Array.isArray(history.quiz?.keywords) &&
+    history.quiz.keywords.length > 0 &&
+    Array.isArray(history.quiz?.questions) &&
+    history.quiz.questions.length > 0;
 
   // 新しい問題に挑戦
   const handleNewQuiz = async (history: QuizHistory) => {
@@ -85,93 +93,91 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
     
     // 制限チェック
     if (!canGenerate) {
-      addToast('error', limitCheck.error || '新問題生成回数の上限に達しました');
+      addToast('error', limitCheck.error || '類題生成回数の上限に達しました');
       return;
     }
     
-    if (history.ocrText) {
-      setIsGenerating(true);
-      setGeneratingId(history.id);
-      
-      try {
-        // 既存の問題と正解を「正しい事実」として渡す
-        const existingQA = history.quiz.questions.map(q => 
-          `問: ${q.q} → 正解: ${q.options[q.a]}`
-        ).join('\n');
-        
-        const response = await fetch('/api/generate-quiz', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            text: history.ocrText,
-            verifiedFacts: existingQA
-          }),
-        });
+    if (!canGenerateFromSeed(history)) {
+      addToast('info', 'この履歴は類題生成に必要な情報が不足しています。既存問題で挑戦します');
+      onStartQuiz(history.quiz, history.id);
+      return;
+    }
 
-        if (response.status === 429) {
-          alert("🙏 申し訳ありません！\n\n本日のAI解析サーバーが混み合っており、1日の利用上限に達しました。\n（コスト制限のため、現在は1日限定数で運営しています）\n\n明日になるとリセットされますので、また明日お試しください！");
-          setIsGenerating(false);
-          setGeneratingId(null);
-          return;
-        }
-        
-        if (!response.ok) throw new Error('Failed to generate quiz');
-        
-        const result = await response.json();
-        // APIは { quiz: ..., ocrText: ..., tokenUsage: ... } を返す
-        const newQuiz = result.quiz;
-        
-        if (newQuiz && newQuiz.questions && newQuiz.questions.length > 0) {
-          // ★成功時のみ生成回数を消費
-          incrementFreeQuestGenerationCount();
-          // 新しい問題を履歴に追加（再挑戦用）
-          addQuestionsToHistory(history.id, newQuiz.questions);
-          
-          // 新しく生成した問題を新しいクイズ履歴エントリとして保存（ページ更新後も保持するため）
-          const newQuizId = `freequest_new_${Date.now()}`;
-          
-          // タイトルに「②」を追加して識別しやすくする
-          const newQuizWithTitle: QuizRaw = {
-            ...newQuiz,
-            summary: `② ${newQuiz.summary}`,
-          };
-          
-          const tempResult: QuizResult = {
-            quizId: newQuizId,
-            correctCount: 0,
-            totalQuestions: newQuiz.questions.length,
-            isPerfect: false,
-            earnedCoins: 0,
-            earnedDistance: 0,
-            isDoubled: false,
-            timestamp: new Date(),
-          };
-          
-          // 新しいクイズ履歴として保存（ocrTextとstructuredOCRは元の履歴から継承）
-          await saveQuizHistory(
-            newQuizWithTitle,
-            tempResult,
-            history.ocrText,
-            history.structuredOCR
-          );
-          
-          addToast('success', '新しい問題を生成しました！');
-          onStartQuiz(newQuizWithTitle, newQuizId);
-        } else {
-          throw new Error('No questions generated');
-        }
-      } catch (error) {
-        console.error('Quiz generation error:', error);
-        // ★エラー時は生成回数を消費しない
-        addToast('error', '新問題の生成に失敗。既存問題で挑戦します');
-        onStartQuiz(history.quiz, history.id);
-      } finally {
+    setIsGenerating(true);
+    setGeneratingId(history.id);
+    
+    try {
+      const existingQA = history.quiz.questions.map((q) =>
+        `問: ${q.q} → 正解: ${q.options[q.a]}`
+      ).join('\n');
+      const existingQuestions = history.quiz.questions.map((q) => ({
+        question: q.q,
+        answer: q.options[q.a],
+        choices: q.options,
+      }));
+
+      const response = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'seed',
+          uid: uid ?? undefined,
+          summary: history.quiz.summary,
+          keywords: history.quiz.keywords,
+          existingQuestions,
+          questionCount: 5,
+          difficulty: 'normal',
+          verifiedFacts: existingQA,
+        }),
+      });
+
+      if (response.status === 429) {
+        alert("🙏 申し訳ありません！\n\n本日のAI解析サーバーが混み合っており、1日の利用上限に達しました。\n（コスト制限のため、現在は1日限定数で運営しています）\n\n明日になるとリセットされますので、また明日お試しください！");
         setIsGenerating(false);
         setGeneratingId(null);
+        return;
       }
-    } else {
-      addToast('info', 'OCRテキストがないため既存問題で挑戦します');
+      
+      if (!response.ok) throw new Error('Failed to generate quiz');
+      
+      const result = await response.json();
+      const newQuiz = result.quiz;
+      
+      if (newQuiz && newQuiz.questions && newQuiz.questions.length > 0) {
+        incrementFreeQuestGenerationCount();
+        addQuestionsToHistory(history.id, newQuiz.questions);
+        
+        const newQuizId = `freequest_new_${Date.now()}`;
+        const newQuizWithTitle: QuizRaw = {
+          ...newQuiz,
+          summary: `② ${newQuiz.summary}`,
+        };
+        
+        const tempResult: QuizResult = {
+          quizId: newQuizId,
+          correctCount: 0,
+          totalQuestions: newQuiz.questions.length,
+          isPerfect: false,
+          earnedCoins: 0,
+          earnedDistance: 0,
+          isDoubled: false,
+          timestamp: new Date(),
+        };
+        
+        await saveQuizHistory(newQuizWithTitle, tempResult);
+        
+        addToast('success', '類題を生成しました！');
+        onStartQuiz(newQuizWithTitle, newQuizId);
+      } else {
+        throw new Error('No questions generated');
+      }
+    } catch (error) {
+      console.error('Quiz generation error:', error);
+      addToast('error', '類題の生成に失敗。既存問題で挑戦します');
       onStartQuiz(history.quiz, history.id);
+    } finally {
+      setIsGenerating(false);
+      setGeneratingId(null);
     }
   };
   
@@ -181,7 +187,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
       recoverFreeQuestGenerationCount();
       setShowAdsModal(false);
       vibrateSuccess();
-      addToast('success', '新問題生成回数が3回回復しました！');
+      addToast('success', '類題生成回数が3回回復しました！');
     }
   };
   
@@ -327,11 +333,14 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
                 過去にスキャンした内容を何度でも復習できます。
                 スキャン回数は消費しません！
               </p>
+              <p className="text-gray-500 text-xs mt-1">
+                類題は、この履歴の要約・キーワード・既出問題から作成します。
+              </p>
             </div>
           </div>
         </div>
         
-        {/* 新問題生成制限表示 */}
+        {/* 類題生成制限表示 */}
         <div className={`rounded-xl p-3 mb-4 border ${
           isVIP 
             ? 'bg-yellow-500/10 border-yellow-500/30' 
@@ -352,7 +361,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
                 <>
                   <AlertCircle className={`w-4 h-4 ${canGenerate ? 'text-cyan-400' : 'text-red-400'}`} />
                   <span className={`text-sm font-medium ${canGenerate ? 'text-cyan-400' : 'text-red-400'}`}>
-                    新問題生成: 残り {remainingGenerations}/{LIMITS.FREE_USER.DAILY_FREE_QUEST_GENERATION_LIMIT} 回
+                    類題生成: 残り {remainingGenerations}/{LIMITS.FREE_USER.DAILY_FREE_QUEST_GENERATION_LIMIT} 回
                   </span>
                 </>
               )}
@@ -424,9 +433,14 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
                       className="mt-1 w-5 h-5 rounded border-gray-600 bg-gray-700 text-emerald-500 focus:ring-emerald-500 focus:ring-2"
                     />
                     <div className="flex-1">
-                      <p className="text-white font-medium line-clamp-2 mb-1">
-                        {history.quiz.summary}
+                      <p className="text-white font-medium line-clamp-2 mb-0.5">
+                        {history.quiz.title || history.quiz.summary}
                       </p>
+                      {history.quiz.summary && (
+                        <p className="text-gray-400 text-xs line-clamp-2">
+                          {history.quiz.summary}
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 text-xs text-gray-400">
                         <Calendar className="w-3 h-3" />
                         {formatDate(history.createdAt)}
@@ -475,21 +489,21 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
                     再挑戦
                   </motion.button>
 
-                  {/* 新しい問題ボタン */}
+                  {/* 類題生成ボタン */}
                   <motion.button
                     onClick={() => handleNewQuiz(history)}
-                    disabled={isGenerating || !history.ocrText || !canGenerate}
+                    disabled={isGenerating || !canGenerateFromSeed(history) || !canGenerate}
                     className={`flex-1 py-2.5 rounded-lg text-white font-medium flex items-center justify-center gap-2 ${
                       isGenerating && generatingId === history.id
                         ? 'bg-gray-600'
                         : !canGenerate
                           ? 'bg-gray-600 opacity-50'
-                          : history.ocrText
+                          : canGenerateFromSeed(history)
                             ? 'bg-gradient-to-r from-emerald-600 to-emerald-500'
                             : 'bg-gray-600 opacity-50'
                     }`}
-                    whileHover={!isGenerating && history.ocrText && canGenerate ? { scale: 1.02 } : {}}
-                    whileTap={!isGenerating && history.ocrText && canGenerate ? { scale: 0.98 } : {}}
+                    whileHover={!isGenerating && canGenerateFromSeed(history) && canGenerate ? { scale: 1.02 } : {}}
+                    whileTap={!isGenerating && canGenerateFromSeed(history) && canGenerate ? { scale: 0.98 } : {}}
                   >
                     {isGenerating && generatingId === history.id ? (
                       <>
@@ -499,7 +513,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
                     ) : (
                       <>
                         <Play className="w-4 h-4" />
-                        新問題
+                        類題を作る
                       </>
                     )}
                   </motion.button>

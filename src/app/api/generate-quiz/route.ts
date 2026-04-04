@@ -9,12 +9,33 @@ import { collection, addDoc, query, where, getDocs, limit, Timestamp } from "fir
 // Google Vision APIのエンドポイント
 const GOOGLE_VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
 
+type SeedQuestionInput = {
+  question: string;
+  answer: string;
+  choices?: string[];
+};
+
+type GenerateQuizRequestBody = {
+  mode?: "ocr" | "seed";
+  uid?: string;
+  image?: string;
+  text?: string;
+  verifiedFacts?: string;
+  summary?: string;
+  keywords?: string[];
+  existingQuestions?: SeedQuestionInput[];
+  questionCount?: number;
+  difficulty?: "easy" | "normal" | "hard";
+};
+
 // タイムアウト対策と動的レンダリング設定 (Node.js Runtime)
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 // ハルシネーション防止用の型定義
 const QuizSchema = z.object({
+  // 旧レスポンス互換: title が無い場合は空文字で受けて後段で補完
+  title: z.string().optional().default(''),
   summary: z.string(),
   keywords: z.array(z.string()),
   questions: z.array(
@@ -46,19 +67,37 @@ function shuffleArray<T>(array: T[]): T[] {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = await req.json() as GenerateQuizRequestBody;
+    const mode: "ocr" | "seed" = body.mode === "seed" ? "seed" : "ocr";
     const { image, text, verifiedFacts } = body;
+    const canUseFirestoreAds = !!db && !!body.uid;
     
     // デバッグ用ログ
     console.log("=== Generate Quiz API Called ===");
+    console.log("mode:", mode);
     console.log("Has image:", !!image);
     console.log("Has text:", !!text);
     console.log("Has verifiedFacts:", !!verifiedFacts);
 
     let extractedText = text || "";
+    const seedSummary = String(body.summary ?? "").trim();
+    const seedKeywords = Array.isArray(body.keywords)
+      ? body.keywords.map((k) => String(k ?? "").trim()).filter(Boolean)
+      : [];
+    const seedExistingQuestions = Array.isArray(body.existingQuestions)
+      ? body.existingQuestions
+          .map((q) => ({
+            question: String(q?.question ?? "").trim(),
+            answer: String(q?.answer ?? "").trim(),
+            choices: Array.isArray(q?.choices) ? q.choices.map((c) => String(c ?? "").trim()).filter(Boolean) : undefined,
+          }))
+          .filter((q) => q.question && q.answer)
+      : [];
+    const seedQuestionCount = Math.min(10, Math.max(3, Number(body.questionCount ?? 5)));
+    const seedDifficulty = body.difficulty ?? "normal";
 
     // ===== Step 1: OCR（Google Vision API）=====
-    if (!extractedText && image) {
+    if (mode === "ocr" && !extractedText && image) {
       const base64Content = image.replace(/^data:image\/\w+;base64,/, "");
 
       console.log("Step 1: OCR with Google Vision API (DOCUMENT_TEXT_DETECTION)...");
@@ -99,14 +138,16 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "No text found (OCR failed)" }, { status: 400 });
       }
 
-      // OCR結果をログ出力（デバッグ用）
-      console.log("=== OCR RESULT ===");
-      console.log(extractedText);
-      console.log("==================");
     }
 
-    if (!extractedText) {
+    if (mode === "ocr" && !extractedText) {
       return NextResponse.json({ error: "No image or text provided" }, { status: 400 });
+    }
+    if (mode === "seed" && (!seedSummary || seedKeywords.length === 0 || seedExistingQuestions.length === 0)) {
+      return NextResponse.json(
+        { error: "Seed mode requires summary, keywords, and existingQuestions" },
+        { status: 400 }
+      );
     }
 
     console.log("Step 2: Preparing Sales Logic...");
@@ -119,13 +160,17 @@ export async function POST(req: Request) {
 
     // 広告リストをシャッフルしてチェック（毎回同じ広告にならないように）
     const shuffledAds = shuffleArray(ASP_ADS);
+    const sourceTextForSales =
+      mode === "seed"
+        ? `${seedSummary}\n${seedKeywords.join(" ")}\n${seedExistingQuestions.map((q) => q.question).join(" ")}`
+        : extractedText;
 
     for (const ad of shuffledAds) {
       // 広告に設定されたキーワードが含まれているか？
       // aspAds.ts に keywords プロパティが設定されている前提
       const keywords = (ad as any).keywords || [];
       if (keywords.length > 0) {
-        const isMatch = keywords.some((keyword: string) => extractedText.includes(keyword));
+        const isMatch = keywords.some((keyword: string) => sourceTextForSales.includes(keyword));
         
         if (isMatch) {
           console.log(`Keyword Match Found: ${ad.name}`);
@@ -133,9 +178,9 @@ export async function POST(req: Request) {
           // ★Firebaseチェック: この広告の「名作コピー」が保存されているか？
           // Firebaseが利用可能な場合のみ実行（エラー時はスキップしてAI生成に回す）
           try {
-            if (db) {
+            if (canUseFirestoreAds) {
               const copyQuery = query(
-                collection(db, "ad_copies"),
+                collection(db!, "ad_copies"),
                 where("ad_id", "==", ad.id),
                 limit(30) // 30個まで取得（在庫チェック用）
               );
@@ -250,7 +295,8 @@ options[0]に正解を入れる
 **重要**: 必ず以下の形式で出力してください。キー名は正確に一致させること。
 
 {
-  "summary": "教材の要約（100文字程度）",
+  "title": "短いタイトル（10〜20文字・句点なし）",
+  "summary": "教材の要約（50〜80文字程度）",
   "keywords": ["重要語句1", "重要語句2", "重要語句3"],
   "questions": [
     {
@@ -359,20 +405,86 @@ ${adListText}
 }`;
     }
 
-    let userContent = `以下はOCRで読み取った教材テキストです。このテキストからクイズを作成してください。
+    if (mode === "seed") {
+      if (preSelectedAdId && preSelectedReason) {
+        systemPrompt = `あなたは大手進学塾のベテラン講師です。
+以下のシード情報（要約・キーワード・既出問題）を使い、同テーマの新しい4択クイズを作ってください。
+
+必須ルール:
+- 既出問題の焼き直しを禁止（同じ問い・同じ正答・同じ切り口はNG）
+- 問題数は${seedQuestionCount}問
+- 難易度は${seedDifficulty}
+- options[0] に正解を入れる
+- 解説は60文字以内
+
+出力(JSON)は必ずこの形式:
+{
+  "summary": "要約",
+  "keywords": ["語句1","語句2","語句3"],
+  "questions": [{"q":"...","options":["..."],"a":0,"explanation":"..."}],
+  "ad_recommendation": { "ad_id": "${preSelectedAdId}", "reason": "${preSelectedReason}" }
+}`;
+      } else {
+        systemPrompt = `あなたは学習カリスマカウンセラーです。
+以下のシード情報（要約・キーワード・既出問題）を使い、同テーマの新しい4択クイズを作成し、学習支援ツール提案も行ってください。
+
+必須ルール:
+- title: 10〜20文字程度、名詞中心の短いタイトル。説明文にせず、句点（。．.）は禁止。
+- summary: 50〜80文字程度の要約文。
+- 既出問題と重複しない問いを作る
+- 問題数は${seedQuestionCount}問
+- 難易度は${seedDifficulty}
+- options[0] に正解を入れる
+- 解説は60文字以内
+- ad_recommendation は適切なものがなければ null
+
+広告候補:
+${adListText}
+
+出力(JSON)は必ずこの形式:
+{
+  "title": "短いタイトル（10〜20文字・句点なし）",
+  "summary": "要約（50〜80文字程度）",
+  "keywords": ["語句1","語句2","語句3"],
+  "questions": [{"q":"...","options":["..."],"a":0,"explanation":"..."}],
+  "ad_recommendation": { "ad_id": "ID", "reason": "メッセージ" }
+}`;
+      }
+    }
+
+    let userContent =
+      mode === "seed"
+        ? `以下は同テーマの再生成シードです。OCR本文は使わず、ここから新しい類題を作ってください。
+
+--- シード要約 ---
+${seedSummary}
+
+--- シードキーワード ---
+${seedKeywords.join(" / ")}
+
+--- 既出問題 ---
+${seedExistingQuestions
+  .map((q, i) => `${i + 1}. 問: ${q.question}\n   正解: ${q.answer}${q.choices?.length ? `\n   選択肢: ${q.choices.join(" | ")}` : ""}`)
+  .join("\n")}
+`
+        : `以下はOCRで読み取った教材テキストです。このテキストからクイズを作成してください。
 
 --- OCRテキスト開始 ---
 ${extractedText}
 --- OCRテキスト終了 ---`;
-    
+
     // 温度設定（新問題生成時は高めに）
     let temperature = preSelectedAdId ? 0.3 : 0.7; // 広告選定時は少し高めに
-    
-    if (verifiedFacts) {
+    const seedFacts = seedExistingQuestions
+      .map((q) => `問: ${q.question} → 正解: ${q.answer}`)
+      .join('\n');
+    const antiDupFacts = verifiedFacts || seedFacts;
+
+    if (antiDupFacts) {
       userContent += `
 
 ★★★【重要：以下の問題は既に出題済み。絶対に同じ問題を作るな】★★★
-${verifiedFacts}
+${antiDupFacts}
 
 上記と同じ問いかけ、同じ切り口の問題は禁止。
 必ず異なる視点、異なるトピック、異なる問い方で新しい問題を作成せよ。`;
@@ -467,10 +579,15 @@ ${verifiedFacts}
         }
         return isValid;
       });
+
+      if (mode === "seed" && json.questions.length > seedQuestionCount) {
+        json.questions = json.questions.slice(0, seedQuestionCount);
+      }
       
       // 問題数が不足している場合の警告
-      if (json.questions.length < 5) {
-        console.warn(`Warning: Only ${json.questions.length} valid questions found (expected 5)`);
+      const expectedCount = mode === "seed" ? seedQuestionCount : 5;
+      if (json.questions.length < expectedCount) {
+        console.warn(`Warning: Only ${json.questions.length} valid questions found (expected ${expectedCount})`);
       }
     } else {
       console.error("No questions array found in OpenAI response:", json);
@@ -488,6 +605,19 @@ ${verifiedFacts}
     }
 
     let validatedData = QuizSchema.parse(json);
+    // title が空のときは keywords からフォールバック生成
+    if (!validatedData.title || !validatedData.title.trim()) {
+      const fallback = (validatedData.keywords?.[0] || validatedData.summary.slice(0, 12)).trim();
+      validatedData = {
+        ...validatedData,
+        title: fallback.replace(/[。．.]/g, '').slice(0, 20) || 'クイズ',
+      };
+    } else {
+      validatedData = {
+        ...validatedData,
+        title: validatedData.title.replace(/[。．.]/g, '').slice(0, 20),
+      };
+    }
 
     // キーワード・ASPマッチなしの場合の楽天フォールバック
     if (!validatedData.ad_recommendation || !validatedData.ad_recommendation.ad_id) {
@@ -508,19 +638,17 @@ ${verifiedFacts}
     // 4. Firebaseへの保存（資産化）
     // ---------------------------------------------------------
     // パターンBで新しく生成されたコピーなら、Firebaseに保存してストックする
-    if (!preSelectedReason && validatedData.ad_recommendation && validatedData.ad_recommendation.ad_id) {
+    if (canUseFirestoreAds && !preSelectedReason && validatedData.ad_recommendation && validatedData.ad_recommendation.ad_id) {
       try {
-        if (db) {
-          await addDoc(collection(db, "ad_copies"), {
-            ad_id: validatedData.ad_recommendation.ad_id,
-            reason: validatedData.ad_recommendation.reason,
-            keywords: validatedData.keywords || [],
-            created_at: Timestamp.now(),
-            click_count: 0, // 将来の分析用
-            view_count: 0   // 将来の分析用
-          });
-          console.log("✨ New Sales Copy Saved to Firebase!");
-        }
+        await addDoc(collection(db!, "ad_copies"), {
+          ad_id: validatedData.ad_recommendation.ad_id,
+          reason: validatedData.ad_recommendation.reason,
+          keywords: validatedData.keywords || [],
+          created_at: Timestamp.now(),
+          click_count: 0, // 将来の分析用
+          view_count: 0   // 将来の分析用
+        });
+        console.log("✨ New Sales Copy Saved to Firebase!");
       } catch (e) {
         console.error("Firebase Save Error (Ignored):", e);
         // 保存に失敗しても、クイズ生成自体は止めない
@@ -529,7 +657,6 @@ ${verifiedFacts}
 
     return NextResponse.json({
       quiz: validatedData,
-      ocrText: extractedText,
       tokenUsage: {
         promptTokens,
         completionTokens,
@@ -538,9 +665,9 @@ ${verifiedFacts}
     });
 
   } catch (error) {
-    console.error("API Error:", error);
-
     const errorMessage = (error as any)?.message || String(error);
+    console.error("API Error:", errorMessage);
+
     const isLimitError =
       errorMessage.includes("429") ||
       errorMessage.includes("Quota") ||

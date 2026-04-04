@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // 実運用の権限判定は Custom Claims（admin=true）で行う
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function isOwner(resourceData) {
+      return signedIn() && resourceData.authorUid == request.auth.uid;
+    }
+
+    function validStatus(value) {
+      return value in ['published', 'pending', 'hidden', 'deleted'];
+    }
+
+    function validChoices(value) {
+      return value is list && value.size() == 4;
+    }
+
+    function validKeywords(value) {
+      return !(value is list) || value.size() <= 8;
+    }
+
+    // すうひもちアカデミー投稿問題
+    match /academy_questions/{questionId} {
+      // 公開問題は誰でも閲覧可。hidden / deleted は管理者のみ閲覧可。
+      allow read: if resource.data.status == 'published' || isAdmin();
+
+      // 投稿作成: authorUid のなりすまし防止 + server timestamp 強制
+      allow create: if signedIn()
+        && request.resource.data.id == questionId
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.authorName is string
+        && request.resource.data.question is string
+        && validChoices(request.resource.data.choices)
+        && request.resource.data.answerIndex is int
+        && request.resource.data.answerIndex >= 0
+        && request.resource.data.answerIndex < 4
+        && request.resource.data.explanation is string
+        && validKeywords(request.resource.data.keywords)
+        && request.resource.data.status == 'published'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      // 更新: 投稿者本人 or 管理者。createdAt / authorUid は固定、updatedAt はサーバ時刻。
+      allow update: if (isOwner(resource.data) || isAdmin())
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && validStatus(request.resource.data.status)
+        && request.resource.data.question is string
+        && validChoices(request.resource.data.choices)
+        && request.resource.data.answerIndex is int
+        && request.resource.data.answerIndex >= 0
+        && request.resource.data.answerIndex < 4
+        && request.resource.data.explanation is string
+        && validKeywords(request.resource.data.keywords);
+
+      // 物理削除は禁止（status=deleted の論理削除を使う）
+      allow delete: if false;
+    }
+
+    // 管理者操作ログ（監査用）
+    match /academy_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.action in ['update', 'soft_delete']
+        && request.resource.data.targetQuestionId is string
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // デフォルト deny（必要なコレクションは既存ルールに合わせて追記）
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

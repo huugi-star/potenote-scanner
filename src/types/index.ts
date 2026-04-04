@@ -31,9 +31,34 @@ export interface QuizQuestionAttempt {
  * APIから返されるクイズ生データ
  */
 export interface QuizRaw {
-  summary: string;           // スキャンした内容の要約
+  title: string;             // クイズの短いタイトル（10〜20文字）
+  summary: string;           // スキャンした内容の要約（50〜80文字）
   keywords: string[];        // フラッグ用キーワード (Top 3)
   questions: QuizQuestion[]; // クイズ問題 (5問)
+}
+
+/**
+ * すうひもちアカデミー: ユーザー作成問題
+ */
+export interface AcademyUserQuestion {
+  id: string;
+  createdAt: string;
+  updatedAt?: string;
+  status?: 'published' | 'pending' | 'hidden' | 'deleted';
+  authorUid?: string;
+  authorName?: string;
+  question: string;
+  choices: string[];
+  answerIndex: number;
+  explanation: string;
+  keywords: string[];
+  bigCategory?: string;
+  subCategory?: string;
+  subjectText?: string;
+  detailText?: string;
+  /** みんなの問題などで表示（任意） */
+  playCount?: number;
+  likeCount?: number;
 }
 
 /**
@@ -255,8 +280,10 @@ export interface QuizHistory {
   result: QuizResult;
   createdAt: string;   // ISO日付文字列
   usedQuestionIndices: number[];  // 出題済み問題のインデックス
-  ocrText?: string;    // OCRで読み取ったテキスト（後方互換用）
-  structuredOCR?: StructuredOCR;  // 構造化OCRデータ（位置情報付き）
+  /** @deprecated OCR本文は保存しない方針。旧データ互換の読み取り専用。 */
+  ocrText?: string;
+  /** @deprecated structuredOCR も保存しない方針。旧データ互換の読み取り専用。 */
+  structuredOCR?: StructuredOCR;
 }
 
 /**
@@ -278,6 +305,8 @@ export interface Island {
 export interface UserState {
   // ユーザーID（Firebase Auth）
   uid?: string | null;
+  // 表示名（ローカル保存）
+  displayName: string;
 
   // リソース
   coins: number;                 // 所持コイン

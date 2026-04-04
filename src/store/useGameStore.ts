@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, StructuredOCR, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult, QuizQuestionAttempt, WordDexDictionary, WordDexRelation, WordDexWord } from '@/types';
+import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult, QuizQuestionAttempt, WordDexDictionary, WordDexRelation, WordDexWord, AcademyUserQuestion } from '@/types';
 import type {
   AnataZukanEntry,
   AnataZukanExtractedEntry,
@@ -15,12 +15,13 @@ import type {
 } from '@/lib/suhimochiConversationTypes';
 import type { GeminiMessage, SuhimochiRequest } from '@/lib/suhimochiConversationEngine'; 
 import { ALL_ITEMS, getItemById } from '@/data/items';
+import { ACADEMY_SEED_QUESTIONS } from '@/data/academySeedQuestions';
 import { REWARDS, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { getJstDateString } from '@/lib/dateUtils';
 import { extractWords } from '@/lib/wordExtraction';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
 import { db, auth } from '@/lib/firebase';
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, orderBy, limit as fsLimit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, orderBy, limit as fsLimit, onSnapshot, where, serverTimestamp } from 'firebase/firestore';
 
 // ===== Helper Functions =====
 
@@ -32,6 +33,108 @@ const getTodayString = (): string => {
 const isLocalDevelopment = (): boolean => {
   return process.env.NODE_ENV === 'development' || 
          (typeof window !== 'undefined' && window.location.hostname === 'localhost');
+};
+
+const ACADEMY_QUESTIONS_COLLECTION = 'academy_questions';
+const ACADEMY_LOGS_COLLECTION = 'academy_logs';
+
+let academyQuestionsUnsubscribe: (() => void) | null = null;
+
+const getAcademyAdminUids = (): string[] =>
+  String(process.env.NEXT_PUBLIC_ACADEMY_ADMIN_UIDS ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+const isAcademyAdminUid = (uid: string | null | undefined): boolean => {
+  if (!uid) return false;
+  return getAcademyAdminUids().includes(uid);
+};
+
+const writeAcademyAdminLog = async (params: {
+  actorUid: string;
+  actorName?: string;
+  action: 'update' | 'soft_delete';
+  targetQuestionId: string;
+  beforeStatus?: string;
+  afterStatus?: string;
+}) => {
+  if (!db) return;
+  try {
+    await setDoc(doc(collection(db, ACADEMY_LOGS_COLLECTION)), {
+      actorUid: params.actorUid,
+      actorName: params.actorName ?? 'admin',
+      action: params.action,
+      targetQuestionId: params.targetQuestionId,
+      beforeStatus: params.beforeStatus ?? null,
+      afterStatus: params.afterStatus ?? null,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.warn('[academy_logs] write failed:', error);
+  }
+};
+
+const toIsoString = (value: unknown, fallback: string): string => {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate?: unknown }).toDate === 'function') {
+    try {
+      return ((value as { toDate: () => Date }).toDate()).toISOString();
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+};
+
+const normalizeAcademyQuestion = (
+  id: string,
+  raw: unknown
+): AcademyUserQuestion | null => {
+  if (!raw || typeof raw !== 'object') return null;
+  const rec = raw as Record<string, unknown>;
+  const choices = Array.isArray(rec.choices)
+    ? rec.choices.map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 4)
+    : [];
+  if (!rec.question || choices.length !== 4) return null;
+  const answerIndexRaw = Number(rec.answerIndex ?? 0);
+  const fallbackDate = new Date(0).toISOString();
+  const status = typeof rec.status === 'string' ? rec.status : 'published';
+  return {
+    id,
+    createdAt: toIsoString(rec.createdAt, fallbackDate),
+    updatedAt: rec.updatedAt ? toIsoString(rec.updatedAt, fallbackDate) : undefined,
+    status: status === 'pending' || status === 'hidden' || status === 'deleted' ? status : 'published',
+    authorUid: typeof rec.authorUid === 'string' ? rec.authorUid : undefined,
+    authorName: typeof rec.authorName === 'string' ? rec.authorName : undefined,
+    question: String(rec.question),
+    choices,
+    answerIndex: Number.isFinite(answerIndexRaw) ? Math.max(0, Math.min(3, Math.floor(answerIndexRaw))) : 0,
+    explanation: String(rec.explanation ?? ''),
+    keywords: Array.isArray(rec.keywords)
+      ? rec.keywords.map((k) => String(k ?? '').trim()).filter(Boolean).slice(0, 8)
+      : [],
+    bigCategory: typeof rec.bigCategory === 'string' ? rec.bigCategory : undefined,
+    subCategory: typeof rec.subCategory === 'string' ? rec.subCategory : undefined,
+    subjectText: typeof rec.subjectText === 'string' ? rec.subjectText : undefined,
+    detailText: typeof rec.detailText === 'string' ? rec.detailText : undefined,
+    playCount: typeof rec.playCount === 'number' ? rec.playCount : undefined,
+    likeCount: typeof rec.likeCount === 'number' ? rec.likeCount : undefined,
+  };
+};
+
+const mergeSeedAndPostedAcademyQuestions = (
+  posted: AcademyUserQuestion[]
+): AcademyUserQuestion[] => {
+  // 同一idは Firestore 投稿を優先し、seed は不足分のみ補完
+  const byId = new Map<string, AcademyUserQuestion>();
+  for (const q of posted) byId.set(q.id, q);
+  for (const seed of ACADEMY_SEED_QUESTIONS) {
+    if (!byId.has(seed.id)) byId.set(seed.id, seed);
+  }
+  return Array.from(byId.values())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 200);
 };
 
 const weightedRandom = <T extends { dropWeight: number }>(items: T[]): T => {
@@ -203,6 +306,9 @@ interface GameState extends UserState {
   wordDexDictionaries: WordDexDictionary[];
   wordDexWords: WordDexWord[];
 
+  // すうひもちアカデミー: 表示用問題（固定seed + Firestore投稿のマージ）
+  academyUserQuestions: AcademyUserQuestion[];
+
   // 講義履歴
   lectureHistory: LectureHistory[];
   
@@ -215,8 +321,6 @@ interface GameState extends UserState {
   // 生成されたクイズ（ページ更新後も保持）
   generatedQuiz: QuizRaw | null;
   scanImageUrl: string | null;
-  scanOcrText: string | undefined;
-  scanStructuredOCR: StructuredOCR | undefined;
   
   // スキャン時に保存したクイズの quizId（重複防止用）
   lastScanQuizId: string | null;
@@ -280,7 +384,7 @@ interface GameActions {
   setTranslationResult: (result: TranslationResult | null) => void;
   
   // 生成されたクイズの保存・取得
-  setGeneratedQuiz: (quiz: QuizRaw | null, imageUrl?: string | null, ocrText?: string, structuredOCR?: StructuredOCR) => void;
+  setGeneratedQuiz: (quiz: QuizRaw | null, imageUrl?: string | null) => void;
   clearGeneratedQuiz: () => void;
   setLastScanQuizId: (quizId: string | null) => void;
   
@@ -321,6 +425,13 @@ interface GameActions {
   applyQuizAttemptsToWordDex: (batchId: string, attempts: QuizQuestionAttempt[]) => void;
   moveWordDexBatch: (batchId: string, toDictionaryId: string) => void;
 
+  // すうひもちアカデミー
+  addAcademyUserQuestion: (payload: Omit<AcademyUserQuestion, 'id' | 'createdAt' | 'authorUid' | 'authorName'>) => Promise<boolean>;
+  updateAcademyUserQuestion: (id: string, patch: Partial<Pick<AcademyUserQuestion, 'question' | 'choices' | 'answerIndex' | 'explanation'>>) => Promise<boolean>;
+  deleteAcademyUserQuestion: (id: string) => Promise<boolean>;
+  getAcademyUserQuestions: () => AcademyUserQuestion[];
+  isAcademyAdmin: () => boolean;
+
   // 講義履歴管理
   saveLectureHistory: (script: LectureScript, imageUrl?: string) => void;
   getLectureHistory: () => LectureHistory[];
@@ -330,7 +441,7 @@ interface GameActions {
   applyQuizResult: (result: QuizResult) => void;
   
   // クイズ履歴
-  saveQuizHistory: (quiz: QuizRaw, result: QuizResult, ocrText?: string, structuredOCR?: StructuredOCR) => Promise<void>;
+  saveQuizHistory: (quiz: QuizRaw, result: QuizResult) => Promise<void>;
   getQuizHistory: () => QuizHistory[];
   deleteQuizHistory: (historyId: string) => Promise<void>;
   updateQuizHistoryUsedIndices: (historyId: string, newIndices: number[]) => void;
@@ -363,6 +474,7 @@ interface GameActions {
   checkAndUnlockIsland: () => Island | null;
   
   setHasLaunched: () => void;
+  setDisplayName: (name: string) => void;
 
   // すうひもち SNS タイムライン MVP
   setSuhimochiInterests: (interests: string[]) => void;
@@ -410,6 +522,7 @@ const DEV_INVENTORY = isLocalDevelopment()
 
 const initialState: GameState = {
   uid: null,
+  displayName: '',
   coins: isLocalDevelopment() ? 999999 : 0,
   tickets: isLocalDevelopment() ? 999 : 0,
   stamina: STAMINA.MAX,
@@ -460,6 +573,7 @@ const initialState: GameState = {
   wordDexOrder: [],
   wordDexDictionaries: DEFAULT_WORD_DEX_DICTIONARIES,
   wordDexWords: [],
+  academyUserQuestions: mergeSeedAndPostedAcademyQuestions([]),
 
   lectureHistory: [],
   
@@ -470,8 +584,6 @@ const initialState: GameState = {
   
   generatedQuiz: null,
   scanImageUrl: null,
-  scanOcrText: undefined,
-  scanStructuredOCR: undefined,
   
   lastScanQuizId: null,
   
@@ -503,6 +615,33 @@ export const useGameStore = create<GameStore>()(
         // ローカルのUIDを更新
         set({ uid });
 
+        // academy_questions をリアルタイム購読（固定seed + 投稿問題を合成）
+        if (academyQuestionsUnsubscribe) {
+          academyQuestionsUnsubscribe();
+          academyQuestionsUnsubscribe = null;
+        }
+        if (db) {
+          academyQuestionsUnsubscribe = onSnapshot(
+            query(
+              collection(db, ACADEMY_QUESTIONS_COLLECTION),
+              where('status', '==', 'published'),
+              orderBy('createdAt', 'desc'),
+              fsLimit(300)
+            ),
+            (snap) => {
+              const posted = snap.docs
+                .map((d) => normalizeAcademyQuestion(d.id, d.data()))
+                .filter((q): q is AcademyUserQuestion => q !== null && q.status === 'published');
+              useGameStore.setState({
+                academyUserQuestions: mergeSeedAndPostedAcademyQuestions(posted),
+              });
+            },
+            (error) => {
+              console.error('[academy_questions] snapshot error:', error);
+            }
+          );
+        }
+
         if (!uid || !db) return;
 
         try {
@@ -527,6 +666,7 @@ export const useGameStore = create<GameStore>()(
             set({
               // ユーザー状態系（努力の結晶のみ）
               uid,
+              displayName: cloudData.userState?.displayName ?? state.displayName,
               coins: cloudData.userState?.coins ?? state.coins,
               tickets: cloudData.userState?.tickets ?? state.tickets,
               stamina: cloudData.userState?.stamina ?? state.stamina,
@@ -567,8 +707,6 @@ export const useGameStore = create<GameStore>()(
               // 生成されたクイズは保持（クラウドには保存しないが、ローカルでは保持）
               generatedQuiz: state.generatedQuiz,
               scanImageUrl: state.scanImageUrl,
-              scanOcrText: state.scanOcrText,
-              scanStructuredOCR: state.scanStructuredOCR,
 
               // Preserve local-only word-collection data to avoid overwriting progress
               wordCollectionScans: state.wordCollectionScans,
@@ -679,6 +817,7 @@ export const useGameStore = create<GameStore>()(
             {
               userState: {
                 uid: state.uid,
+                displayName: state.displayName,
                 coins: state.coins,
                 tickets: state.tickets,
                 stamina: state.stamina,
@@ -970,12 +1109,10 @@ export const useGameStore = create<GameStore>()(
       },
       
       // 生成されたクイズの保存
-      setGeneratedQuiz: (quiz, imageUrl, ocrText, structuredOCR) => {
+      setGeneratedQuiz: (quiz, imageUrl) => {
         set({
           generatedQuiz: quiz,
           scanImageUrl: imageUrl ?? null,
-          scanOcrText: ocrText,
-          scanStructuredOCR: structuredOCR,
         });
       },
       
@@ -989,8 +1126,6 @@ export const useGameStore = create<GameStore>()(
         set({
           generatedQuiz: null,
           scanImageUrl: null,
-          scanOcrText: undefined,
-          scanStructuredOCR: undefined,
         });
       },
       
@@ -1571,6 +1706,120 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      // ===== すうひもちアカデミー =====
+      addAcademyUserQuestion: async (payload) => {
+        if (!db) return false;
+        const uid = get().uid;
+        if (!uid) return false;
+
+        const questionRef = doc(collection(db, ACADEMY_QUESTIONS_COLLECTION));
+        const normalizedChoices = Array.isArray(payload.choices)
+          ? payload.choices.map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 4)
+          : [];
+        const safeAnswerIndex = Number.isInteger(payload.answerIndex)
+          ? Math.max(0, Math.min(3, payload.answerIndex))
+          : 0;
+        const safeQuestion = String(payload.question ?? '').trim();
+        if (!safeQuestion || normalizedChoices.length !== 4) return false;
+        try {
+          await setDoc(questionRef, {
+            id: questionRef.id,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            status: 'published',
+            // authorUid は必ず auth.uid を採用（外部入力値は使わない）
+            authorUid: uid,
+            authorName: String(get().displayName ?? '').trim() || '匿名ユーザー',
+            question: safeQuestion,
+            choices: normalizedChoices,
+            answerIndex: safeAnswerIndex,
+            explanation: String(payload.explanation ?? '').trim(),
+            keywords: Array.isArray(payload.keywords) ? payload.keywords.map((k) => String(k ?? '').trim()).filter(Boolean).slice(0, 8) : [],
+            bigCategory: payload.bigCategory,
+            subCategory: payload.subCategory,
+            subjectText: payload.subjectText,
+            detailText: payload.detailText,
+          });
+          return true;
+        } catch (error) {
+          console.error('[academy_questions] add failed:', error);
+          return false;
+        }
+      },
+      updateAcademyUserQuestion: async (id, patch) => {
+        if (!db) return false;
+        const uid = get().uid;
+        if (!uid) return false;
+        const ref = doc(db, ACADEMY_QUESTIONS_COLLECTION, id);
+        try {
+          const snap = await getDoc(ref);
+          if (!snap.exists()) return false;
+          const current = normalizeAcademyQuestion(id, snap.data());
+          if (!current) return false;
+          if (current.status === 'deleted') return false;
+          const nextChoices = Array.isArray(patch.choices)
+            ? patch.choices.map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 4)
+            : current.choices;
+          const nextAnswer = typeof patch.answerIndex === 'number'
+            ? Math.max(0, Math.min(3, patch.answerIndex))
+            : current.answerIndex;
+          await setDoc(ref, {
+            question: patch.question !== undefined ? String(patch.question).trim() : current.question,
+            choices: nextChoices.length === 4 ? nextChoices : current.choices,
+            answerIndex: nextAnswer,
+            explanation: patch.explanation !== undefined ? String(patch.explanation).trim() : current.explanation,
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+          if (isAcademyAdminUid(uid) && current.authorUid !== uid) {
+            await writeAcademyAdminLog({
+              actorUid: uid,
+              actorName: String(get().displayName ?? '').trim() || 'admin',
+              action: 'update',
+              targetQuestionId: id,
+              beforeStatus: current.status,
+              afterStatus: current.status,
+            });
+          }
+          return true;
+        } catch (error) {
+          console.error('[academy_questions] update failed:', error);
+          return false;
+        }
+      },
+      deleteAcademyUserQuestion: async (id) => {
+        if (!db) return false;
+        const uid = get().uid;
+        if (!uid) return false;
+        const ref = doc(db, ACADEMY_QUESTIONS_COLLECTION, id);
+        try {
+          const snap = await getDoc(ref);
+          if (!snap.exists()) return false;
+          const current = normalizeAcademyQuestion(id, snap.data());
+          if (!current) return false;
+          if (current.status === 'deleted') return true;
+          await setDoc(ref, {
+            status: 'deleted',
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+          if (isAcademyAdminUid(uid)) {
+            await writeAcademyAdminLog({
+              actorUid: uid,
+              actorName: String(get().displayName ?? '').trim() || 'admin',
+              action: 'soft_delete',
+              targetQuestionId: id,
+              beforeStatus: current.status,
+              afterStatus: 'deleted',
+            });
+          }
+          return true;
+        } catch (error) {
+          console.error('[academy_questions] delete failed:', error);
+          return false;
+        }
+      },
+      getAcademyUserQuestions: () => get().academyUserQuestions ?? [],
+      isAcademyAdmin: () => isAcademyAdminUid(get().uid),
+
       // ===== Lecture History Management =====
       
       saveLectureHistory: (script, imageUrl) => {
@@ -1686,7 +1935,7 @@ export const useGameStore = create<GameStore>()(
       
       // ===== Quiz History =====
       
-      saveQuizHistory: async (quiz, result, ocrText, structuredOCR) => {
+      saveQuizHistory: async (quiz, result) => {
         const state = get();
         
         // スキャン時に保存した quizId が存在し、それが結果画面で保存しようとしている quizId と一致する場合は、既存の履歴を更新する
@@ -1706,8 +1955,6 @@ export const useGameStore = create<GameStore>()(
               ...result,
               quizId: targetQuizId, // quizId を統一
             },
-            ocrText: ocrText ?? updatedHistory[existingHistoryIndex].ocrText,
-            structuredOCR: structuredOCR ?? updatedHistory[existingHistoryIndex].structuredOCR,
           };
           set({ 
             quizHistory: updatedHistory,
@@ -1725,8 +1972,6 @@ export const useGameStore = create<GameStore>()(
             },
             createdAt: new Date().toISOString(),
             usedQuestionIndices: [],
-            ocrText,
-            structuredOCR, // 構造化OCRを保存（位置情報付き）
           };
           
           // 端末ローカルでは履歴を無制限に保持（クラウド側で最新件数を制御）
@@ -1772,14 +2017,6 @@ export const useGameStore = create<GameStore>()(
               createdAt: history.createdAt,
               usedQuestionIndices: history.usedQuestionIndices,
             };
-            
-            // undefined でない場合のみ追加
-            if (history.ocrText !== undefined) {
-              historyForFirestore.ocrText = history.ocrText;
-            }
-            if (history.structuredOCR !== undefined) {
-              historyForFirestore.structuredOCR = history.structuredOCR;
-            }
             
             await setDoc(doc(colRef, history.id), historyForFirestore, { merge: true });
             console.log('[saveQuizHistory] Successfully saved to Firestore!');
@@ -2231,6 +2468,12 @@ export const useGameStore = create<GameStore>()(
         set({ hasLaunched: true });
       },
 
+      setDisplayName: (name) => {
+        const normalized = String(name ?? '').trim().slice(0, 12);
+        if (!normalized) return;
+        set({ displayName: normalized });
+      },
+
       // ===== すうひもち SNS タイムライン MVP =====
 
       setSuhimochiInterests: (interests) => {
@@ -2479,6 +2722,16 @@ export const useGameStore = create<GameStore>()(
     {
       name: 'potenote-scanner-v2',
       storage: createJSONStorage(() => localStorage),
+      merge: (persistedState, currentState) => {
+        const persisted = { ...((persistedState as Partial<GameState> | undefined) ?? {}) };
+        // academyUserQuestions は常に「固定seed + Firestore投稿」から再構成する。
+        delete (persisted as Partial<GameState>).academyUserQuestions;
+        return {
+          ...currentState,
+          ...persisted,
+          academyUserQuestions: mergeSeedAndPostedAcademyQuestions([]),
+        };
+      },
       onRehydrateStorage: () => (state) => {
         // ストレージから復元する際に翻訳履歴をクリーンアップ
         if (state && state.translationHistory && state.translationHistory.length > LIMITS.TRANSLATION_HISTORY.MAX_ITEMS) {
@@ -2518,6 +2771,14 @@ export const useGameStore = create<GameStore>()(
         if (isLocalDevelopment() && state) {
           state.inventory = DEV_INVENTORY;
           useGameStore.setState({ inventory: DEV_INVENTORY });
+        }
+        // 旧バージョンで永続化されていたOCR本文は破棄（保存しない方針）
+        if (state && typeof state === 'object') {
+          delete (state as unknown as Record<string, unknown>).scanOcrText;
+          delete (state as unknown as Record<string, unknown>).scanStructuredOCR;
+          // アカデミー問題は永続化せず、seed + Firestore から再構成する
+          delete (state as unknown as Record<string, unknown>).academyUserQuestions;
+          state.academyUserQuestions = mergeSeedAndPostedAcademyQuestions([]);
         }
         // すうひもち: 旧永続データにフィールドが無いと append/update 時に例外になり、会話UIが誤ってエラー表示する
         if (state) {
@@ -2565,9 +2826,11 @@ export const useGameStore = create<GameStore>()(
             useGameStore.setState(patch);
           }
         }
+        // アカデミー固定問題のマージは persist の merge オプションで実施
       },
       partialize: (state) => ({
         coins: state.coins,
+        displayName: state.displayName,
         tickets: state.tickets,
         stamina: state.stamina,
         isVIP: state.isVIP,
@@ -2604,8 +2867,6 @@ export const useGameStore = create<GameStore>()(
         translationResult: state.translationResult,
         generatedQuiz: state.generatedQuiz,
         scanImageUrl: state.scanImageUrl,
-        scanOcrText: state.scanOcrText,
-        scanStructuredOCR: state.scanStructuredOCR,
         lastScanQuizId: state.lastScanQuizId,
 
         suhimochiIntimacy: state.suhimochiIntimacy,

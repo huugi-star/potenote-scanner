@@ -33,13 +33,13 @@ import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/i
 import { vibrateLight, vibrateSuccess, vibrateError } from '@/lib/haptics';
 import { LIMITS } from '@/lib/constants';
 import { getJstDateString } from '@/lib/dateUtils';
-import type { QuizRaw, StructuredOCR, QuizResult, TranslationResult } from '@/types';
+import type { QuizRaw, QuizResult, TranslationResult } from '@/types';
 import { PREPOSITION_QUIZ, PrepositionQuizItem } from '@/data/prepositionQuiz';
 
 // ===== Types =====
 
 interface ScanningScreenProps {
-  onQuizReady: (quiz: QuizRaw, imageUrl: string, ocrText?: string, structuredOCR?: StructuredOCR) => void;
+  onQuizReady: (quiz: QuizRaw, imageUrl: string) => void;
   onTranslationReady?: (result: TranslationResult, imageUrl: string) => void;
   onOpenFreeQuest?: () => void;
   onOpenWordDex?: () => void;
@@ -68,8 +68,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
   // ストアから生成されたクイズを取得
   const generatedQuiz = useGameStore(state => state.generatedQuiz);
   const scanImageUrl = useGameStore(state => state.scanImageUrl);
-  const scanOcrText = useGameStore(state => state.scanOcrText);
-  const scanStructuredOCR = useGameStore(state => state.scanStructuredOCR);
   const setGeneratedQuiz = useGameStore(state => state.setGeneratedQuiz);
   const clearGeneratedQuiz = useGameStore(state => state.clearGeneratedQuiz);
 
@@ -79,6 +77,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
   const lastScanDate = useGameStore(state => state.lastScanDate);
   const bonusScanBalance = useGameStore(state => state.bonusScanBalance);
   const quizHistoryCount = useGameStore(state => state.quizHistory.length);
+  const uid = useGameStore(state => state.uid);
   const scanType = useGameStore(state => state.scanType);
   const translationMode = useGameStore(state => state.translationMode);
   const englishLearningMode = useGameStore(state => state.englishLearningMode);
@@ -366,6 +365,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             image: enhancedImage, // 補正済み画像を送信
+            uid: uid ?? undefined,
           }),
           signal: controller.signal,
         });
@@ -388,7 +388,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
 
         const quizResult = await quizResponse.json();
 
-        // APIは { quiz: ..., ocrText: ..., structuredOCR: ... } を返す
+        // APIは { quiz: ..., tokenUsage: ... } を返す
         if (quizResult.quiz && quizResult.quiz.questions && quizResult.quiz.questions.length > 0) {
           // ★成功時のみスキャン回数を消費
           incrementScanCount();
@@ -411,12 +411,12 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
           useGameStore.getState().setLastScanQuizId(scanQuizId);
           // ★ここでクラウドへの書き込み完了まで await する
           console.log('[ScanningScreen] Calling saveQuizHistory...');
-          await saveQuizHistory(quizResult.quiz, initialResult, quizResult.ocrText, quizResult.structuredOCR);
+          await saveQuizHistory(quizResult.quiz, initialResult);
           console.log('[ScanningScreen] saveQuizHistory completed');
           registerQuizBatchToWordDex(quizResult.quiz, scanQuizId);
 
           // ストアに保存（ページ更新後も保持）
-          setGeneratedQuiz(quizResult.quiz, compressed.dataUrl, quizResult.ocrText, quizResult.structuredOCR);
+          setGeneratedQuiz(quizResult.quiz, compressed.dataUrl);
           
           // ASP広告推奨を保存（クイズ生成成功時のみ）
           if (quizResult.quiz.ad_recommendation) {
@@ -478,7 +478,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
   const handleStartQuiz = () => {
     vibrateLight();
     if (generatedQuiz && scanImageUrl) {
-      onQuizReady(generatedQuiz, scanImageUrl, scanOcrText, scanStructuredOCR);
+      onQuizReady(generatedQuiz, scanImageUrl);
       // クイズ画面へ遷移したらスキャン画面は初期状態に戻す
       setScanState('idle');
       setSelectedImage(null);

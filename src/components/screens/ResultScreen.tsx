@@ -26,7 +26,7 @@ import { AdsModal } from '@/components/ui/AdsModal';
 import { AffiliateSection } from '@/components/ui/AffiliateSection';
 import { useToast } from '@/components/ui/Toast';
 import { vibrateLight, vibrateSuccess } from '@/lib/haptics';
-import type { QuizRaw, QuizResult, StructuredOCR, QuizQuestionAttempt } from '@/types';
+import type { QuizRaw, QuizResult, QuizQuestionAttempt } from '@/types';
 
 // ===== Types =====
 
@@ -40,8 +40,6 @@ interface ResultScreenProps {
   isFreeQuest?: boolean;
   batchId?: string;
   attempts?: QuizQuestionAttempt[];
-  ocrText?: string;
-  structuredOCR?: StructuredOCR;
   mode?: 'speed_rush' | 'potato_pupil'; // クイズモード
   speedRushTotalTime?: number; // speed rushモードでの正答の合計時間（秒）
 }
@@ -60,8 +58,6 @@ export const ResultScreen = ({
   isFreeQuest = false,
   batchId,
   attempts,
-  ocrText,
-  structuredOCR,
   mode,
   speedRushTotalTime,
 }: ResultScreenProps) => {
@@ -145,13 +141,13 @@ export const ResultScreen = ({
       }));
       void useGameStore.getState().syncWithCloud();
       // フリークエストでも開始元履歴IDがあれば同一履歴を上書き更新する
-      saveQuizHistory(quiz, quizResult, ocrText, structuredOCR);
+      saveQuizHistory(quiz, quizResult);
     } else {
       // 通常クエスト: 結果を適用（1回のみ）
       applyQuizResult(quizResult);
 
-      // クイズ履歴を保存（構造化OCR付き）
-      saveQuizHistory(quiz, quizResult, ocrText, structuredOCR);
+      // クイズ履歴を保存
+      saveQuizHistory(quiz, quizResult);
     }
 
     if (batchId && attempts && attempts.length > 0) {
@@ -159,7 +155,7 @@ export const ResultScreen = ({
     }
     
     hasAppliedResult.current = true;
-  }, [mode, speedRushTotalTime, updateSpeedRushBestTime, isFreeQuest, correctCount, totalQuestions, adWatched, calculateResult, applyQuizResult, saveQuizHistory, applyQuizAttemptsToWordDex, batchId, attempts, quiz, ocrText, structuredOCR]); // 依存配列を更新
+  }, [mode, speedRushTotalTime, updateSpeedRushBestTime, isFreeQuest, correctCount, totalQuestions, adWatched, calculateResult, applyQuizResult, saveQuizHistory, applyQuizAttemptsToWordDex, batchId, attempts, quiz]); // 依存配列を更新
 
   // 広告視聴で2倍にする場合の追加コイン
   const handleAdRewardClaimed = () => {

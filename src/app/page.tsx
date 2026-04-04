@@ -9,12 +9,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Gem, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword, Users } from 'lucide-react';
+import { Gem, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword, Users, GraduationCap } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import type { QuizRaw, StructuredOCR, TranslationResult, LectureHistory, QuizQuestionAttempt } from '@/types';
+import type { QuizRaw, TranslationResult, LectureHistory, QuizQuestionAttempt } from '@/types';
 
 // Screens
 import { ScanningScreen } from '@/components/screens/ScanningScreen';
@@ -30,6 +30,7 @@ import { TranslationHistoryScreen } from '@/components/screens/TranslationHistor
 import { LectureScreen } from '@/components/screens/LectureScreen';
 import { LectureHistoryScreen } from '@/components/screens/LectureHistoryScreen';
 import { SuhimochiRoomScreen } from '@/components/screens/SuhimochiRoomScreen';
+import { AcademyScreen } from '@/components/screens/AcademyScreen';
 
 // UI Components
 import { LoginBonusModal } from '@/components/ui/LoginBonusModal';
@@ -47,7 +48,9 @@ import { vibrateLight } from '@/lib/haptics';
 
 type GamePhase = 
   | 'home'
+  | 'mypage'
   | 'suhimochi_room'
+  | 'academy'
   | 'adventure_menu'
   | 'scanning'
   | 'mode_select'
@@ -73,9 +76,13 @@ interface QuizSession {
   isFreeQuest?: boolean;
   batchId?: string;
   attempts?: QuizQuestionAttempt[];
-  ocrText?: string;
-  structuredOCR?: StructuredOCR;
 }
+
+const TEMP_DISPLAY_NAMES = ['すうひもち見習い', 'クイズ旅人', 'ポテノ研究員'] as const;
+
+const pickTemporaryDisplayName = (): string => {
+  return TEMP_DISPLAY_NAMES[Math.floor(Math.random() * TEMP_DISPLAY_NAMES.length)];
+};
 
 // ===== Sub Components =====
 
@@ -183,9 +190,11 @@ const AdventureMenuScreen = ({
 const HomeScreen = ({
   onNavigate,
   onShowShare,
+  onOpenMyPage,
 }: {
   onNavigate: (phase: GamePhase) => void;
   onShowShare: () => void;
+  onOpenMyPage: () => void;
 }) => {
   const coins = useGameStore(state => state.coins);
   const isVIP = useGameStore(state => state.isVIP);
@@ -228,6 +237,16 @@ const HomeScreen = ({
           </div>
           {/* 右上: シェアボタンとGoogleログインボタン */}
           <div className="flex items-center gap-2">
+          <button
+  onClick={() => {
+    vibrateLight();
+    onOpenMyPage();
+  }}
+  className="px-3 py-2 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors text-sm font-semibold whitespace-nowrap"
+  title="マイページ"
+>
+              マイページ
+            </button>
             <button
               onClick={() => {
                 vibrateLight();
@@ -285,7 +304,7 @@ const HomeScreen = ({
           </div>
         </motion.button>
 
-        {/* 主導線（中央の大ボタン2つ） */}
+        {/* 主導線（中央の大ボタン） */}
         <div className="space-y-3">
           <motion.button
             onClick={() => {
@@ -298,6 +317,19 @@ const HomeScreen = ({
           >
             <Languages className="w-7 h-7" />
             すうひもちと会話する
+          </motion.button>
+
+          <motion.button
+            onClick={() => {
+              vibrateLight();
+              onNavigate('academy');
+            }}
+            className="w-full py-5 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-indigo-500/25"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <GraduationCap className="w-7 h-7" />
+            アカデミーに出席する
           </motion.button>
 
           <motion.button
@@ -355,6 +387,172 @@ const HomeScreen = ({
         onPurchase={handleVIPPurchase}
         isVIP={isVIP}
       /> */}
+    </div>
+  );
+};
+
+const MyPageScreen = ({
+  displayName,
+  onBack,
+  onEditName,
+}: {
+  displayName: string;
+  onBack: () => void;
+  onEditName: () => void;
+}) => {
+  const totalScans = useGameStore((s) => s.totalScans);
+  const totalQuizzes = useGameStore((s) => s.totalQuizzes);
+  const totalMessages = useGameStore((s) => s.suhimochiIntimacy.totalMessages);
+  const intimacyLevel = useGameStore((s) => s.suhimochiIntimacy.level);
+  const intimacyPoints = useGameStore((s) => s.suhimochiIntimacy.points);
+  const consecutiveDays = useGameStore((s) => s.consecutiveLoginDays);
+  const isVIP = useGameStore((s) => s.isVIP);
+  const coins = useGameStore((s) => s.coins);
+  const equipment = useGameStore((s) => s.equipment);
+
+  const equippedDetails = useMemo(
+    () => ({
+      head: equipment.head ? getItemById(equipment.head) : undefined,
+      body: equipment.body ? getItemById(equipment.body) : undefined,
+      face: equipment.face ? getItemById(equipment.face) : undefined,
+      accessory: equipment.accessory ? getItemById(equipment.accessory) : undefined,
+    }),
+    [equipment.head, equipment.body, equipment.face, equipment.accessory]
+  );
+
+
+  const INTIMACY_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = {
+    1: 'はじめまして',
+    2: 'なかよし',
+    3: 'ともだち',
+    4: 'しんゆう',
+    5: 'ずっといっしょ',
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 pb-16">
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-4 bg-gray-900/80 backdrop-blur border-b border-gray-700/50">
+        <button
+          onClick={() => {
+            vibrateLight();
+            onBack();
+          }}
+          className="text-gray-400 hover:text-white transition-colors text-sm"
+        >
+          ← 戻る
+        </button>
+        <h1 className="text-white font-bold text-base">マイページ</h1>
+        <div className="w-12" />
+      </div>
+
+      <div className="max-w-md mx-auto px-4 pt-6 space-y-5">
+        <div className="rounded-2xl border border-gray-700 bg-gray-800/60 p-5">
+          <div className="flex items-center gap-4">
+            <div className="shrink-0">
+              <PotatoAvatar
+                equipped={equippedDetails}
+                emotion="happy"
+                size={80}
+                ssrEffect={false}
+                showShadow={false}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-white text-xl font-bold truncate max-w-[180px]">
+                  {displayName || '未設定'}
+                </p>
+                {isVIP && (
+                  <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                    👑 VIP
+                  </span>
+                )}
+              </div>
+              <p className="text-gray-400 text-xs mt-1">{consecutiveDays}日連続ログイン中</p>
+              <div className="mt-1 flex items-center gap-1 text-yellow-400 text-sm font-semibold">
+                <Coins className="w-3.5 h-3.5" />
+                {coins} コイン
+              </div>
+            </div>
+          </div>
+
+          <motion.button
+            onClick={() => {
+              vibrateLight();
+              onEditName();
+            }}
+            className="mt-4 w-full py-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
+            whileTap={{ scale: 0.98 }}
+          >
+            ✏️ 名前を変更
+          </motion.button>
+        </div>
+
+        <div className="rounded-2xl border border-rose-900/40 bg-rose-950/30 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">🧸</span>
+            <h2 className="text-rose-200 font-bold text-sm">すうひもちとの関係</h2>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-white text-2xl font-bold">
+                {INTIMACY_LABELS[intimacyLevel as 1 | 2 | 3 | 4 | 5]}
+              </p>
+              <p className="text-rose-300/70 text-xs mt-0.5">{totalMessages}回会話した</p>
+            </div>
+            <div className="flex gap-1">
+              {([1, 2, 3, 4, 5] as const).map((lv) => (
+                <div
+                  key={lv}
+                  className={`rounded-full transition-all ${
+                    lv <= intimacyLevel ? 'w-3 h-3 bg-rose-400' : 'w-2.5 h-2.5 bg-gray-600'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 h-2 w-full rounded-full bg-gray-700 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-rose-400 to-pink-400 transition-all duration-700"
+              style={{ width: `${Math.min(100, (intimacyPoints / 1000) * 100)}%` }}
+            />
+          </div>
+          <p className="text-right text-xs text-rose-400/60 mt-1">Lv.{intimacyLevel} / 5</p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-700 bg-gray-800/60 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-base">📊</span>
+            <h2 className="text-gray-200 font-bold text-sm">学習の記録</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: 'スキャン回数', value: totalScans, unit: '回' },
+              { label: 'クイズ回答数', value: totalQuizzes, unit: '問' },
+              { label: '会話回数', value: totalMessages, unit: '回' },
+            ].map((stat) => (
+              <div key={stat.label} className="rounded-xl bg-gray-700/50 px-4 py-3 text-center">
+                <p className="text-gray-400 text-xs mb-1">{stat.label}</p>
+                <p className="text-white text-2xl font-bold">
+                  {stat.value}
+                  <span className="text-gray-400 text-sm font-normal ml-0.5">{stat.unit}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-700 bg-gray-800/60 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-base">🔐</span>
+            <h2 className="text-gray-200 font-bold text-sm">アカウント</h2>
+          </div>
+          <p className="text-gray-400 text-xs mb-4">
+            Googleアカウントでログインすると、データが複数の端末で引き継げます。
+          </p>
+          <AuthButton />
+        </div>
+      </div>
     </div>
   );
 };
@@ -578,11 +776,16 @@ const AppContent = () => {
   const [showLoginBonus, setShowLoginBonus] = useState(false);
   const [loginBonusData, setLoginBonusData] = useState({ coins: 0, days: 1 });
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showDisplayNameModal, setShowDisplayNameModal] = useState(false);
+  const [displayNameDraft, setDisplayNameDraft] = useState('');
+  const [isEditingDisplayName, setIsEditingDisplayName] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedLectureHistory, setSelectedLectureHistory] = useState<LectureHistory | null>(null);
 
   // Store
   const isVIP = useGameStore(state => state.isVIP);
+  const displayName = useGameStore(state => state.displayName);
+  const setDisplayName = useGameStore(state => state.setDisplayName);
   const setUserId = useGameStore(state => state.setUserId);
   const equipment = useGameStore(state => state.equipment);
   const equippedDetails = useMemo(() => ({
@@ -664,10 +867,38 @@ const AppContent = () => {
     vibrateLight();
     setShowOnboarding(false);
     useGameStore.getState().setHasLaunched();
+    const currentDisplayName = useGameStore.getState().displayName;
+    if (!String(currentDisplayName ?? '').trim()) {
+      setDisplayNameDraft('');
+      setIsEditingDisplayName(false);
+      setShowDisplayNameModal(true);
+    }
   }, []);
 
+  const handleSaveDisplayName = useCallback(() => {
+    const normalized = displayNameDraft.trim().slice(0, 12);
+    if (!normalized) return;
+    setDisplayName(normalized);
+    setShowDisplayNameModal(false);
+    setIsEditingDisplayName(false);
+  }, [displayNameDraft, setDisplayName]);
+
+  const handleSkipDisplayName = useCallback(() => {
+    const tempName = pickTemporaryDisplayName();
+    setDisplayName(tempName);
+    setDisplayNameDraft(tempName);
+    setShowDisplayNameModal(false);
+    setIsEditingDisplayName(false);
+  }, [setDisplayName]);
+
+  const handleOpenDisplayNameEdit = useCallback(() => {
+    setDisplayNameDraft(displayName || '');
+    setIsEditingDisplayName(true);
+    setShowDisplayNameModal(true);
+  }, [displayName]);
+
   // クイズ準備完了
-  const handleQuizReady = useCallback((quiz: QuizRaw, imageUrl: string, ocrText?: string, structuredOCR?: StructuredOCR) => {
+  const handleQuizReady = useCallback((quiz: QuizRaw, imageUrl: string) => {
     const batchId = useGameStore.getState().lastScanQuizId ?? undefined;
     setQuizSession({
       quiz,
@@ -676,8 +907,6 @@ const AppContent = () => {
       correctCount: 0,
       isFreeQuest: false,
       batchId,
-      ocrText,
-      structuredOCR,
     });
     setPhase('mode_select');
   }, []);
@@ -758,6 +987,22 @@ const AppContent = () => {
             <HomeScreen 
               onNavigate={handleNavigate} 
               onShowShare={() => setShowShareModal(true)}
+              onOpenMyPage={() => handleNavigate('mypage')}
+            />
+          </motion.div>
+        )}
+
+        {phase === 'mypage' && (
+          <motion.div
+            key="mypage"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <MyPageScreen
+              displayName={displayName}
+              onBack={handleBackToHome}
+              onEditName={handleOpenDisplayNameEdit}
             />
           </motion.div>
         )}
@@ -809,6 +1054,17 @@ const AppContent = () => {
             exit={{ opacity: 0, x: -20 }}
           >
             <SuhimochiRoomScreen onBack={handleBackToHome} />
+          </motion.div>
+        )}
+
+        {phase === 'academy' && (
+          <motion.div
+            key="academy"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <AcademyScreen onBack={handleBackToHome} />
           </motion.div>
         )}
 
@@ -882,8 +1138,6 @@ const AppContent = () => {
               isFreeQuest={quizSession.isFreeQuest}
               batchId={quizSession.batchId}
               attempts={quizSession.attempts}
-              ocrText={quizSession.ocrText}
-              structuredOCR={quizSession.structuredOCR}
               mode={quizSession.mode}
               speedRushTotalTime={quizSession.speedRushTotalTime}
             />
@@ -1010,6 +1264,67 @@ const AppContent = () => {
       <AnimatePresence>
         {showOnboarding && (
           <OnboardingOverlay onDismiss={handleDismissOnboarding} />
+        )}
+      </AnimatePresence>
+
+      {/* 表示名設定モーダル（初回/編集） */}
+      <AnimatePresence>
+        {showDisplayNameModal && (
+          <motion.div
+            className="fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="w-full max-w-sm rounded-2xl border border-gray-700 bg-gray-900 p-5"
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            >
+              <h3 className="text-white text-lg font-bold mb-2">
+                {isEditingDisplayName ? '表示名を変更' : '表示名を決めよう'}
+              </h3>
+              <p className="text-gray-300 text-sm mb-4">あとで変更できます</p>
+
+              <input
+                type="text"
+                value={displayNameDraft}
+                onChange={(e) => setDisplayNameDraft(e.target.value.slice(0, 12))}
+                placeholder="1〜12文字で入力"
+                className="w-full rounded-xl border border-gray-600 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                maxLength={12}
+              />
+              <p className="text-right text-xs text-gray-400 mt-1">{displayNameDraft.length}/12</p>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    vibrateLight();
+                    if (isEditingDisplayName) {
+                      setShowDisplayNameModal(false);
+                      setIsEditingDisplayName(false);
+                      return;
+                    }
+                    handleSkipDisplayName();
+                  }}
+                  className="py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-gray-100 font-semibold"
+                >
+                  {isEditingDisplayName ? 'キャンセル' : 'スキップ'}
+                </button>
+                <button
+                  onClick={() => {
+                    vibrateLight();
+                    handleSaveDisplayName();
+                  }}
+                  disabled={!displayNameDraft.trim()}
+                  className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-600 disabled:text-gray-400 text-white font-bold"
+                >
+                  保存
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
