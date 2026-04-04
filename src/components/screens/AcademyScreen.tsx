@@ -1227,7 +1227,7 @@ if (subview === 'create_detail') {
                         detailText: detailText.trim() || undefined,
                       });
                       if (!ok) {
-                        addToast('error', '投稿に失敗しました（ログイン状態を確認してください）');
+                        addToast('error', '投稿に失敗しました（権限設定またはサーバー状態を確認してください）');
                         return;
                       }
                     }

@@ -150,19 +150,19 @@ const submitAcademyQuestionViaApi = async (
         Authorization: `Bearer ${idToken}`,
       },
       body: JSON.stringify({
-        question: String(payload.question ?? '').trim(),
+        question: String(payload.question ?? '').trim().slice(0, 1000),
         choices: Array.isArray(payload.choices)
-          ? payload.choices.map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 4)
+          ? payload.choices.map((c) => String(c ?? '').trim().slice(0, 300)).filter(Boolean).slice(0, 4)
           : [],
         answerIndex: Number.isInteger(payload.answerIndex) ? Math.max(0, Math.min(3, payload.answerIndex)) : 0,
-        explanation: String(payload.explanation ?? '').trim(),
+        explanation: String(payload.explanation ?? '').trim().slice(0, 4000),
         keywords: Array.isArray(payload.keywords)
-          ? payload.keywords.map((k) => String(k ?? '').trim()).filter(Boolean).slice(0, 8)
+          ? payload.keywords.map((k) => String(k ?? '').trim().slice(0, 80)).filter(Boolean).slice(0, 8)
           : [],
-        bigCategory: payload.bigCategory,
-        subCategory: payload.subCategory,
-        subjectText: payload.subjectText,
-        detailText: payload.detailText,
+        bigCategory: payload.bigCategory ? String(payload.bigCategory).slice(0, 100) : undefined,
+        subCategory: payload.subCategory ? String(payload.subCategory).slice(0, 100) : undefined,
+        subjectText: payload.subjectText ? String(payload.subjectText).slice(0, 200) : undefined,
+        detailText: payload.detailText ? String(payload.detailText).slice(0, 1200) : undefined,
       }),
     });
     if (!res.ok) return false;
@@ -1750,6 +1750,10 @@ export const useGameStore = create<GameStore>()(
           set({ uid });
         }
 
+        // 本番はまず認証済み API 経由を優先（rules 差分や権限揺れの影響を受けにくい）
+        const apiOk = await submitAcademyQuestionViaApi(payload);
+        if (apiOk) return true;
+
         const questionRef = doc(collection(db, ACADEMY_QUESTIONS_COLLECTION));
         const normalizedChoices = Array.isArray(payload.choices)
           ? payload.choices.map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 4)
@@ -1781,11 +1785,6 @@ export const useGameStore = create<GameStore>()(
           return true;
         } catch (error) {
           console.error('[academy_questions] add failed:', error);
-          const code = String((error as { code?: string } | undefined)?.code ?? '');
-          if (code.includes('permission-denied')) {
-            // 本番で rules 未反映/反映差分があっても投稿不能にならないよう API フォールバック
-            return await submitAcademyQuestionViaApi(payload);
-          }
           return false;
         }
       },

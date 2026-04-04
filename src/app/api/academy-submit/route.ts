@@ -7,15 +7,15 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 const BodySchema = z.object({
-  question: z.string().min(1).max(300),
-  choices: z.array(z.string().min(1).max(120)).length(4),
+  question: z.string().min(1).max(1000),
+  choices: z.array(z.string().min(1).max(300)).length(4),
   answerIndex: z.number().int().min(0).max(3),
-  explanation: z.string().max(1000),
-  keywords: z.array(z.string().min(1).max(40)).max(8).optional().default([]),
-  bigCategory: z.string().max(50).optional(),
-  subCategory: z.string().max(50).optional(),
-  subjectText: z.string().max(80).optional(),
-  detailText: z.string().max(300).optional(),
+  explanation: z.string().max(4000),
+  keywords: z.array(z.string().min(1).max(80)).max(8).optional().default([]),
+  bigCategory: z.string().max(100).optional(),
+  subCategory: z.string().max(100).optional(),
+  subjectText: z.string().max(200).optional(),
+  detailText: z.string().max(1200).optional(),
 });
 
 const getBearerToken = (req: Request): string | null => {
