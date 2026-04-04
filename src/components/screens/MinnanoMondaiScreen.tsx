@@ -1043,14 +1043,14 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
         // 魔法陣アニメーション完了後に○×を表示
         const magicTimer = window.setTimeout(() => {
           setAnswerFeedback(isCorrect ? 'correct' : 'wrong');
-          scheduleAdvance(isCorrect);
+          scheduleAdvance();
         }, MAGIC_CIRCLE_DURATION_MS);
 
         return () => window.clearTimeout(magicTimer);
       } else {
         // タイムアウト → 即座に表示
         setAnswerFeedback(isCorrect ? 'correct' : 'wrong');
-        scheduleAdvance(isCorrect);
+        scheduleAdvance();
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1058,7 +1058,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   );
 
   /** ○×表示後に次問題へ進む */
-  const scheduleAdvance = (isCorrect: boolean) => {
+  const scheduleAdvance = () => {
     if (feedbackAdvanceTimerRef.current !== null) window.clearTimeout(feedbackAdvanceTimerRef.current);
     feedbackAdvanceTimerRef.current = window.setTimeout(() => {
       feedbackAdvanceTimerRef.current = null;
