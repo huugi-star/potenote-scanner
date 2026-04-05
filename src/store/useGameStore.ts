@@ -40,6 +40,64 @@ const ACADEMY_LOGS_COLLECTION = 'academy_logs';
 
 let academyQuestionsUnsubscribe: (() => void) | null = null;
 
+/**
+ * academy_questions の onSnapshot 購読を開始する。
+ * uid に関係なくアプリ起動直後から購読し、正答率などをリアルタイム反映する。
+ * 多重呼び出し防止のため既存購読があれば先に解除する。
+ */
+const startAcademyQuestionsSubscription = (): void => {
+  if (!db) return;
+  if (academyQuestionsUnsubscribe) {
+    academyQuestionsUnsubscribe();
+    academyQuestionsUnsubscribe = null;
+  }
+  const firestore = db;
+  const applySnapshot = (snap: import('firebase/firestore').QuerySnapshot) => {
+    const posted = snap.docs
+      .map((d) => normalizeAcademyQuestion(d.id, d.data()))
+      .filter((q): q is AcademyUserQuestion => q !== null && q.status === 'published');
+    useGameStore.setState({
+      academyUserQuestions: mergeSeedAndPostedAcademyQuestions(posted),
+    });
+  };
+  const subscribeWithoutOrderBy = () =>
+    onSnapshot(
+      query(
+        collection(firestore, ACADEMY_QUESTIONS_COLLECTION),
+        where('status', '==', 'published'),
+        fsLimit(300)
+      ),
+      applySnapshot,
+      (err) => console.error('[academy_questions] fallback snapshot error:', err)
+    );
+
+  let switchedToFallback = false;
+  academyQuestionsUnsubscribe = onSnapshot(
+    query(
+      collection(firestore, ACADEMY_QUESTIONS_COLLECTION),
+      where('status', '==', 'published'),
+      orderBy('createdAt', 'desc'),
+      fsLimit(300)
+    ),
+    applySnapshot,
+    (error) => {
+      console.error('[academy_questions] snapshot error:', error);
+      const code = String((error as { code?: string } | undefined)?.code ?? '');
+      const message = String((error as { message?: string } | undefined)?.message ?? '');
+      const isIndexMissing = code === 'failed-precondition' || /index/i.test(message);
+      if (switchedToFallback || !isIndexMissing) return;
+      switchedToFallback = true;
+      try { academyQuestionsUnsubscribe?.(); } catch { /* ignore */ }
+      academyQuestionsUnsubscribe = subscribeWithoutOrderBy();
+    }
+  );
+};
+
+// db が利用可能なら即時購読開始（uid 不要・ゲスト閲覧でも正答率を反映）
+if (typeof window !== 'undefined') {
+  startAcademyQuestionsSubscription();
+}
+
 const getAcademyAdminUids = (): string[] =>
   String(process.env.NEXT_PUBLIC_ACADEMY_ADMIN_UIDS ?? '')
     .split(',')
@@ -663,59 +721,9 @@ export const useGameStore = create<GameStore>()(
         // ローカルのUIDを更新
         set({ uid });
 
-        // academy_questions をリアルタイム購読（固定seed + 投稿問題を合成）
-        if (academyQuestionsUnsubscribe) {
-          academyQuestionsUnsubscribe();
-          academyQuestionsUnsubscribe = null;
-        }
-        if (db) {
-          const firestore = db;
-          const applyAcademySnapshot = (snap: import('firebase/firestore').QuerySnapshot) => {
-            const posted = snap.docs
-              .map((d) => normalizeAcademyQuestion(d.id, d.data()))
-              .filter((q): q is AcademyUserQuestion => q !== null && q.status === 'published');
-            useGameStore.setState({
-              academyUserQuestions: mergeSeedAndPostedAcademyQuestions(posted),
-            });
-          };
-          const subscribeWithoutOrderBy = () =>
-            onSnapshot(
-              query(
-                collection(firestore, ACADEMY_QUESTIONS_COLLECTION),
-                where('status', '==', 'published'),
-                fsLimit(300)
-              ),
-              applyAcademySnapshot,
-              (fallbackError) => {
-                console.error('[academy_questions] fallback snapshot error:', fallbackError);
-              }
-            );
-
-          let switchedToFallback = false;
-          academyQuestionsUnsubscribe = onSnapshot(
-            query(
-              collection(firestore, ACADEMY_QUESTIONS_COLLECTION),
-              where('status', '==', 'published'),
-              orderBy('createdAt', 'desc'),
-              fsLimit(300)
-            ),
-            applyAcademySnapshot,
-            (error) => {
-              console.error('[academy_questions] snapshot error:', error);
-              const code = String((error as { code?: string } | undefined)?.code ?? '');
-              const message = String((error as { message?: string } | undefined)?.message ?? '');
-              const isIndexMissing = code === 'failed-precondition' || /index/i.test(message);
-              if (switchedToFallback || !isIndexMissing) return;
-              switchedToFallback = true;
-              try {
-                academyQuestionsUnsubscribe?.();
-              } catch {
-                // ignore
-              }
-              academyQuestionsUnsubscribe = subscribeWithoutOrderBy();
-            }
-          );
-        }
+        // academy_questions の onSnapshot は起動時に開始済み。
+        // ログイン/ログアウト時は再購読して最新データを取得する。
+        startAcademyQuestionsSubscription();
 
         if (!uid || !db) return;
 
