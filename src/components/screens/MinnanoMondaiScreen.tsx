@@ -235,6 +235,7 @@ function buildQuizQuestions(
 }
 
 const persistAcademyAnswerAggregate = async (questionId: string, isCorrect: boolean): Promise<void> => {
+  console.log(`[academy-answer] sending: questionId=${questionId} isCorrect=${isCorrect}`);
   try {
     const res = await fetch('/api/academy-answer', {
       method: 'POST',
@@ -247,29 +248,23 @@ const persistAcademyAnswerAggregate = async (questionId: string, isCorrect: bool
     type AcademyAnswerApiResponse = {
       success?: boolean;
       persisted?: boolean;
+      createdFromSeed?: boolean;
       reason?: string;
       error?: string;
     };
 
+    let body: AcademyAnswerApiResponse = {};
+    try { body = (await res.json()) as AcademyAnswerApiResponse; } catch { /* ignore */ }
+
     if (!res.ok) {
-      let reason = '';
-      try {
-        const body = (await res.json()) as AcademyAnswerApiResponse;
-        reason = body?.error ? `:${body.error}` : '';
-      } catch {
-        reason = '';
-      }
-      console.error(`[academy-answer] persist failed: status=${res.status}${reason}`);
+      console.error(`[academy-answer] persist failed: status=${res.status} body=`, body);
       return;
     }
 
-    try {
-      const body = (await res.json()) as AcademyAnswerApiResponse;
-      if (body?.persisted === false && body?.reason === 'not_found') {
-        console.warn(`[academy-answer] aggregate not persisted (not_found): questionId=${questionId}`);
-      }
-    } catch {
-      // 成功レスポンスのJSON解析失敗は集計処理を止めない
+    console.log(`[academy-answer] persist ok: status=${res.status} body=`, body);
+
+    if (body?.persisted === false && body?.reason === 'not_found') {
+      console.warn(`[academy-answer] aggregate not persisted (not_found): questionId=${questionId}`);
     }
   } catch (error) {
     console.error('[academy-answer] persist request failed:', error);

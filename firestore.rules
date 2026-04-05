@@ -28,7 +28,11 @@ service cloud.firestore {
 
     // すうひもちアカデミー投稿問題
     match /academy_questions/{questionId} {
-      // 公開問題は誰でも閲覧可。hidden / deleted は管理者のみ閲覧可。
+      // get（単一取得）と list（コレクションクエリ）の両方に適用。
+      // list の場合: クライアントが where('status','==','published') を付けていれば
+      // Firestore はクエリ結果が全て published であることを証明できるため、
+      // resource.data.status == 'published' の評価が通る（rules are not filters の原則に準拠）。
+      // 管理者は非公開ドキュメントも取得可。
       allow read: if resource.data.status == 'published' || isAdmin();
 
       // 投稿作成: authorUid のなりすまし防止

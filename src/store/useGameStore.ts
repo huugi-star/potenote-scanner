@@ -53,8 +53,15 @@ const startAcademyQuestionsSubscription = (): void => {
   }
   const firestore = db;
   const applySnapshot = (snap: import('firebase/firestore').QuerySnapshot) => {
+    console.log(`[academy_questions] snapshot received: ${snap.docs.length} docs`);
     const posted = snap.docs
-      .map((d) => normalizeAcademyQuestion(d.id, d.data()))
+      .map((d) => {
+        const q = normalizeAcademyQuestion(d.id, d.data());
+        if (q) {
+          console.log(`[academy_questions] doc id=${d.id} playCount=${q.playCount} correctCount=${q.correctCount} status=${q.status}`);
+        }
+        return q;
+      })
       .filter((q): q is AcademyUserQuestion => q !== null && q.status === 'published');
     useGameStore.setState({
       academyUserQuestions: mergeSeedAndPostedAcademyQuestions(posted),
