@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { ACADEMY_SEED_QUESTIONS } from '@/data/academySeedQuestions';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -31,9 +32,35 @@ export async function POST(req: Request) {
     const ref = adminDb.collection('academy_questions').doc(questionId);
     const snap = await ref.get();
 
-    // 公式seed由来の問題でも、Firestoreに同一idがある場合のみ集計を永続化する
+    // Firestore未作成でも seed に同一idがあれば初回作成して集計を永続化する
     if (!snap.exists) {
-      return NextResponse.json({ success: true, persisted: false, reason: 'not_found' });
+      const seed = ACADEMY_SEED_QUESTIONS.find((q) => q.id === questionId);
+      if (!seed) {
+        return NextResponse.json({ success: true, persisted: false, reason: 'not_found' });
+      }
+
+      await ref.set({
+        id: questionId,
+        status: 'published',
+        authorUid: seed.authorUid ?? 'official_seed',
+        authorName: String(seed.authorName ?? '').trim() || '公式問題',
+        question: seed.question,
+        choices: seed.choices,
+        answerIndex: seed.answerIndex,
+        explanation: seed.explanation,
+        keywords: Array.isArray(seed.keywords) ? seed.keywords : [],
+        bigCategory: seed.bigCategory ?? null,
+        subCategory: seed.subCategory ?? null,
+        subjectText: seed.subjectText ?? null,
+        detailText: seed.detailText ?? null,
+        playCount: 1,
+        correctCount: isCorrect ? 1 : 0,
+        goodCount: 0,
+        badCount: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return NextResponse.json({ success: true, persisted: true, createdFromSeed: true });
     }
 
     const updatePayload: Record<string, unknown> = {

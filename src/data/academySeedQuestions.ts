@@ -397,5 +397,5 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
 /** 公式seed: 運営名義（統計は固定値を持たせず、実プレイで更新） */
 export const ACADEMY_SEED_QUESTIONS: AcademyUserQuestion[] = ACADEMY_SEED_QUESTIONS_RAW.map((q) => ({
   ...q,
-  authorName: '運営',
+  authorName: '公式問題',
 }));
