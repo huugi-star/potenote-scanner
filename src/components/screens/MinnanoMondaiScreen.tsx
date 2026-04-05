@@ -364,7 +364,7 @@ const MagicCircleBurst = ({
       initial={{ scale: 0.05, opacity: 0, rotate: -30 }}
       animate={{
         scale: 1,
-        opacity: [0, 1, 1, 0.85],
+        opacity: [0, 1, 1, 0.55],
         rotate: isCorrect ? 90 : -90,
       }}
       transition={{ duration: MAGIC_CIRCLE_DURATION_MS / 1000, ease: 'easeOut' }}

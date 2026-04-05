@@ -20,6 +20,8 @@ import {
 import { useGameStore } from '@/store/useGameStore';
 import { useToast } from '@/components/ui/Toast';
 import { MinnanoMondaiScreen } from '@/components/screens/MinnanoMondaiScreen';
+import { storyIntroPages, STORY_INTRO_READ_KEY } from '@/data/storyIntroPages';
+import { StoryIntroScreen } from '@/components/story/StoryIntroScreen';
 import type { AcademyUserQuestion, QuizHistory } from '@/types';
 
 // ============================================================
@@ -129,7 +131,7 @@ const academyScreenRootBg: CSSProperties = {
     'radial-gradient(ellipse 120% 55% at 50% -8%, rgba(255, 220, 190, 0.06) 0%, transparent 58%), linear-gradient(to bottom, rgba(53,45,82,0.22) 0%, rgba(66,58,104,0.16) 45%, rgba(78,70,128,0.12) 100%)',
 };
 
-const academyBackgroundImageUrl = '/images/backgrounds/gate.png';
+const academyBackgroundImageUrl = '/images/backgrounds/library.png';
 
 const AcademyScreenBackdrop = () => (
   <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
@@ -375,6 +377,11 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
   /** 「自分の問題」一覧のページ（1始まり） */
   const [mineQuestionsPage, setMineQuestionsPage] = useState(1);
 
+  /** はじまりの物語（図書館トップ） */
+  const [storyIntroModalOpen, setStoryIntroModalOpen] = useState(false);
+  const [storyIntroPageIndex, setStoryIntroPageIndex] = useState(0);
+  const [storyIntroRead, setStoryIntroRead] = useState(false);
+
   const magicStones    = 0;
   const todayAttendees = 24;
 
@@ -406,6 +413,34 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
     if (mineListTotalPages === 0) return;
     setMineQuestionsPage((p) => Math.min(Math.max(1, p), mineListTotalPages));
   }, [mineListTotalPages]);
+
+  useEffect(() => {
+    try {
+      setStoryIntroRead(typeof window !== 'undefined' && localStorage.getItem(STORY_INTRO_READ_KEY) === '1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const openStoryIntro = () => {
+    setStoryIntroPageIndex(0);
+    setStoryIntroModalOpen(true);
+  };
+
+  const closeStoryIntro = () => {
+    setStoryIntroModalOpen(false);
+    setStoryIntroPageIndex(0);
+  };
+
+  const finishStoryIntro = () => {
+    try {
+      localStorage.setItem(STORY_INTRO_READ_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setStoryIntroRead(true);
+    closeStoryIntro();
+  };
 
   const selectedTheme = useMemo(
     () => themes.find((t) => t.id === selectedThemeId) ?? null,
@@ -1304,11 +1339,11 @@ if (subview === 'create_detail') {
     <div className="relative min-h-screen p-4 pb-24" style={academyScreenRootBg}>
       <AcademyScreenBackdrop />
       <div className="relative z-10 max-w-md mx-auto pt-6">
-        <CardHeader title="🎓 すうひもちアカデミー" onBack={onBack} tone="onLight" />
+        <CardHeader title="🎓 ことばの図書館" onBack={onBack} tone="onLight" />
 
         {/* マジックアカデミーヘッダー */}
         <div className="rounded-2xl p-5 mb-5 border border-indigo-500/30 bg-gradient-to-br from-indigo-900/80 via-purple-900/70 to-slate-900/80">
-          <p className="text-white text-2xl font-bold mb-4">🎓 見習い魔術師 10級</p>
+          <p className="text-white text-2xl font-bold mb-4">🎓 見習い司書 10級</p>
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="rounded-xl bg-black/20 border border-white/10 px-3 py-2 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-cyan-300 shrink-0" />
@@ -1327,6 +1362,26 @@ if (subview === 'create_detail') {
 
         {/* メニュー */}
         <div className="space-y-3">
+          <motion.button
+            type="button"
+            onClick={openStoryIntro}
+            className="relative w-full py-4 rounded-2xl border border-violet-200/90 bg-white/95 text-violet-900 font-bold text-lg flex items-center justify-center gap-2 shadow-md shadow-violet-900/10 backdrop-blur-sm"
+            whileTap={{ scale: 0.98 }}
+          >
+            <span className="text-xl" aria-hidden>
+              📖
+            </span>
+            はじまりの物語
+            {!storyIntroRead && (
+              <span
+                className="absolute top-2 right-3 rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-600 px-2 py-0.5 text-[10px] font-black tracking-wide text-white shadow-sm"
+                aria-label="未読"
+              >
+                NEW
+              </span>
+            )}
+          </motion.button>
+
           <motion.button
             onClick={() => setSubview('everyone')}
             className="w-full py-5 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-blue-500/25"
@@ -1364,6 +1419,86 @@ if (subview === 'create_detail') {
             <p className="text-slate-600 text-xs mt-1">準備中・近日公開予定</p>
           </div>
         </div>
+
+        {storyIntroModalOpen && (
+          <div
+            className="fixed inset-0 z-[85] flex items-center justify-center p-3 sm:p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="はじまりの物語"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 bg-slate-950/70 backdrop-blur-[3px]"
+              aria-label="背景をタップして閉じる"
+              onClick={closeStoryIntro}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+              className="relative w-full max-w-md overflow-hidden rounded-2xl border border-violet-500/35 shadow-2xl shadow-violet-950/40"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-slate-950/90 px-3 py-2.5">
+                <p className="text-xs font-bold tabular-nums text-violet-200/95">
+                  {storyIntroPageIndex + 1} / {storyIntroPages.length}
+                </p>
+                <span className="text-base" aria-hidden>
+                  📖
+                </span>
+              </div>
+
+              <StoryIntroScreen
+                page={storyIntroPages[storyIntroPageIndex]}
+                embedded
+              />
+
+              <div className="flex flex-wrap items-center justify-center gap-2 border-t border-white/10 bg-slate-950/95 px-3 py-3">
+                <motion.button
+                  type="button"
+                  disabled={storyIntroPageIndex <= 0}
+                  onClick={() => setStoryIntroPageIndex((i) => Math.max(0, i - 1))}
+                  className="inline-flex items-center gap-1 rounded-xl border border-violet-400/35 bg-violet-950/50 px-3.5 py-2.5 text-sm font-semibold text-violet-100 disabled:pointer-events-none disabled:opacity-35"
+                  whileTap={{ scale: storyIntroPageIndex <= 0 ? 1 : 0.98 }}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  戻る
+                </motion.button>
+                <motion.button
+                  type="button"
+                  onClick={closeStoryIntro}
+                  className="rounded-xl border border-slate-600/80 bg-slate-800/90 px-3.5 py-2.5 text-sm font-semibold text-slate-200"
+                  whileTap={{ scale: 0.98 }}
+                >
+                  とじる
+                </motion.button>
+                {storyIntroPageIndex < storyIntroPages.length - 1 ? (
+                  <motion.button
+                    type="button"
+                    onClick={() =>
+                      setStoryIntroPageIndex((i) => Math.min(storyIntroPages.length - 1, i + 1))
+                    }
+                    className="inline-flex items-center gap-1 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 py-2.5 text-sm font-bold text-white shadow-md shadow-violet-600/30"
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    次へ
+                    <ChevronRight className="h-4 w-4" />
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    type="button"
+                    onClick={finishStoryIntro}
+                    className="inline-flex items-center gap-1 rounded-xl bg-gradient-to-r from-fuchsia-600 to-violet-600 px-3.5 py-2.5 text-sm font-bold text-white shadow-md shadow-fuchsia-600/25"
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    読み終える
+                    <CheckCircle2 className="h-4 w-4" />
+                  </motion.button>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
       </div>
     </div>
   );

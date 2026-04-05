@@ -329,7 +329,7 @@ const HomeScreen = ({
             whileTap={{ scale: 0.98 }}
           >
             <GraduationCap className="w-7 h-7" />
-            アカデミーに出席する
+            ぽてっとクイズ
           </motion.button>
 
           <motion.button
