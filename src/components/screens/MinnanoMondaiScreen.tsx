@@ -234,6 +234,48 @@ function buildQuizQuestions(
   return filled.map(withShuffledChoices);
 }
 
+const persistAcademyAnswerAggregate = async (questionId: string, isCorrect: boolean): Promise<void> => {
+  try {
+    const res = await fetch('/api/academy-answer', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ questionId, isCorrect }),
+    });
+
+    type AcademyAnswerApiResponse = {
+      success?: boolean;
+      persisted?: boolean;
+      reason?: string;
+      error?: string;
+    };
+
+    if (!res.ok) {
+      let reason = '';
+      try {
+        const body = (await res.json()) as AcademyAnswerApiResponse;
+        reason = body?.error ? `:${body.error}` : '';
+      } catch {
+        reason = '';
+      }
+      console.error(`[academy-answer] persist failed: status=${res.status}${reason}`);
+      return;
+    }
+
+    try {
+      const body = (await res.json()) as AcademyAnswerApiResponse;
+      if (body?.persisted === false && body?.reason === 'not_found') {
+        console.warn(`[academy-answer] aggregate not persisted (not_found): questionId=${questionId}`);
+      }
+    } catch {
+      // 成功レスポンスのJSON解析失敗は集計処理を止めない
+    }
+  } catch (error) {
+    console.error('[academy-answer] persist request failed:', error);
+  }
+};
+
 const calcRank = (score: number): 'S' | 'A' | 'B' | 'C' => {
   if (score >= 90) return 'S';
   if (score >= 75) return 'A';
@@ -1052,6 +1094,21 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
       const basePoint = isCorrect ? 10 : 0;
       const timeBonus = isCorrect ? Math.max(0, 10 - elapsedSec) : 0;
       const totalPoint = basePoint + timeBonus;
+
+      // 正答率表示用の統計をローカル状態に即時反映（公式seed/ユーザー投稿の両方に適用）
+      useGameStore.setState((state) => ({
+        academyUserQuestions: state.academyUserQuestions.map((q) => {
+          if (q.id !== current.id) return q;
+          const nextPlayCount = Math.max(0, Number(q.playCount ?? 0)) + 1;
+          const nextCorrectCount = Math.max(0, Number(q.correctCount ?? 0)) + (isCorrect ? 1 : 0);
+          return {
+            ...q,
+            playCount: nextPlayCount,
+            correctCount: nextCorrectCount,
+          };
+        }),
+      }));
+      void persistAcademyAnswerAggregate(current.id, isCorrect);
 
       setQuizResults((prev) => [
         ...prev,
