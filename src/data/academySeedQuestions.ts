@@ -6,7 +6,7 @@ import type { AcademyUserQuestion } from '@/types';
  * - `bigCategory` は `EXAM_CATEGORIES[].label` と一致（教養枠は「趣味・教養」、創作枠は「オリジナル」）。
  * - 同じ `id` はストアに二重登録されない。
  */
-export const ACADEMY_SEED_QUESTIONS: AcademyUserQuestion[] = [
+const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
   // --- 文系学問（3問） ---
   {
     id: 'academy_seed_bunkei_01',
@@ -393,3 +393,13 @@ export const ACADEMY_SEED_QUESTIONS: AcademyUserQuestion[] = [
     subCategory: 'オリジナル',
   },
 ];
+
+/** 公式seed: 運営名義＋サンプル統計（正答率表示用。Firestore 側に同一 id があればマージで上書き） */
+export const ACADEMY_SEED_QUESTIONS: AcademyUserQuestion[] = ACADEMY_SEED_QUESTIONS_RAW.map((q) => ({
+  ...q,
+  authorName: '運営',
+  playCount: 120,
+  correctCount: 84,
+  goodCount: 0,
+  badCount: 0,
+}));

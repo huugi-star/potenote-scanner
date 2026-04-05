@@ -58,6 +58,13 @@ export interface AcademyUserQuestion {
   detailText?: string;
   /** みんなの問題などで表示（任意） */
   playCount?: number;
+  /** 正答率算出用（correctRateは保存しない） */
+  correctCount?: number;
+  /** 良い評価数（goodRateは保存しない） */
+  goodCount?: number;
+  /** 悪い評価数（badRateは保存しない） */
+  badCount?: number;
+  /** 旧フィールド（互換読み取り用） */
   likeCount?: number;
 }
 

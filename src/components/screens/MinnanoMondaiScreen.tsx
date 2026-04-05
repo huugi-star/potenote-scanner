@@ -286,34 +286,30 @@ const MagicCircleBurst = ({
   onComplete: (id: number) => void;
 }) => {
   const color = isCorrect ? '#22c55e' : '#ef4444';
-  const size = 280;
+  const size = 320;
 
-  // 魔法陣 SVG を構成するパーツ（リングの半径リスト）
-  const rings = [28, 52, 76, 100, 116];
+  const rings = [32, 58, 82, 106, 124];
 
-  // 六芒星の頂点
   const hexPoints = Array.from({ length: 6 }, (_, i) => {
     const a = (i / 6) * Math.PI * 2;
-    return `${Math.cos(a) * 68},${Math.sin(a) * 68}`;
+    return `${Math.cos(a) * 72},${Math.sin(a) * 72}`;
   }).join(' ');
 
-  // 正三角形×2（ダビデの星）
   const tri1 = Array.from({ length: 3 }, (_, i) => {
     const a = (i / 3) * Math.PI * 2;
-    return `${Math.cos(a) * 86},${Math.sin(a) * 86}`;
+    return `${Math.cos(a) * 92},${Math.sin(a) * 92}`;
   }).join(' ');
+
   const tri2 = Array.from({ length: 3 }, (_, i) => {
     const a = (i / 3) * Math.PI * 2 + Math.PI;
-    return `${Math.cos(a) * 86},${Math.sin(a) * 86}`;
+    return `${Math.cos(a) * 92},${Math.sin(a) * 92}`;
   }).join(' ');
 
-  // 放射線の角度
   const spokeAngles = Array.from({ length: 12 }, (_, i) => (i / 12) * Math.PI * 2);
 
-  // 外周の装飾ドット
   const dots = Array.from({ length: 8 }, (_, i) => {
     const a = (i / 8) * Math.PI * 2;
-    const r = 52 + (i % 3) * 20;
+    const r = 56 + (i % 3) * 22;
     return { cx: Math.cos(a) * r, cy: Math.sin(a) * r };
   });
 
@@ -329,7 +325,11 @@ const MagicCircleBurst = ({
         marginTop: -size / 2,
       }}
       initial={{ scale: 0.05, opacity: 0, rotate: -30 }}
-      animate={{ scale: 1, opacity: [0, 1, 1, 0], rotate: isCorrect ? 90 : -90 }}
+      animate={{
+        scale: 1,
+        opacity: [0, 1, 1, 0.85],
+        rotate: isCorrect ? 90 : -90,
+      }}
       transition={{ duration: MAGIC_CIRCLE_DURATION_MS / 1000, ease: 'easeOut' }}
       onAnimationComplete={() => onComplete(id)}
     >
@@ -339,56 +339,50 @@ const MagicCircleBurst = ({
         viewBox={`${-size / 2} ${-size / 2} ${size} ${size}`}
         xmlns="http://www.w3.org/2000/svg"
       >
-        {/* 中心グロー */}
         <radialGradient id={`mg-${id}`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="0%" stopColor={color} stopOpacity="0.70" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </radialGradient>
-        <circle r={30} fill={`url(#mg-${id})`} />
+        <circle r={38} fill={`url(#mg-${id})`} />
 
-        {/* 同心円リング */}
         {rings.map((r, i) => (
           <circle
             key={r}
             r={r}
             fill="none"
             stroke={color}
-            strokeWidth={i === rings.length - 1 ? 2 : 1}
-            strokeOpacity={i === rings.length - 1 ? 0.9 : 0.3}
+            strokeWidth={i === rings.length - 1 ? 2.5 : 1.2}
+            strokeOpacity={i === rings.length - 1 ? 1.0 : 0.65}
             strokeDasharray={i % 2 === 0 ? '5 4' : '2 6'}
           />
         ))}
 
-        {/* 放射スポーク */}
         {spokeAngles.map((a, i) => (
           <line
             key={i}
-            x1={Math.cos(a) * 28}
-            y1={Math.sin(a) * 28}
-            x2={Math.cos(a) * 108}
-            y2={Math.sin(a) * 108}
+            x1={Math.cos(a) * 32}
+            y1={Math.sin(a) * 32}
+            x2={Math.cos(a) * 116}
+            y2={Math.sin(a) * 116}
             stroke={color}
-            strokeOpacity="0.18"
-            strokeWidth="1"
+            strokeOpacity="0.45"
+            strokeWidth="1.2"
           />
         ))}
 
-        {/* 六芒星 */}
         <polygon
           points={hexPoints}
           fill="none"
           stroke={color}
-          strokeOpacity="0.48"
-          strokeWidth="1.5"
+          strokeOpacity="0.85"
+          strokeWidth="2"
         />
 
-        {/* ダビデの星 */}
-        <polygon points={tri1} fill="none" stroke={color} strokeOpacity="0.3" strokeWidth="1" />
-        <polygon points={tri2} fill="none" stroke={color} strokeOpacity="0.3" strokeWidth="1" />
+        <polygon points={tri1} fill="none" stroke={color} strokeOpacity="0.65" strokeWidth="1.5" />
+        <polygon points={tri2} fill="none" stroke={color} strokeOpacity="0.65" strokeWidth="1.5" />
 
-        {/* 外周ドット */}
         {dots.map((d, i) => (
-          <circle key={i} cx={d.cx} cy={d.cy} r="3" fill={color} opacity="0.75" />
+          <circle key={i} cx={d.cx} cy={d.cy} r="4" fill={color} opacity="1.0" />
         ))}
       </svg>
     </motion.div>
@@ -758,6 +752,14 @@ const QuizPlayView = ({
   const current = questions[currentQuestionIndex];
   const timeLeftSec = Math.max(0, Math.ceil(timeLeftMs / 1000));
   const progress = Math.max(0, Math.min(100, (timeLeftMs / QUIZ_TIME_LIMIT_MS) * 100));
+  const safePlayCount = typeof current?.playCount === 'number' ? Math.max(0, current.playCount) : 0;
+  const safeCorrectCount = typeof current?.correctCount === 'number' ? Math.max(0, current.correctCount) : 0;
+  const correctRate = safePlayCount > 0
+    ? Math.max(0, Math.min(100, Math.floor((safeCorrectCount / safePlayCount) * 100)))
+    : null;
+  const rawAuthorName = String(current?.authorName ?? '').trim();
+  const authorLabel =
+    !rawAuthorName || rawAuthorName === '匿名ユーザー' ? '匿名' : rawAuthorName;
 
   if (!current) return null;
 
@@ -802,16 +804,37 @@ const QuizPlayView = ({
           </span>
         </div>
 
-        {/* 問題文 */}
+        {/* 問題文（正答率:右上 / 出題者:右下） */}
         <div
-          className="rounded-2xl p-4 mb-3"
+          className="relative rounded-2xl p-4 mb-3 pb-7"
           style={{ border: '1px solid rgba(160,150,210,0.22)', background: 'rgba(255,255,255,0.94)', boxShadow: '0 12px 28px rgba(80,60,160,0.08)' }}
         >
-          <p className="text-[10px] font-bold mb-2" style={{ color: 'rgba(108,88,164,0.7)' }}>
+          <div
+            className="absolute top-2.5 right-2.5 z-[1] rounded-lg px-2.5 py-1 text-xs font-black tabular-nums shadow-md"
+            style={{
+              color: '#4c1d95',
+              background: 'linear-gradient(135deg, rgba(253,230,138,0.95) 0%, rgba(250,204,21,0.88) 100%)',
+              border: '1px solid rgba(180,130,20,0.45)',
+              boxShadow: '0 4px 14px rgba(234,179,8,0.35), 0 0 0 1px rgba(255,255,255,0.5) inset',
+            }}
+          >
+            正答率 {correctRate === null ? '--' : `${correctRate}%`}
+          </div>
+
+          <p className="text-[10px] font-bold mb-2 pr-[7.5rem]" style={{ color: 'rgba(108,88,164,0.7)' }}>
             {cat.icon} {cat.label}
           </p>
-          <p className="text-base font-bold leading-relaxed" style={{ color: 'rgba(55,38,105,0.96)' }}>
+
+          <p className="text-base font-bold leading-relaxed pr-1" style={{ color: 'rgba(55,38,105,0.96)' }}>
             {current.question}
+          </p>
+
+          <p
+            className="absolute bottom-2 right-3 max-w-[70%] text-right text-[9px] font-normal leading-tight truncate"
+            style={{ color: 'rgba(108,88,164,0.52)' }}
+            title={authorLabel}
+          >
+            出題者 {authorLabel}
           </p>
         </div>
 

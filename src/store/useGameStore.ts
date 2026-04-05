@@ -118,7 +118,10 @@ const normalizeAcademyQuestion = (
     subCategory: typeof rec.subCategory === 'string' ? rec.subCategory : undefined,
     subjectText: typeof rec.subjectText === 'string' ? rec.subjectText : undefined,
     detailText: typeof rec.detailText === 'string' ? rec.detailText : undefined,
-    playCount: typeof rec.playCount === 'number' ? rec.playCount : undefined,
+    playCount: typeof rec.playCount === 'number' ? rec.playCount : 0,
+    correctCount: typeof rec.correctCount === 'number' ? rec.correctCount : 0,
+    goodCount: typeof rec.goodCount === 'number' ? rec.goodCount : 0,
+    badCount: typeof rec.badCount === 'number' ? rec.badCount : 0,
     likeCount: typeof rec.likeCount === 'number' ? rec.likeCount : undefined,
   };
 };
@@ -1821,6 +1824,10 @@ export const useGameStore = create<GameStore>()(
             // authorUid は必ず auth.uid を採用（外部入力値は使わない）
             authorUid: uid,
             authorName: String(get().displayName ?? '').trim() || '匿名ユーザー',
+            playCount: 0,
+            correctCount: 0,
+            goodCount: 0,
+            badCount: 0,
             question: safeQuestion,
             choices: normalizedChoices,
             answerIndex: safeAnswerIndex,
