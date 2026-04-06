@@ -21,6 +21,7 @@ import { useGameStore } from '@/store/useGameStore';
 import { useToast } from '@/components/ui/Toast';
 import { MinnanoMondaiScreen } from '@/components/screens/MinnanoMondaiScreen';
 import { storyIntroPages, STORY_INTRO_READ_KEY } from '@/data/storyIntroPages';
+import { CREATION_CATEGORIES, SUBCATEGORY_SUGGESTIONS } from '@/data/categories';
 import { StoryIntroScreen } from '@/components/story/StoryIntroScreen';
 import type { AcademyUserQuestion, QuizHistory } from '@/types';
 
@@ -63,53 +64,6 @@ interface AcademyScreenProps {
 }
 
 // ============================================================
-// カテゴリ定義
-// ============================================================
-
-const CATEGORIES: { label: string; sub: string[] }[] = [
-  { label: '文系学問', sub: ['日本史', '世界史', '地理', '現代文', '古文', '漢文', '政治経済', '倫理'] },
-  { label: '理系学問', sub: ['数学', '物理', '化学', '生物', '地学'] },
-  { label: '言語',     sub: ['英単語', '英文法', '英会話', 'リーディング', 'リスニング', '韓国語', '中国語', 'その他言語'] },
-  { label: '資格',     sub: ['宅建', '簿記', 'ITパスポート', '基本情報', '英検', 'TOEIC', 'その他資格'] },
-  { label: 'エンタメ', sub: ['漫画・アニメ', 'ゲーム', '映画', 'ドラマ', '小説', '音楽'] },
-  { label: '趣味・教養', sub: ['雑学', '心理学', '哲学', 'アート', 'スポーツ', '料理', '健康'] },
-  { label: '生活',     sub: ['一般常識', 'マナー', '社会', 'ニュース'] },
-  { label: 'オリジナル', sub: ['オリジナル'] },
-];
-
-// サブカテゴリごとの代表的な題材候補
-const SUBCATEGORY_SUGGESTIONS: Record<string, string[]> = {
-  '日本史':     ['縄文時代', '弥生時代', '奈良時代', '平安時代', '鎌倉幕府', '江戸幕府', '明治維新', '大正デモクラシー'],
-  '世界史':     ['古代ローマ', 'フランス革命', '産業革命', '第一次世界大戦', '冷戦', 'ルネサンス'],
-  '地理':       ['気候区分', '地形', '人口問題', '資源エネルギー', '農業', '工業'],
-  '数学':       ['微分積分', '線形代数', '確率統計', '数列', '三角関数', '複素数'],
-  '物理':       ['力学', '熱力学', '電磁気学', '波動', '量子力学', '相対性理論'],
-  '化学':       ['有機化学', '無機化学', '電気化学', '高分子化学', '熱化学'],
-  '生物':       ['細胞', 'DNA', '進化', '生態系', '光合成', '神経'],
-  '英単語':     ['TOEIC頻出', '大学受験', 'ビジネス英語', '日常会話', 'イディオム'],
-  '英文法':     ['時制', '仮定法', '関係代名詞', '不定詞', '分詞', '助動詞'],
-  '韓国語':     ['ハングル文字', '基本文法', 'K-POP関連', '日常会話'],
-  '中国語':     ['ピンイン', '声調', '基本文法', 'HSK'],
-  '宅建':       ['民法', '宅建業法', '都市計画法', '建築基準法', '税法'],
-  '簿記':       ['仕訳', '財務諸表', '原価計算', '損益計算書', '貸借対照表'],
-  'ITパスポート':['情報セキュリティ', 'ネットワーク', 'データベース', 'プロジェクト管理'],
-  '基本情報':   ['アルゴリズム', 'データ構造', 'OS', 'ネットワーク', 'SQL'],
-  '英検':       ['英検2級', '英検準1級', '英検1級', '英検3級'],
-  'TOEIC':      ['リスニング対策', 'リーディング対策', 'ビジネス英語', '文法問題'],
-  '漫画・アニメ': ['ワンピース', '鬼滅の刃', '呪術廻戦', '進撃の巨人', 'ドラゴンボール', 'ナルト', 'ブリーチ', 'ハンターハンター', 'スラムダンク', '推しの子'],
-  'ゲーム':     ['ポケモン', 'ゼルダの伝説', 'ファイナルファンタジー', 'ドラゴンクエスト', 'モンスターハンター', 'スプラトゥーン'],
-  '映画':       ['マーベル', 'ジブリ', 'ディズニー', 'SF映画', 'ホラー映画', '邦画'],
-  'ドラマ':     ['朝ドラ', '大河ドラマ', '韓国ドラマ', '海外ドラマ'],
-  '小説':       ['純文学', 'ミステリー', 'SF小説', 'ライトノベル', '歴史小説'],
-  '音楽':       ['J-POP', 'K-POP', 'クラシック', 'ロック', 'ジャズ', 'ボカロ'],
-  '雑学':       ['動物', '食べ物', '地理', '宇宙', '人体', '言葉'],
-  '心理学':     ['認知心理学', '社会心理学', '発達心理学', '臨床心理学'],
-  '哲学':       ['西洋哲学', '東洋哲学', '倫理学', '存在論', '認識論'],
-  'スポーツ':   ['野球', 'サッカー', 'バスケ', '陸上', 'テニス', '水泳', 'オリンピック'],
-  '料理':       ['和食', '洋食', '中華', 'お菓子', '調理技法', '食材'],
-};
-
-// ============================================================
 // 定数
 // ============================================================
 
@@ -120,6 +74,24 @@ const CREATION_POLICY = {
     { id: 'noRepost', label: '転載していません' },
     { id: 'reviewed', label: '内容を確認しました' },
   ] as const,
+};
+
+const EXAM_TRACKS = ['総合', '大学受験', '高校受験', '中学受験'] as const;
+type ExamTrack = (typeof EXAM_TRACKS)[number];
+
+const SUBJECTS_BY_TRACK: Record<'文系学問' | '理系学問', Record<ExamTrack, string[]>> = {
+  文系学問: {
+    総合: ['英語', '国語', '社会', '日本史', '世界史', '地理', '政治経済', '倫理', '現代文', '古文', '漢文', '哲学', '心理学'],
+    大学受験: ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理'],
+    高校受験: ['英語', '国語', '社会', '地理'],
+    中学受験: ['国語', '社会'],
+  },
+  理系学問: {
+    総合: ['算数', '数学', '数学ⅠA', '数学ⅡB', '数学Ⅲ', '理科', '物理', '化学', '生物', '地学', '情報・統計'],
+    大学受験: ['数学ⅠA', '数学ⅡB', '数学Ⅲ', '物理', '化学', '生物', '地学'],
+    高校受験: ['数学', '理科'],
+    中学受験: ['算数', '理科'],
+  },
 };
 
 /** テーマ選択・自分の問題 など一覧の1ページあたり件数 */
@@ -360,6 +332,7 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
   const [allExtractedKeywords,      setAllExtractedKeywords]      = useState<KeywordCandidate[]>([]);
   const [selectedKeywordsForDraft,  setSelectedKeywordsForDraft]  = useState<string[]>([]);
   const [selectedBigCategory,       setSelectedBigCategory]       = useState<string | null>(null);
+  const [selectedExamTrack,         setSelectedExamTrack]         = useState<ExamTrack | null>(null);
   const [selectedSubCategory,       setSelectedSubCategory]       = useState<string | null>(null);
   // 科目名・作品名
   const [subjectText,               setSubjectText]               = useState('');
@@ -464,6 +437,7 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
     setAllExtractedKeywords([]);
     setSelectedKeywordsForDraft([]);
     setSelectedBigCategory(null);
+    setSelectedExamTrack(null);
     setSelectedSubCategory(null);
     setSubjectText('');
     setDetailText('');
@@ -950,7 +924,7 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
               onClick={() => setSubview('create_category')}
               className="mt-2 w-full text-center text-xs text-gray-500 hover:text-gray-300 py-1"
             >
-              カテゴリを変更する（現在: {selectedBigCategory} / {selectedSubCategory}）
+              カテゴリを変更する（現在: {selectedBigCategory}{selectedExamTrack ? ` / ${selectedExamTrack}` : ''} / {selectedSubCategory}）
             </button>
           )}
         </div>
@@ -973,13 +947,21 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
           <p className="text-gray-700 text-sm mb-4">大カテゴリを選んでください</p>
 
           <div className="space-y-2 mb-6">
-            {CATEGORIES.map((cat) => {
+            {CREATION_CATEGORIES.map((cat) => {
               const isSelected = selectedBigCategory === cat.label;
+              const hasTrackStep = cat.label === '文系学問' || cat.label === '理系学問';
+              const selectedTrack = hasTrackStep ? selectedExamTrack : null;
+              const subjectCandidates = hasTrackStep
+                ? (selectedTrack
+                  ? SUBJECTS_BY_TRACK[cat.label as '文系学問' | '理系学問'][selectedTrack]
+                  : [])
+                : cat.sub;
               return (
                 <div key={cat.label}>
                   <motion.button
                     onClick={() => {
                       setSelectedBigCategory(isSelected ? null : cat.label);
+                      setSelectedExamTrack(null);
                       setSelectedSubCategory(null);
                     }}
                     className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border font-semibold transition-colors ${
@@ -996,21 +978,47 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
                   </motion.button>
 
                   {isSelected && (
-                    <div className="mt-2 ml-3 flex flex-wrap gap-2 pb-2">
-                      {cat.sub.map((sub) => (
-                        <motion.button
-                          key={sub}
-                          onClick={() => setSelectedSubCategory(sub)}
-                          className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                            selectedSubCategory === sub
-                              ? 'bg-indigo-500 border-indigo-400 text-white'
-                              : 'bg-white/70 border-gray-500 text-gray-800'
-                          }`}
-                          whileTap={{ scale: 0.96 }}
-                        >
-                          {sub}
-                        </motion.button>
-                      ))}
+                    <div className="mt-2 ml-3 space-y-2 pb-2">
+                      {hasTrackStep && (
+                        <div className="flex flex-wrap gap-2">
+                          {EXAM_TRACKS.map((track) => (
+                            <motion.button
+                              key={track}
+                              onClick={() => {
+                                setSelectedExamTrack(track);
+                                setSelectedSubCategory(null);
+                              }}
+                              className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                                selectedExamTrack === track
+                                  ? 'bg-violet-500 border-violet-400 text-white'
+                                  : 'bg-white/70 border-gray-500 text-gray-800'
+                              }`}
+                              whileTap={{ scale: 0.96 }}
+                            >
+                              {track}
+                            </motion.button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {hasTrackStep && !selectedTrack && (
+                          <p className="text-xs text-gray-500 px-1">まず受験区分を選んでください</p>
+                        )}
+                        {subjectCandidates.map((sub) => (
+                          <motion.button
+                            key={sub}
+                            onClick={() => setSelectedSubCategory(sub)}
+                            className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                              selectedSubCategory === sub
+                                ? 'bg-indigo-500 border-indigo-400 text-white'
+                                : 'bg-white/70 border-gray-500 text-gray-800'
+                            }`}
+                            whileTap={{ scale: 0.96 }}
+                          >
+                            {sub}
+                          </motion.button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1020,13 +1028,19 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
 
           <motion.button
             onClick={() => setSubview('create_detail')}
-            disabled={!selectedBigCategory || !selectedSubCategory}
+            disabled={
+              !selectedBigCategory ||
+              !selectedSubCategory ||
+              ((selectedBigCategory === '文系学問' || selectedBigCategory === '理系学問') && !selectedExamTrack)
+            }
             className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold"
             whileTap={{ scale: 0.98 }}
           >
             {selectedBigCategory && selectedSubCategory
-              ? `「${selectedBigCategory} / ${selectedSubCategory}」で次へ`
-              : '中カテゴリまで選んでください'}
+              ? `「${selectedBigCategory}${selectedExamTrack ? ` / ${selectedExamTrack}` : ''} / ${selectedSubCategory}」で次へ`
+              : selectedBigCategory === '文系学問' || selectedBigCategory === '理系学問'
+                ? '受験区分と科目を選んでください'
+                : '中カテゴリまで選んでください'}
           </motion.button>
         </div>
       </div>
@@ -1048,7 +1062,7 @@ if (subview === 'create_detail') {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-gray-400 text-xs">カテゴリ</span>
             <span className="rounded-full bg-indigo-500/20 border border-indigo-500/40 px-2 py-0.5 text-xs text-indigo-200">
-              {selectedBigCategory} / {selectedSubCategory}
+              {selectedBigCategory}{selectedExamTrack ? ` / ${selectedExamTrack}` : ''} / {selectedSubCategory}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -1503,3 +1517,4 @@ if (subview === 'create_detail') {
     </div>
   );
 };
+

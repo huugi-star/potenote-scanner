@@ -21,11 +21,22 @@ import {
 import { useGameStore } from '@/store/useGameStore';
 import type { AcademyUserQuestion } from '@/types';
 
-// ============================================================
-// 試験カテゴリ定義
-// ============================================================
+const QUIZ_QUESTION_COUNT = 5;
+const QUIZ_TIME_LIMIT_SEC = 10;
+const QUIZ_TIME_LIMIT_MS = QUIZ_TIME_LIMIT_SEC * 1000;
+/** 魔法陣アニメーション完了後にフィードバック(○×)を表示するまでの遅延 */
+const MAGIC_CIRCLE_DURATION_MS = 450;
+/** ○×フィードバック表示後に次問題へ進むまでの待機 */
+const QUIZ_FEEDBACK_ADVANCE_MS = 1000;
+const ANSWER_LABELS = ['①', '②', '③', '④'] as const;
 
-const EXAM_CATEGORIES: {
+type LectureTab = {
+  label: string;
+  matches: (q: AcademyUserQuestion) => boolean;
+};
+
+type LectureCategory = {
+  id: string;
   label: string;
   ruby: string;
   icon: string;
@@ -38,49 +49,171 @@ const EXAM_CATEGORIES: {
   ribbonColor: string;
   lightBg: string;
   lightBorder: string;
-}[] = [
+  tabs: LectureTab[];
+};
+
+const LIBERAL_SUBJECTS_BY_TAB: Record<'総合' | '中学受験' | '高校受験' | '大学受験', string[]> = {
+  総合: ['英語', '国語', '社会', '日本史', '世界史', '地理', '政治経済', '倫理', '現代文', '古文', '漢文', '哲学', '心理学'],
+  中学受験: ['国語', '社会'],
+  高校受験: ['英語', '国語', '社会', '地理'],
+  大学受験: ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理'],
+};
+
+const SCIENCE_SUBJECTS_BY_TAB: Record<'総合' | '中学受験' | '高校受験' | '大学受験', string[]> = {
+  総合: ['算数', '数学', '数学ⅠA', '数学ⅡB', '数学Ⅲ', '理科', '物理', '化学', '生物', '地学', '情報・統計'],
+  中学受験: ['算数', '理科'],
+  高校受験: ['数学', '理科'],
+  大学受験: ['数学ⅠA', '数学ⅡB', '数学Ⅲ', '物理', '化学', '生物', '地学'],
+};
+
+const CERT_ITEMS_BY_TAB: Record<
+  '法律・不動産' | 'IT・情報' | '設備・技術' | '医療・福祉' | 'ビジネス・金融' | '食品・環境',
+  string[]
+> = {
+  '法律・不動産': ['宅建', '行政書士', '司法書士', 'マンション管理士', '社労士'],
+  'IT・情報': ['ITパスポート', '基本情報技術者', '応用情報技術者', '情報セキュリティマネジメント'],
+  '設備・技術': ['危険物取扱者', '電気工事士', '消防設備士', 'ボイラー技士'],
+  '医療・福祉': ['医療事務', '介護福祉士', 'ケアマネージャー', '登録販売者'],
+  'ビジネス・金融': ['FP3級', 'FP2級', '証券外務員', '秘書検定', '中小企業診断士'],
+  '食品・環境': ['食品衛生責任者', '調理師', '環境計量士'],
+};
+
+const LANGUAGE_SUBJECTS_BY_TAB: Record<'英語', string[]> = {
+  英語: ['英単語', '英文法', '英熟語', '英会話'],
+};
+
+const normalize = (v: unknown): string => String(v ?? '').trim();
+const includesAny = (v: string, words: string[]) => words.some((w) => v.includes(w));
+const eqAny = (v: string, words: string[]) => words.includes(v);
+
+const isLiberal = (q: AcademyUserQuestion): boolean => {
+  const big = normalize(q.bigCategory);
+  const sub = normalize(q.subCategory);
+  const subject = normalize(q.subjectText);
+  if (big === '文系学問') return true;
+  return eqAny(sub, ['英語', '国語', '社会', '日本史', '世界史', '地理', '政治経済', '倫理', '現代文', '古文', '漢文', '哲学', '心理学']) ||
+    includesAny(subject, ['英語', '国語', '社会', '日本史', '世界史', '地理', '政治経済', '倫理', '現代文', '古文', '漢文', '哲学', '心理学']);
+};
+
+const isScience = (q: AcademyUserQuestion): boolean => {
+  const big = normalize(q.bigCategory);
+  const sub = normalize(q.subCategory);
+  const subject = normalize(q.subjectText);
+  if (big === '理系学問') return true;
+  return eqAny(sub, ['算数', '数学', '数学ⅠA', '数学ⅡB', '数学Ⅲ', '理科', '物理', '化学', '生物', '地学', '情報・統計']) ||
+    includesAny(subject, ['算数', '数学', '数学ⅠA', '数学ⅡB', '数学Ⅲ', '理科', '物理', '化学', '生物', '地学', '情報・統計']);
+};
+
+const isCert = (q: AcademyUserQuestion): boolean => normalize(q.bigCategory) === '資格';
+
+const langText = (q: AcademyUserQuestion): string =>
+  `${normalize(q.subCategory)} ${normalize(q.subjectText)} ${Array.isArray(q.keywords) ? q.keywords.join(' ') : ''}`;
+
+const isLanguage = (q: AcademyUserQuestion): boolean => {
+  const big = normalize(q.bigCategory);
+  const sub = normalize(q.subCategory);
+  if (big === '語学' || big === '言語' || big === '英語' || big === '韓国語・中国語' || big === 'その他言語') return true;
+  return eqAny(sub, ['英語', '英単語', '英文法', '英熟語', '英会話', '韓国語', '中国語', 'フランス語', 'スペイン語', 'ドイツ語']);
+};
+
+/** 語学タブ用：英語系（韓国語・中国語・欧州語の小カテゴリは除外） */
+const isEnglishLanguageTab = (q: AcademyUserQuestion): boolean => {
+  if (!isLanguage(q)) return false;
+  const sub = normalize(q.subCategory);
+  if (eqAny(sub, ['韓国語', '中国語', 'フランス語', 'スペイン語', 'ドイツ語'])) return false;
+  const t = langText(q);
+  if (includesAny(t, ['韓国語', 'ハングル', 'TOPIK', '中国語', 'HSK', 'ピンイン'])) return false;
+  if (sub === 'フランス語' || includesAny(t, ['フランス語', '仏語'])) return false;
+  if (sub === 'スペイン語' || includesAny(t, ['スペイン語'])) return false;
+  if (sub === 'ドイツ語' || includesAny(t, ['ドイツ語', '独語'])) return false;
+  return true;
+};
+const isAnimeManga = (q: AcademyUserQuestion): boolean => {
+  const big = normalize(q.bigCategory);
+  const sub = normalize(q.subCategory);
+  return big === 'アニメ・漫画' || (big === 'エンタメ' && eqAny(sub, ['漫画・アニメ', 'ゲーム']));
+};
+const isEntertainment = (q: AcademyUserQuestion): boolean => {
+  const big = normalize(q.bigCategory);
+  const sub = normalize(q.subCategory);
+  return big === '芸能' || (big === 'エンタメ' && eqAny(sub, ['映画', '音楽', 'ドラマ']));
+};
+const isHobby = (q: AcademyUserQuestion): boolean => normalize(q.bigCategory) === '趣味・教養';
+const isCreative = (q: AcademyUserQuestion): boolean => {
+  const big = normalize(q.bigCategory);
+  const sub = normalize(q.subCategory);
+  return big === '創作' || big === 'オリジナル' || eqAny(sub, ['ユーザー創作問題', '自由テーマ', 'コラボ', '期間限定']);
+};
+
+const getDetailedSubjects = (catId: string, tabLabel: string): string[] => {
+  if (catId === 'liberal') {
+    return LIBERAL_SUBJECTS_BY_TAB[tabLabel as keyof typeof LIBERAL_SUBJECTS_BY_TAB] ?? [];
+  }
+  if (catId === 'science') {
+    return SCIENCE_SUBJECTS_BY_TAB[tabLabel as keyof typeof SCIENCE_SUBJECTS_BY_TAB] ?? [];
+  }
+  if (catId === 'cert') {
+    return CERT_ITEMS_BY_TAB[tabLabel as keyof typeof CERT_ITEMS_BY_TAB] ?? [];
+  }
+  if (catId === 'language') {
+    return LANGUAGE_SUBJECTS_BY_TAB[tabLabel as keyof typeof LANGUAGE_SUBJECTS_BY_TAB] ?? [];
+  }
+  return [];
+};
+
+const matchDetailedSubject = (q: AcademyUserQuestion, subject: string): boolean => {
+  if (!subject || subject === 'すべて') return true;
+  const sub = normalize(q.subCategory);
+  const subjectText = normalize(q.subjectText);
+  const keywords = Array.isArray(q.keywords) ? q.keywords.join(' ') : '';
+  return sub === subject || subjectText.includes(subject) || keywords.includes(subject);
+};
+
+const LECTURE_CATEGORIES: LectureCategory[] = [
   {
+    id: 'liberal',
     label: '文系学問',
-    ruby: 'ぶんけい',
+    ruby: 'ぶんけいがくもん',
     icon: '📚',
     kanji: '文系',
     kanjiSub: '学問',
     color: 'from-amber-500 via-yellow-400 to-orange-400',
     glow: '#f59e0b',
     border: 'border-amber-400/60',
-    description: '歴史・地理\n国語・倫理',
+    description: '総合 / 中学受験 / 高校受験 / 大学受験',
     ribbonColor: '#b45309',
     lightBg: 'linear-gradient(135deg, rgba(255,251,235,0.98) 0%, rgba(254,243,199,0.96) 100%)',
     lightBorder: 'rgba(245,158,11,0.28)',
+    tabs: [
+      { label: '総合', matches: (q) => isLiberal(q) },
+      { label: '中学受験', matches: (q) => isLiberal(q) && (eqAny(normalize(q.subCategory), ['国語', '社会']) || includesAny(normalize(q.subjectText), ['国語', '社会'])) },
+      { label: '高校受験', matches: (q) => isLiberal(q) && (eqAny(normalize(q.subCategory), ['英語', '国語', '社会', '地理']) || includesAny(normalize(q.subjectText), ['英語', '国語', '社会', '地理'])) },
+      { label: '大学受験', matches: (q) => isLiberal(q) && (eqAny(normalize(q.subCategory), ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理']) || includesAny(normalize(q.subjectText), ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理'])) },
+    ],
   },
   {
+    id: 'science',
     label: '理系学問',
-    ruby: 'りけい',
+    ruby: 'りけいがくもん',
     icon: '🔬',
     kanji: '理系',
     kanjiSub: '学問',
     color: 'from-cyan-500 via-sky-500 to-blue-500',
     glow: '#06b6d4',
     border: 'border-cyan-400/60',
-    description: '数学・物理\n化学・生物',
+    description: '総合 / 中学受験 / 高校受験 / 大学受験',
     ribbonColor: '#0284c7',
     lightBg: 'linear-gradient(135deg, rgba(240,249,255,0.98) 0%, rgba(224,242,254,0.96) 100%)',
     lightBorder: 'rgba(6,182,212,0.28)',
+    tabs: [
+      { label: '総合', matches: (q) => isScience(q) },
+      { label: '中学受験', matches: (q) => isScience(q) && (eqAny(normalize(q.subCategory), ['算数', '理科']) || includesAny(normalize(q.subjectText), ['算数', '理科'])) },
+      { label: '高校受験', matches: (q) => isScience(q) && (eqAny(normalize(q.subCategory), ['数学', '理科']) || includesAny(normalize(q.subjectText), ['数学', '理科'])) },
+      { label: '大学受験', matches: (q) => isScience(q) && (eqAny(normalize(q.subCategory), ['数学ⅠA', '数学ⅡB', '数学Ⅲ', '物理', '化学', '生物', '地学']) || includesAny(normalize(q.subjectText), ['数学ⅠA', '数学ⅡB', '数学Ⅲ', '物理', '化学', '生物', '地学'])) },
+    ],
   },
   {
-    label: '言語',
-    ruby: 'げんご',
-    icon: '🌐',
-    kanji: '言語',
-    color: 'from-emerald-500 via-green-500 to-teal-400',
-    glow: '#10b981',
-    border: 'border-emerald-400/60',
-    description: '英語・韓国語\n中国語',
-    ribbonColor: '#059669',
-    lightBg: 'linear-gradient(135deg, rgba(236,253,245,0.98) 0%, rgba(209,250,229,0.96) 100%)',
-    lightBorder: 'rgba(16,185,129,0.28)',
-  },
-  {
+    id: 'cert',
     label: '資格',
     ruby: 'しかく',
     icon: '🏅',
@@ -88,73 +221,128 @@ const EXAM_CATEGORIES: {
     color: 'from-orange-500 via-red-500 to-rose-500',
     glow: '#f97316',
     border: 'border-orange-400/60',
-    description: '宅建・簿記\nIT・英検',
+    description: '法律・不動産 / IT・情報 / 設備・技術 / 医療・福祉 / ビジネス・金融 / 食品・環境',
     ribbonColor: '#dc2626',
     lightBg: 'linear-gradient(135deg, rgba(255,247,237,0.98) 0%, rgba(255,228,230,0.96) 100%)',
     lightBorder: 'rgba(249,115,22,0.28)',
+    tabs: [
+      { label: '法律・不動産', matches: (q) => isCert(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, CERT_ITEMS_BY_TAB['法律・不動産']) },
+      { label: 'IT・情報', matches: (q) => isCert(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, CERT_ITEMS_BY_TAB['IT・情報']) },
+      { label: '設備・技術', matches: (q) => isCert(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, CERT_ITEMS_BY_TAB['設備・技術']) },
+      { label: '医療・福祉', matches: (q) => isCert(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, CERT_ITEMS_BY_TAB['医療・福祉']) },
+      { label: 'ビジネス・金融', matches: (q) => isCert(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, CERT_ITEMS_BY_TAB['ビジネス・金融']) },
+      { label: '食品・環境', matches: (q) => isCert(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, CERT_ITEMS_BY_TAB['食品・環境']) },
+    ],
   },
   {
-    label: 'エンタメ',
-    ruby: 'えんため',
+    id: 'language',
+    label: '語学',
+    ruby: 'ごがく',
+    icon: '🌐',
+    kanji: '語学',
+    color: 'from-emerald-500 via-green-500 to-teal-400',
+    glow: '#10b981',
+    border: 'border-emerald-400/60',
+    description: '英語（単語・文法・熟語・会話）/ 韓国語 / 中国語 / フランス語 / スペイン語 / ドイツ語',
+    ribbonColor: '#059669',
+    lightBg: 'linear-gradient(135deg, rgba(236,253,245,0.98) 0%, rgba(209,250,229,0.96) 100%)',
+    lightBorder: 'rgba(16,185,129,0.28)',
+    tabs: [
+      { label: '英語', matches: (q) => isEnglishLanguageTab(q) },
+      { label: '韓国語', matches: (q) => isLanguage(q) && includesAny(langText(q), ['韓国語', 'ハングル', 'TOPIK']) },
+      { label: '中国語', matches: (q) => isLanguage(q) && includesAny(langText(q), ['中国語', 'HSK', 'ピンイン']) },
+      {
+        label: 'フランス語',
+        matches: (q) =>
+          isLanguage(q) &&
+          (normalize(q.subCategory) === 'フランス語' || includesAny(langText(q), ['フランス語', '仏語', 'DELF', 'DALF'])),
+      },
+      {
+        label: 'スペイン語',
+        matches: (q) =>
+          isLanguage(q) && (normalize(q.subCategory) === 'スペイン語' || includesAny(langText(q), ['スペイン語', 'DELE'])),
+      },
+      {
+        label: 'ドイツ語',
+        matches: (q) =>
+          isLanguage(q) &&
+          (normalize(q.subCategory) === 'ドイツ語' || includesAny(langText(q), ['ドイツ語', '独語', 'Goethe'])),
+      },
+    ],
+  },
+  {
+    id: 'anime',
+    label: 'アニメ・漫画',
+    ruby: 'あにめ・まんが',
     icon: '🎮',
-    kanji: '娯楽',
+    kanji: 'アニメ',
+    kanjiSub: '漫画',
     color: 'from-purple-600 via-fuchsia-500 to-pink-500',
     glow: '#d946ef',
     border: 'border-fuchsia-400/60',
-    description: '漫画・アニメ\nゲーム・映画',
+    description: 'アニメ / 漫画 / ゲーム',
     ribbonColor: '#a21caf',
     lightBg: 'linear-gradient(135deg, rgba(253,244,255,0.96) 0%, rgba(250,232,255,0.96) 100%)',
     lightBorder: 'rgba(217,70,239,0.28)',
+    tabs: [
+      { label: 'アニメ', matches: (q) => isAnimeManga(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, ['アニメ']) },
+      { label: '漫画', matches: (q) => isAnimeManga(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, ['漫画']) },
+      { label: 'ゲーム', matches: (q) => isAnimeManga(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, ['ゲーム']) },
+    ],
   },
   {
-    label: '趣味・教養',
-    ruby: 'しゅみ\nきょうよう',
-    icon: '🎨',
-    kanji: '教養',
+    id: 'entertainment',
+    label: '芸能',
+    ruby: 'げいのう',
+    icon: '🎬',
+    kanji: '芸能',
     color: 'from-rose-500 via-pink-500 to-fuchsia-400',
     glow: '#ec4899',
     border: 'border-rose-400/60',
-    description: '雑学・哲学\nスポーツ',
+    description: '映画 / 音楽 / 芸能',
     ribbonColor: '#be185d',
     lightBg: 'linear-gradient(135deg, rgba(255,241,242,0.98) 0%, rgba(252,231,243,0.96) 100%)',
     lightBorder: 'rgba(236,72,153,0.28)',
+    tabs: [
+      { label: '映画', matches: (q) => isEntertainment(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, ['映画']) },
+      { label: '音楽', matches: (q) => isEntertainment(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, ['音楽']) },
+      { label: '芸能', matches: (q) => isEntertainment(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, ['芸能', 'ドラマ']) },
+    ],
   },
   {
-    label: '生活',
-    ruby: 'せいかつ',
-    icon: '🏠',
-    kanji: '生活',
+    id: 'hobby',
+    label: '趣味・教養',
+    ruby: 'しゅみ・きょうよう',
+    icon: '🎨',
+    kanji: '教養',
     color: 'from-teal-500 via-cyan-500 to-sky-400',
     glow: '#14b8a6',
     border: 'border-teal-400/60',
-    description: '常識・マナー\n社会',
+    description: '雑学 / スポーツ',
     ribbonColor: '#0f766e',
     lightBg: 'linear-gradient(135deg, rgba(240,253,250,0.98) 0%, rgba(224,242,254,0.96) 100%)',
     lightBorder: 'rgba(20,184,166,0.28)',
+    tabs: [
+      { label: '雑学', matches: (q) => isHobby(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, ['雑学']) },
+      { label: 'スポーツ', matches: (q) => isHobby(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, ['スポーツ']) },
+    ],
   },
   {
-    label: 'オリジナル',
-    ruby: 'おりじなる',
+    id: 'creative',
+    label: '創作',
+    ruby: 'そうさく',
     icon: '✨',
     kanji: '創作',
     color: 'from-indigo-500 via-violet-500 to-purple-500',
     glow: '#6366f1',
     border: 'border-indigo-400/60',
-    description: 'ユーザー\n創作問題',
+    description: 'ユーザー創作問題',
     ribbonColor: '#4f46e5',
     lightBg: 'linear-gradient(135deg, rgba(238,242,255,0.98) 0%, rgba(243,232,255,0.96) 100%)',
     lightBorder: 'rgba(99,102,241,0.28)',
+    tabs: [{ label: 'ユーザー創作問題', matches: (q) => isCreative(q) }],
   },
 ];
-
-const QUIZ_QUESTION_COUNT = 5;
-const QUIZ_TIME_LIMIT_SEC = 10;
-const QUIZ_TIME_LIMIT_MS = QUIZ_TIME_LIMIT_SEC * 1000;
-/** 魔法陣アニメーション完了後にフィードバック(○×)を表示するまでの遅延 */
-const MAGIC_CIRCLE_DURATION_MS = 450;
-/** ○×フィードバック表示後に次問題へ進むまでの待機 */
-const QUIZ_FEEDBACK_ADVANCE_MS = 1000;
-const ANSWER_LABELS = ['①', '②', '③', '④'] as const;
 
 // ============================================================
 // 型定義
@@ -561,7 +749,7 @@ const CategoryCard = ({
   onSelect,
   index,
 }: {
-  cat: typeof EXAM_CATEGORIES[number];
+  cat: LectureCategory;
   count: number;
   totalPlays: number;
   onSelect: () => void;
@@ -670,14 +858,24 @@ const CategoryCard = ({
 
 const ExamRoomInside = ({
   cat,
-  questions,
+  selectedTabLabel,
+  tabCounts,
+  detailedSubjects,
+  selectedDetailSubject,
   onBack,
+  onChangeTab,
+  onChangeDetailSubject,
   onChallenge,
 }: {
-  cat: typeof EXAM_CATEGORIES[number];
-  questions: AcademyUserQuestion[];
+  cat: LectureCategory;
+  selectedTabLabel: string;
+  tabCounts: Record<string, number>;
+  detailedSubjects: string[];
+  selectedDetailSubject: string;
   onBack: () => void;
-  onChallenge: (q: AcademyUserQuestion[]) => void;
+  onChangeTab: (label: string) => void;
+  onChangeDetailSubject: (subject: string) => void;
+  onChallenge: () => void;
 }) => {
   const [glowing, setGlowing] = useState(false);
   useEffect(() => {
@@ -715,8 +913,76 @@ const ExamRoomInside = ({
         </div>
 
         <div className="max-w-md mx-auto px-4 pt-5 space-y-4">
+          <div
+            className="rounded-2xl p-3"
+            style={{
+              border: '1px solid rgba(160,150,210,0.20)',
+              background: 'rgba(255,255,255,0.90)',
+              boxShadow: '0 12px 28px rgba(80,60,160,0.08)',
+              backdropFilter: 'blur(10px)',
+            }}
+          >
+            <p className="text-[11px] font-bold mb-2" style={{ color: 'rgba(67,54,98,0.88)' }}>
+              タブを選択
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {cat.tabs.map((tab) => {
+                const selected = selectedTabLabel === tab.label;
+                const count = tabCounts[tab.label] ?? 0;
+                return (
+                  <motion.button
+                    key={tab.label}
+                    onClick={() => onChangeTab(tab.label)}
+                    className="px-3 py-1.5 rounded-full text-xs font-bold border"
+                    style={{
+                      color: selected ? '#fff' : 'rgba(67,54,98,0.9)',
+                      background: selected
+                        ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`
+                        : 'rgba(255,255,255,0.92)',
+                      borderColor: selected ? 'rgba(255,255,255,0.35)' : 'rgba(160,150,210,0.24)',
+                      boxShadow: selected ? `0 8px 18px ${cat.glow}28` : 'none',
+                    }}
+                    whileTap={{ scale: 0.97 }}
+                  >
+                    {tab.label}（{count}）
+                  </motion.button>
+                );
+              })}
+            </div>
+            {detailedSubjects.length > 0 && (
+              <div className="mt-3">
+                <p className="text-[11px] font-bold mb-2" style={{ color: 'rgba(67,54,98,0.82)' }}>
+                  科目を選択
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {['すべて', ...detailedSubjects].map((subject) => {
+                    const selected = selectedDetailSubject === subject;
+                    return (
+                      <motion.button
+                        key={subject}
+                        onClick={() => onChangeDetailSubject(subject)}
+                        className="px-3 py-1.5 rounded-full text-xs font-bold border"
+                        style={{
+                          color: selected ? '#fff' : 'rgba(67,54,98,0.9)',
+                          background: selected
+                            ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`
+                            : 'rgba(255,255,255,0.92)',
+                          borderColor: selected ? 'rgba(255,255,255,0.35)' : 'rgba(160,150,210,0.24)',
+                          boxShadow: selected ? `0 8px 18px ${cat.glow}28` : 'none',
+                        }}
+                        whileTap={{ scale: 0.97 }}
+                      >
+                        {subject}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           <motion.button
-            onClick={() => onChallenge(questions)}
+            onClick={onChallenge}
             className="relative w-full overflow-hidden rounded-2xl py-5 font-black text-white text-xl"
             style={{ background: `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})` }}
             animate={glowing ? { boxShadow: [`0 0 20px ${cat.glow}35, inset 0 1px 0 rgba(255,255,255,0.2)`, `0 0 38px ${cat.glow}55, inset 0 1px 0 rgba(255,255,255,0.2)`, `0 0 20px ${cat.glow}35, inset 0 1px 0 rgba(255,255,255,0.2)`] } : {}}
@@ -731,25 +997,6 @@ const ExamRoomInside = ({
             </div>
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
           </motion.button>
-
-          <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(160,150,210,0.20)', background: 'rgba(255,255,255,0.90)', boxShadow: '0 12px 28px rgba(80,60,160,0.08)', backdropFilter: 'blur(10px)' }}>
-            <div className="flex items-center gap-2 px-4 py-2.5" style={{ borderBottom: '1px solid rgba(160,150,210,0.16)' }}>
-              <Sparkles className="w-3.5 h-3.5 text-yellow-500" />
-              <p className="text-xs font-bold" style={{ color: 'rgba(67,54,98,0.94)' }}>収録問題 {questions.length}問</p>
-            </div>
-            {questions.map((q, i) => (
-              <motion.div key={q.id} className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: i < questions.length - 1 ? '1px solid rgba(120,100,180,0.08)' : 'none' }} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}>
-                <div className="flex items-center gap-3">
-                  <span className="w-5 text-center text-xs font-bold" style={{ color: 'rgba(108,88,164,0.56)' }}>{i + 1}</span>
-                  <div>
-                    <p className="text-xs" style={{ color: 'rgba(67,54,98,0.88)' }}>{q.subCategory ?? q.bigCategory}{q.subjectText ? ` ・ ${q.subjectText}` : ''}</p>
-                    <p className="text-[10px]" style={{ color: 'rgba(108,88,164,0.60)' }}>{(q.keywords ?? []).slice(0, 2).map((k) => `#${k}`).join(' ')}</p>
-                  </div>
-                </div>
-                <span className="text-xs font-mono" style={{ color: 'rgba(108,88,164,0.52)' }}>？？？</span>
-              </motion.div>
-            ))}
-          </div>
         </div>
       </div>
     </div>
@@ -773,7 +1020,7 @@ const QuizPlayView = ({
   onAnswer,
   onBackToRoom,
 }: {
-  cat: typeof EXAM_CATEGORIES[number];
+  cat: LectureCategory;
   questions: ShuffledQuestion[];
   currentQuestionIndex: number;
   timeLeftMs: number;
@@ -957,7 +1204,7 @@ const QuizResultView = ({
   onRetry,
   onBackToCategories,
 }: {
-  cat: typeof EXAM_CATEGORIES[number];
+  cat: LectureCategory;
   questions: ShuffledQuestion[];
   results: QuizQuestionResult[];
   onRetry: () => void;
@@ -1017,7 +1264,9 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   const academyUserQuestions = useGameStore((s) => s.academyUserQuestions);
   const consecutiveLoginDays = useGameStore((s) => s.consecutiveLoginDays);
 
-  const [selectedCat, setSelectedCat] = useState<typeof EXAM_CATEGORIES[number] | null>(null);
+  const [selectedCat, setSelectedCat] = useState<LectureCategory | null>(null);
+  const [selectedTabLabel, setSelectedTabLabel] = useState<string>('');
+  const [selectedDetailSubject, setSelectedDetailSubject] = useState<string>('すべて');
   const [quizQuestions, setQuizQuestions] = useState<ShuffledQuestion[]>([]);
   const [quizPhase, setQuizPhase] = useState<'idle' | 'playing' | 'result'>('idle');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -1032,15 +1281,46 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   const magicIdRef = useRef(0);
   const feedbackAdvanceTimerRef = useRef<number | null>(null);
 
-  const questionsByCategory = useMemo(() => {
-    const map: Record<string, AcademyUserQuestion[]> = {};
-    for (const cat of EXAM_CATEGORIES) {
-      map[cat.label] = academyUserQuestions
-        .filter((q) => q.bigCategory === cat.label)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const questionsByCategoryAndTab = useMemo(() => {
+    const map: Record<string, Record<string, AcademyUserQuestion[]>> = {};
+    for (const cat of LECTURE_CATEGORIES) {
+      map[cat.id] = {};
+      for (const tab of cat.tabs) {
+        map[cat.id][tab.label] = academyUserQuestions
+          .filter((q) => tab.matches(q))
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
     }
     return map;
   }, [academyUserQuestions]);
+
+  const selectedTabQuestions = useMemo(() => {
+    if (!selectedCat) return [];
+    return questionsByCategoryAndTab[selectedCat.id]?.[selectedTabLabel] ?? [];
+  }, [questionsByCategoryAndTab, selectedCat, selectedTabLabel]);
+
+  const detailedSubjects = useMemo(() => {
+    if (!selectedCat) return [];
+    return getDetailedSubjects(selectedCat.id, selectedTabLabel);
+  }, [selectedCat, selectedTabLabel]);
+
+  const selectedLectureQuestions = useMemo(
+    () => selectedTabQuestions.filter((q) => matchDetailedSubject(q, selectedDetailSubject)),
+    [selectedTabQuestions, selectedDetailSubject]
+  );
+
+  const categoryAllQuestionsById = useMemo(() => {
+    const map: Record<string, AcademyUserQuestion[]> = {};
+    for (const cat of LECTURE_CATEGORIES) {
+      const byId = new Map<string, AcademyUserQuestion>();
+      for (const tab of cat.tabs) {
+        const arr = questionsByCategoryAndTab[cat.id]?.[tab.label] ?? [];
+        for (const q of arr) byId.set(q.id, q);
+      }
+      map[cat.id] = Array.from(byId.values());
+    }
+    return map;
+  }, [questionsByCategoryAndTab]);
 
   const recentQuestions = useMemo(() => {
     const posted = academyUserQuestions.filter((q) => !!q.authorUid);
@@ -1190,6 +1470,8 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   const handleBackToCategories = () => {
     handleBackToRoom();
     setSelectedCat(null);
+    setSelectedTabLabel('');
+    setSelectedDetailSubject('すべて');
   };
 
   // ============================================================
@@ -1221,7 +1503,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
           cat={selectedCat}
           questions={quizQuestions}
           results={quizResults}
-          onRetry={() => startQuiz(questionsByCategory[selectedCat.label] ?? [])}
+          onRetry={() => startQuiz(selectedLectureQuestions)}
           onBackToCategories={handleBackToCategories}
         />
       );
@@ -1230,9 +1512,26 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     return (
       <ExamRoomInside
         cat={selectedCat}
-        questions={questionsByCategory[selectedCat.label] ?? []}
-        onBack={() => setSelectedCat(null)}
-        onChallenge={(q) => startQuiz(q)}
+        selectedTabLabel={selectedTabLabel}
+        tabCounts={Object.fromEntries(
+          selectedCat.tabs.map((tab) => [
+            tab.label,
+            questionsByCategoryAndTab[selectedCat.id]?.[tab.label]?.length ?? 0,
+          ])
+        )}
+        onBack={() => {
+          setSelectedCat(null);
+          setSelectedTabLabel('');
+          setSelectedDetailSubject('すべて');
+        }}
+        detailedSubjects={detailedSubjects}
+        selectedDetailSubject={selectedDetailSubject}
+        onChangeTab={(label) => {
+          setSelectedTabLabel(label);
+          setSelectedDetailSubject('すべて');
+        }}
+        onChangeDetailSubject={setSelectedDetailSubject}
+        onChallenge={() => startQuiz(selectedLectureQuestions)}
       />
     );
   }
@@ -1257,13 +1556,17 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          {EXAM_CATEGORIES.map((cat, i) => (
+          {LECTURE_CATEGORIES.map((cat, i) => (
             <CategoryCard
-              key={cat.label}
+              key={cat.id}
               cat={cat}
-              count={questionsByCategory[cat.label]?.length ?? 0}
-              totalPlays={questionsByCategory[cat.label]?.reduce((s, q) => s + (q.playCount ?? 0), 0) ?? 0}
-              onSelect={() => setSelectedCat(cat)}
+              count={categoryAllQuestionsById[cat.id]?.length ?? 0}
+              totalPlays={categoryAllQuestionsById[cat.id]?.reduce((s, q) => s + (q.playCount ?? 0), 0) ?? 0}
+              onSelect={() => {
+                setSelectedCat(cat);
+                setSelectedTabLabel(cat.tabs[0]?.label ?? '');
+                setSelectedDetailSubject('すべて');
+              }}
               index={i}
             />
           ))}
@@ -1282,7 +1585,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
               <p className="text-xs font-bold" style={{ color: 'rgba(67,54,98,0.94)' }}>最近追加された問題</p>
             </div>
             {recentQuestions.map((q, idx) => {
-              const cat = EXAM_CATEGORIES.find((c) => c.label === q.bigCategory);
+              const cat = LECTURE_CATEGORIES.find((c) => c.tabs.some((t) => t.matches(q)));
               return (
                 <div
                   key={q.id}
@@ -1308,3 +1611,4 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     </div>
   );
 };
+
