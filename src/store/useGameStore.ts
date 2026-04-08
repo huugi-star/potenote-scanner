@@ -15,7 +15,6 @@ import type {
 } from '@/lib/suhimochiConversationTypes';
 import type { GeminiMessage, SuhimochiRequest } from '@/lib/suhimochiConversationEngine'; 
 import { ALL_ITEMS, getItemById } from '@/data/items';
-import { ACADEMY_SEED_QUESTIONS } from '@/data/academySeedQuestions';
 import { REWARDS, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { getJstDateString } from '@/lib/dateUtils';
 import { extractWords } from '@/lib/wordExtraction';
@@ -36,12 +35,16 @@ const isLocalDevelopment = (): boolean => {
 };
 
 const ACADEMY_QUESTIONS_COLLECTION = 'academy_questions';
+const ACADEMY_OFFICIAL_QUESTIONS_COLLECTION = 'academy_official_questions';
 const ACADEMY_LOGS_COLLECTION = 'academy_logs';
 
 let academyQuestionsUnsubscribe: (() => void) | null = null;
+let academyOfficialQuestionsUnsubscribe: (() => void) | null = null;
+let latestPostedAcademyQuestions: AcademyUserQuestion[] = [];
+let latestOfficialAcademyQuestions: AcademyUserQuestion[] = [];
 
 /**
- * academy_questions の onSnapshot 購読を開始する。
+ * academy_questions / academy_official_questions の onSnapshot 購読を開始する。
  * uid に関係なくアプリ起動直後から購読し、正答率などをリアルタイム反映する。
  * 多重呼び出し防止のため既存購読があれば先に解除する。
  */
@@ -51,52 +54,65 @@ const startAcademyQuestionsSubscription = (): void => {
     academyQuestionsUnsubscribe();
     academyQuestionsUnsubscribe = null;
   }
+  if (academyOfficialQuestionsUnsubscribe) {
+    academyOfficialQuestionsUnsubscribe();
+    academyOfficialQuestionsUnsubscribe = null;
+  }
+
+  latestPostedAcademyQuestions = [];
+  latestOfficialAcademyQuestions = [];
+
   const firestore = db;
-  const applySnapshot = (snap: import('firebase/firestore').QuerySnapshot) => {
-    console.log(`[academy_questions] snapshot received: ${snap.docs.length} docs`);
-    const posted = snap.docs
+  const applySnapshot = (
+    collectionName: string,
+    target: 'posted' | 'official',
+    snap: import('firebase/firestore').QuerySnapshot
+  ) => {
+    console.log(`[${collectionName}] snapshot received: ${snap.docs.length} docs`);
+    const normalized = snap.docs
       .map((d) => {
         const q = normalizeAcademyQuestion(d.id, d.data());
         if (q) {
-          console.log(`[academy_questions] doc id=${d.id} playCount=${q.playCount} correctCount=${q.correctCount} status=${q.status}`);
+          console.log(
+            `[${collectionName}] doc id=${d.id} playCount=${q.playCount} correctCount=${q.correctCount} status=${q.status}`
+          );
         }
         return q;
       })
       .filter((q): q is AcademyUserQuestion => q !== null && q.status === 'published');
+
+    if (target === 'posted') {
+      latestPostedAcademyQuestions = normalized;
+    } else {
+      latestOfficialAcademyQuestions = normalized;
+    }
+
     useGameStore.setState({
-      academyUserQuestions: mergeSeedAndPostedAcademyQuestions(posted),
+      academyUserQuestions: mergeSeedAndPostedAcademyQuestions(
+        latestOfficialAcademyQuestions,
+        latestPostedAcademyQuestions
+      ),
     });
   };
-  const subscribeWithoutOrderBy = () =>
-    onSnapshot(
-      query(
-        collection(firestore, ACADEMY_QUESTIONS_COLLECTION),
-        where('status', '==', 'published'),
-        fsLimit(300)
-      ),
-      applySnapshot,
-      (err) => console.error('[academy_questions] fallback snapshot error:', err)
-    );
 
-  let switchedToFallback = false;
   academyQuestionsUnsubscribe = onSnapshot(
     query(
       collection(firestore, ACADEMY_QUESTIONS_COLLECTION),
       where('status', '==', 'published'),
-      orderBy('createdAt', 'desc'),
       fsLimit(300)
     ),
-    applySnapshot,
-    (error) => {
-      console.error('[academy_questions] snapshot error:', error);
-      const code = String((error as { code?: string } | undefined)?.code ?? '');
-      const message = String((error as { message?: string } | undefined)?.message ?? '');
-      const isIndexMissing = code === 'failed-precondition' || /index/i.test(message);
-      if (switchedToFallback || !isIndexMissing) return;
-      switchedToFallback = true;
-      try { academyQuestionsUnsubscribe?.(); } catch { /* ignore */ }
-      academyQuestionsUnsubscribe = subscribeWithoutOrderBy();
-    }
+    (snap) => applySnapshot(ACADEMY_QUESTIONS_COLLECTION, 'posted', snap),
+    (error) => console.error('[academy_questions] snapshot error:', error)
+  );
+
+  academyOfficialQuestionsUnsubscribe = onSnapshot(
+    query(
+      collection(firestore, ACADEMY_OFFICIAL_QUESTIONS_COLLECTION),
+      where('status', '==', 'published'),
+      fsLimit(300)
+    ),
+    (snap) => applySnapshot(ACADEMY_OFFICIAL_QUESTIONS_COLLECTION, 'official', snap),
+    (error) => console.error('[academy_official_questions] snapshot error:', error)
   );
 };
 
@@ -192,14 +208,13 @@ const normalizeAcademyQuestion = (
 };
 
 const mergeSeedAndPostedAcademyQuestions = (
+  official: AcademyUserQuestion[],
   posted: AcademyUserQuestion[]
 ): AcademyUserQuestion[] => {
-  // 同一idは Firestore 投稿を優先し、seed は不足分のみ補完
+  // 同一idはユーザー投稿を優先（後勝ち）。
   const byId = new Map<string, AcademyUserQuestion>();
+  for (const q of official) byId.set(q.id, q);
   for (const q of posted) byId.set(q.id, q);
-  for (const seed of ACADEMY_SEED_QUESTIONS) {
-    if (!byId.has(seed.id)) byId.set(seed.id, seed);
-  }
   return Array.from(byId.values())
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 200);
@@ -419,7 +434,7 @@ interface GameState extends UserState {
   wordDexDictionaries: WordDexDictionary[];
   wordDexWords: WordDexWord[];
 
-  // すうひもちアカデミー: 表示用問題（固定seed + Firestore投稿のマージ）
+  // すうひもちアカデミー: 表示用問題（公式 + ユーザー投稿のFirestoreマージ）
   academyUserQuestions: AcademyUserQuestion[];
 
   // 講義履歴
@@ -686,7 +701,7 @@ const initialState: GameState = {
   wordDexOrder: [],
   wordDexDictionaries: DEFAULT_WORD_DEX_DICTIONARIES,
   wordDexWords: [],
-  academyUserQuestions: mergeSeedAndPostedAcademyQuestions([]),
+  academyUserQuestions: mergeSeedAndPostedAcademyQuestions([], []),
 
   lectureHistory: [],
   
@@ -728,7 +743,7 @@ export const useGameStore = create<GameStore>()(
         // ローカルのUIDを更新
         set({ uid });
 
-        // academy_questions の onSnapshot は起動時に開始済み。
+        // academy_questions / academy_official_questions の onSnapshot は起動時に開始済み。
         // ログイン/ログアウト時は再購読して最新データを取得する。
         startAcademyQuestionsSubscription();
 
@@ -2851,12 +2866,12 @@ export const useGameStore = create<GameStore>()(
       storage: createJSONStorage(() => localStorage),
       merge: (persistedState, currentState) => {
         const persisted = { ...((persistedState as Partial<GameState> | undefined) ?? {}) };
-        // academyUserQuestions は常に「固定seed + Firestore投稿」から再構成する。
+        // academyUserQuestions は常に「公式 + ユーザー投稿」のFirestoreから再構成する。
         delete (persisted as Partial<GameState>).academyUserQuestions;
         return {
           ...currentState,
           ...persisted,
-          academyUserQuestions: mergeSeedAndPostedAcademyQuestions([]),
+          academyUserQuestions: mergeSeedAndPostedAcademyQuestions([], []),
         };
       },
       onRehydrateStorage: () => (state) => {
@@ -2903,9 +2918,9 @@ export const useGameStore = create<GameStore>()(
         if (state && typeof state === 'object') {
           delete (state as unknown as Record<string, unknown>).scanOcrText;
           delete (state as unknown as Record<string, unknown>).scanStructuredOCR;
-          // アカデミー問題は永続化せず、seed + Firestore から再構成する
+          // アカデミー問題は永続化せず、公式 + ユーザー投稿Firestoreから再構成する
           delete (state as unknown as Record<string, unknown>).academyUserQuestions;
-          state.academyUserQuestions = mergeSeedAndPostedAcademyQuestions([]);
+          state.academyUserQuestions = mergeSeedAndPostedAcademyQuestions([], []);
         }
         // すうひもち: 旧永続データにフィールドが無いと append/update 時に例外になり、会話UIが誤ってエラー表示する
         if (state) {

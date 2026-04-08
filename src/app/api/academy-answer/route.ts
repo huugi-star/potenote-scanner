@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebaseAdmin';
-import { ACADEMY_SEED_QUESTIONS } from '@/data/academySeedQuestions';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
+
+const USER_COLLECTION = 'academy_questions';
+const OFFICIAL_COLLECTION = 'academy_official_questions';
 
 const BodySchema = z.object({
   questionId: z.string().min(1).max(200),
@@ -29,38 +31,14 @@ export async function POST(req: Request) {
     }
 
     const { questionId, isCorrect } = parsed.data;
-    const ref = adminDb.collection('academy_questions').doc(questionId);
-    const snap = await ref.get();
+    const userRef = adminDb.collection(USER_COLLECTION).doc(questionId);
+    const officialRef = adminDb.collection(OFFICIAL_COLLECTION).doc(questionId);
+    const userSnap = await userRef.get();
+    const officialSnap = userSnap.exists ? null : await officialRef.get();
+    const targetRef = userSnap.exists ? userRef : officialSnap?.exists ? officialRef : null;
 
-    // Firestore未作成でも seed に同一idがあれば初回作成して集計を永続化する
-    if (!snap.exists) {
-      const seed = ACADEMY_SEED_QUESTIONS.find((q) => q.id === questionId);
-      if (!seed) {
-        return NextResponse.json({ success: true, persisted: false, reason: 'not_found' });
-      }
-
-      await ref.set({
-        id: questionId,
-        status: 'published',
-        authorUid: seed.authorUid ?? 'official_seed',
-        authorName: String(seed.authorName ?? '').trim() || '公式問題',
-        question: seed.question,
-        choices: seed.choices,
-        answerIndex: seed.answerIndex,
-        explanation: seed.explanation,
-        keywords: Array.isArray(seed.keywords) ? seed.keywords : [],
-        bigCategory: seed.bigCategory ?? null,
-        subCategory: seed.subCategory ?? null,
-        subjectText: seed.subjectText ?? null,
-        detailText: seed.detailText ?? null,
-        playCount: 1,
-        correctCount: isCorrect ? 1 : 0,
-        goodCount: 0,
-        badCount: 0,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      return NextResponse.json({ success: true, persisted: true, createdFromSeed: true });
+    if (!targetRef) {
+      return NextResponse.json({ success: true, persisted: false, reason: 'not_found' });
     }
 
     const updatePayload: Record<string, unknown> = {
@@ -71,7 +49,7 @@ export async function POST(req: Request) {
       updatePayload.correctCount = FieldValue.increment(1);
     }
 
-    await ref.set(updatePayload, { merge: true });
+    await targetRef.set(updatePayload, { merge: true });
     return NextResponse.json({ success: true, persisted: true });
   } catch (error) {
     const code = String((error as { code?: string } | undefined)?.code ?? 'unknown');

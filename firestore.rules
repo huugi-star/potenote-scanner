@@ -83,6 +83,12 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // 公式問題（公開読み取り / 管理者のみ書き込み）
+    match /academy_official_questions/{questionId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
     // デフォルト deny（必要なコレクションは既存ルールに合わせて追記）
     match /{document=**} {
       allow read, write: if false;

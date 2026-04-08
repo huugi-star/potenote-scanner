@@ -340,6 +340,7 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
   const [detailText,                setDetailText]                = useState('');
   const [draft,                     setDraft]                     = useState<DraftMcq | null>(null);
   const [isGenerating,              setIsGenerating]              = useState(false);
+  const [isPublishing,              setIsPublishing]              = useState(false);
   const [showPublishModal,          setShowPublishModal]          = useState(false);
   const [publishChecks,             setPublishChecks]             = useState({ noRepost: false, reviewed: false });
   const [isDetailOpen, setIsDetailOpen] = useState(false); // ← ここに追加
@@ -455,11 +456,11 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
     setSelectedThemeId(null);
     setAllExtractedKeywords([]);
     setSelectedKeywordsForDraft([]);
-    setSubjectText('');
-    setDetailText('');
+    // 同カテゴリ再作問では初回入力の詳細を引き継ぐ
     setDraft(null);
     setShowPublishModal(false);
     setPublishChecks({ noRepost: false, reviewed: false });
+    setIsPublishing(false);
   };
 
   const handleSelectTheme = (theme: AcademyTheme) => {
@@ -527,6 +528,8 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
     setIsGenerating(false);
     setSubview('create_editor');
   };
+
+  const hasReusableDetailInput = subjectText.trim().length > 0 || detailText.trim().length > 0;
 
   // ── サブビューの描画 ──────────────────────────────────────
 
@@ -899,21 +902,28 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
 
           <motion.button
             onClick={() => {
-              // ★ カテゴリが選択済みならカテゴリ選択をスキップして詳細入力へ
+              // カテゴリ引き継ぎ時:
+              // - 初回入力済みの詳細があれば再入力を省略してそのまま生成へ
+              // - 未入力なら詳細入力へ
               if (selectedBigCategory && selectedSubCategory) {
-                setSubview('create_detail');
+                if (hasReusableDetailInput) {
+                  void handleGenerate();
+                } else {
+                  setSubview('create_detail');
+                }
               } else {
                 setSubview('create_category');
               }
             }}
-            disabled={selectedKeywordsForDraft.length === 0}
+            disabled={selectedKeywordsForDraft.length === 0 || isGenerating}
             className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold"
             whileTap={{ scale: 0.98 }}
           >
             {selectedKeywordsForDraft.length > 0
               ? selectedBigCategory && selectedSubCategory
-                // ★ カテゴリ引き継ぎ中は現在のカテゴリを表示
-                ? `${selectedKeywordsForDraft.length}個選択中 → 詳細入力へ（${selectedSubCategory}）`
+                ? hasReusableDetailInput
+                  ? `${selectedKeywordsForDraft.length}個選択中 → 問題を生成（${selectedSubCategory}）`
+                  : `${selectedKeywordsForDraft.length}個選択中 → 詳細入力へ（${selectedSubCategory}）`
                 : `${selectedKeywordsForDraft.length}個選択中 → カテゴリを選ぶ`
               : 'キーワードを1〜2個選んでください'}
           </motion.button>
@@ -1237,6 +1247,7 @@ if (subview === 'create_detail') {
             <div className="w-full max-w-sm rounded-2xl border border-gray-700 bg-gray-900 p-5">
               <h2 className="text-white text-lg font-bold mb-1">公開前の確認</h2>
               <p className="text-gray-400 text-xs mb-4">ガイドライン {CREATION_POLICY.version}</p>
+              <p className="text-amber-100 text-xs mb-3">下記にチェックを入れてください。</p>
               <div className="space-y-2 mb-5">
                 {CREATION_POLICY.checks.map((item) => (
                   <label key={item.id} className="flex items-start gap-2 text-sm text-gray-200 cursor-pointer">
@@ -1262,33 +1273,38 @@ if (subview === 'create_detail') {
                 </motion.button>
                 <motion.button
                   onClick={async () => {
-                    if (!canPublish) return;
-                    if (draft) {
-                      const result = await addAcademyUserQuestion({
-                        question: draft.question,
-                        choices: draft.choices,
-                        answerIndex: draft.answerIndex,
-                        explanation: draft.explanation,
-                        keywords: selectedKeywordsForDraft,
-                        bigCategory: selectedBigCategory ?? undefined,
-                        subCategory: selectedSubCategory ?? undefined,
-                        subjectText: subjectText.trim() || undefined,
-                        detailText: detailText.trim() || undefined,
-                      });
-                      if (!result.ok) {
-                        const reason = result.reason ? ` / ${result.reason}` : '';
-                        addToast('error', `投稿に失敗しました${reason}`);
-                        return;
+                    if (!canPublish || isPublishing) return;
+                    setIsPublishing(true);
+                    try {
+                      if (draft) {
+                        const result = await addAcademyUserQuestion({
+                          question: draft.question,
+                          choices: draft.choices,
+                          answerIndex: draft.answerIndex,
+                          explanation: draft.explanation,
+                          keywords: selectedKeywordsForDraft,
+                          bigCategory: selectedBigCategory ?? undefined,
+                          subCategory: selectedSubCategory ?? undefined,
+                          subjectText: subjectText.trim() || undefined,
+                          detailText: detailText.trim() || undefined,
+                        });
+                        if (!result.ok) {
+                          const reason = result.reason ? ` / ${result.reason}` : '';
+                          addToast('error', `投稿に失敗しました${reason}`);
+                          return;
+                        }
                       }
+                      setShowPublishModal(false);
+                      setSubview('create_done');
+                    } finally {
+                      setIsPublishing(false);
                     }
-                    setShowPublishModal(false);
-                    setSubview('create_done');
                   }}
-                  disabled={!canPublish}
+                  disabled={!canPublish || isPublishing}
                   className="py-2.5 rounded-xl bg-emerald-600 text-white font-bold disabled:bg-gray-700 disabled:text-gray-500"
                   whileTap={{ scale: 0.98 }}
                 >
-                  公開する
+                  {isPublishing ? '公開中...' : '公開する'}
                 </motion.button>
               </div>
             </div>

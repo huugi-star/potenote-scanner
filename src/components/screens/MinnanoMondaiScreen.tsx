@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import type { AcademyUserQuestion } from '@/types';
+import { QuizResultView } from './minnano-mondai/QuizResultView';
 
 const QUIZ_QUESTION_COUNT = 5;
 const QUIZ_TIME_LIMIT_SEC = 10;
@@ -348,9 +349,10 @@ const LECTURE_CATEGORIES: LectureCategory[] = [
 // 型定義
 // ============================================================
 
-type QuizQuestionResult = {
+export type QuizQuestionResult = {
   questionId: string;
   isCorrect: boolean;
+  selectedDisplayIndex: number | null;
   elapsedSec: number;
   basePoint: number;
   timeBonus: number;
@@ -362,7 +364,7 @@ type QuizQuestionResult = {
  * displayChoices: 表示順の選択肢テキスト配列
  * displayAnswerIndex: displayChoices における正解のインデックス
  */
-type ShuffledQuestion = AcademyUserQuestion & {
+export type ShuffledQuestion = AcademyUserQuestion & {
   displayChoices: string[];
   displayAnswerIndex: number;
 };
@@ -457,13 +459,6 @@ const persistAcademyAnswerAggregate = async (questionId: string, isCorrect: bool
   } catch (error) {
     console.error('[academy-answer] persist request failed:', error);
   }
-};
-
-const calcRank = (score: number): 'S' | 'A' | 'B' | 'C' => {
-  if (score >= 90) return 'S';
-  if (score >= 75) return 'A';
-  if (score >= 60) return 'B';
-  return 'C';
 };
 
 // ============================================================
@@ -1194,69 +1189,6 @@ const QuizPlayView = ({
 };
 
 // ============================================================
-// リザルト画面
-// ============================================================
-
-const QuizResultView = ({
-  cat,
-  questions,
-  results,
-  onRetry,
-  onBackToCategories,
-}: {
-  cat: LectureCategory;
-  questions: ShuffledQuestion[];
-  results: QuizQuestionResult[];
-  onRetry: () => void;
-  onBackToCategories: () => void;
-}) => {
-  const correctCount = results.filter((r) => r.isCorrect).length;
-  const basePoint = results.reduce((sum, r) => sum + r.basePoint, 0);
-  const timeBonus = results.reduce((sum, r) => sum + r.timeBonus, 0);
-  const totalPoint = basePoint + timeBonus;
-  const rank = calcRank(totalPoint);
-
-  return (
-    <div className="relative min-h-screen pb-24 overflow-hidden">
-      <LightAcademyBackground />
-      <div className="relative z-10 max-w-md mx-auto px-4 pt-8">
-        <div className="rounded-3xl p-5 mb-4" style={{ border: '1px solid rgba(160,150,210,0.24)', background: 'rgba(255,255,255,0.94)', boxShadow: '0 14px 30px rgba(80,60,160,0.1)' }}>
-          <p className="text-[10px] tracking-[0.25em] mb-1" style={{ color: 'rgba(108,88,164,0.74)' }}>RESULT</p>
-          <p className="text-lg font-black mb-3" style={{ color: 'rgba(55,38,105,0.96)' }}>{cat.icon} {cat.label} 試験結果</p>
-          <div className="rounded-2xl px-4 py-3 mb-3" style={{ background: 'rgba(237,233,254,0.56)' }}>
-            <p className="text-xs font-bold mb-1" style={{ color: 'rgba(76,29,149,0.84)' }}>ランク</p>
-            <p className="text-5xl font-black leading-none" style={{ color: '#6d28d9' }}>{rank}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(250,245,255,0.92)' }}>
-              <p className="text-[11px]" style={{ color: 'rgba(108,88,164,0.72)' }}>正解数</p>
-              <p className="text-lg font-black" style={{ color: 'rgba(55,38,105,0.96)' }}>{correctCount} / {questions.length}</p>
-            </div>
-            <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(250,245,255,0.92)' }}>
-              <p className="text-[11px]" style={{ color: 'rgba(108,88,164,0.72)' }}>合計点</p>
-              <p className="text-lg font-black" style={{ color: 'rgba(55,38,105,0.96)' }}>{totalPoint} 点</p>
-            </div>
-          </div>
-          <div className="mt-3 space-y-1 text-sm" style={{ color: 'rgba(67,54,98,0.9)' }}>
-            <p>正解点: {basePoint} 点</p>
-            <p>時間ボーナス: {timeBonus} 点</p>
-            <p>合計点: {totalPoint} 点</p>
-          </div>
-        </div>
-        <div className="space-y-2">
-          <button onClick={onRetry} className="w-full rounded-2xl py-3 text-white font-black" style={{ background: `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})` }}>
-            もう一度挑戦
-          </button>
-          <button onClick={onBackToCategories} className="w-full rounded-2xl py-3 font-bold" style={{ background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(160,150,210,0.24)', color: 'rgba(67,54,98,0.9)' }}>
-            受講カテゴリーへ戻る
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ============================================================
 // メイン
 // ============================================================
 
@@ -1370,7 +1302,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
       const timeBonus = isCorrect ? Math.max(0, 10 - elapsedSec) : 0;
       const totalPoint = basePoint + timeBonus;
 
-      // 正答率表示用の統計をローカル状態に即時反映（公式seed/ユーザー投稿の両方に適用）
+      // 正答率表示用の統計をローカル状態に即時反映（公式/ユーザー投稿の両方に適用）
       useGameStore.setState((state) => ({
         academyUserQuestions: state.academyUserQuestions.map((q) => {
           if (q.id !== current.id) return q;
@@ -1387,7 +1319,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
 
       setQuizResults((prev) => [
         ...prev,
-        { questionId: current.id, isCorrect, elapsedSec, basePoint, timeBonus, totalPoint },
+        { questionId: current.id, isCorrect, selectedDisplayIndex: displayIndex, elapsedSec, basePoint, timeBonus, totalPoint },
       ]);
 
       if (displayIndex !== null) {
