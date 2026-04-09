@@ -89,6 +89,12 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // 問題統計（公開読み取り / サーバー集計のみ書き込み）
+    match /academy_question_stats/{questionId} {
+      allow read: if true;
+      allow create, update, delete: if false;
+    }
+
     // デフォルト deny（必要なコレクションは既存ルールに合わせて追記）
     match /{document=**} {
       allow read, write: if false;

@@ -324,8 +324,13 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
   const addAcademyUserQuestion = useGameStore((s) => s.addAcademyUserQuestion);
   const updateAcademyUserQuestion = useGameStore((s) => s.updateAcademyUserQuestion);
   const deleteAcademyUserQuestion = useGameStore((s) => s.deleteAcademyUserQuestion);
+  const refreshAcademyQuestions = useGameStore((s) => s.refreshAcademyQuestions);
 
   const [subview, setSubview] = useState<AcademySubview>('top');
+
+  useEffect(() => {
+    void refreshAcademyQuestions();
+  }, [refreshAcademyQuestions, subview]);
 
   // 作問フロー用ステート
   const [selectedThemeId,          setSelectedThemeId]          = useState<string | null>(null);

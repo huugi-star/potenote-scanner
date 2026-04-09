@@ -64,6 +64,11 @@ export interface AcademyUserQuestion {
   goodCount?: number;
   /** 悪い評価数（badRateは保存しない） */
   badCount?: number;
+  /** 4択の各選択肢が選ばれた回数（0-3） */
+  choicePick0?: number;
+  choicePick1?: number;
+  choicePick2?: number;
+  choicePick3?: number;
   /** 旧フィールド（互換読み取り用） */
   likeCount?: number;
 }

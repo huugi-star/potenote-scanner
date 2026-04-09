@@ -91,8 +91,6 @@ export async function POST(req: Request) {
         status: 'published',
         authorUid: uid,
         authorName: decoded.name ?? '匿名ユーザー',
-        playCount: 0,
-        correctCount: 0,
         goodCount: 0,
         badCount: 0,
         question: data.question.trim(),

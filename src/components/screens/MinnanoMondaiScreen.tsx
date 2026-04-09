@@ -367,6 +367,8 @@ export type QuizQuestionResult = {
 export type ShuffledQuestion = AcademyUserQuestion & {
   displayChoices: string[];
   displayAnswerIndex: number;
+  /** displayChoices[index] が元 choices のどのインデックスか */
+  displayChoiceSourceIndices: number[];
 };
 
 /** 魔法陣エフェクトの状態 */
@@ -396,7 +398,7 @@ function withShuffledChoices(q: AcademyUserQuestion): ShuffledQuestion {
   const indices = shuffleArray([0, 1, 2, 3].slice(0, q.choices.length));
   const displayChoices = indices.map((i) => q.choices[i]);
   const displayAnswerIndex = indices.indexOf(q.answerIndex);
-  return { ...q, displayChoices, displayAnswerIndex };
+  return { ...q, displayChoices, displayAnswerIndex, displayChoiceSourceIndices: indices };
 }
 
 function shuffleQuestions(items: AcademyUserQuestion[]): AcademyUserQuestion[] {
@@ -424,22 +426,33 @@ function buildQuizQuestions(
   return filled.map(withShuffledChoices);
 }
 
-const persistAcademyAnswerAggregate = async (questionId: string, isCorrect: boolean): Promise<void> => {
-  console.log(`[academy-answer] sending: questionId=${questionId} isCorrect=${isCorrect}`);
+type AcademyAnswerBatchItem = {
+  questionId: string;
+  isCorrect: boolean;
+  selectedChoiceIndex: number | null;
+};
+
+const persistAcademyAnswerAggregateBatch = async (
+  answers: AcademyAnswerBatchItem[]
+): Promise<void> => {
+  if (answers.length === 0) return;
+  console.log(`[academy-answer] batch sending: answers=${answers.length}`);
   try {
     const res = await fetch('/api/academy-answer', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ questionId, isCorrect }),
+      body: JSON.stringify({ answers }),
     });
 
     type AcademyAnswerApiResponse = {
       success?: boolean;
       persisted?: boolean;
-      createdFromSeed?: boolean;
+      persistedCount?: number;
+      total?: number;
       reason?: string;
+      notFoundIds?: string[];
       error?: string;
     };
 
@@ -447,17 +460,17 @@ const persistAcademyAnswerAggregate = async (questionId: string, isCorrect: bool
     try { body = (await res.json()) as AcademyAnswerApiResponse; } catch { /* ignore */ }
 
     if (!res.ok) {
-      console.error(`[academy-answer] persist failed: status=${res.status} body=`, body);
+      console.error(`[academy-answer] batch persist failed: status=${res.status} body=`, body);
       return;
     }
 
-    console.log(`[academy-answer] persist ok: status=${res.status} body=`, body);
-
-    if (body?.persisted === false && body?.reason === 'not_found') {
-      console.warn(`[academy-answer] aggregate not persisted (not_found): questionId=${questionId}`);
+    console.log(`[academy-answer] batch persist ok: status=${res.status} body=`, body);
+    if (Array.isArray(body?.notFoundIds) && body.notFoundIds.length > 0) {
+      console.warn('[academy-answer] batch aggregate not persisted for ids:', body.notFoundIds);
     }
+    void useGameStore.getState().refreshAcademyQuestions();
   } catch (error) {
-    console.error('[academy-answer] persist request failed:', error);
+    console.error('[academy-answer] batch persist request failed:', error);
   }
 };
 
@@ -1212,6 +1225,11 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   const [magicCircles, setMagicCircles] = useState<MagicCircleState[]>([]);
   const magicIdRef = useRef(0);
   const feedbackAdvanceTimerRef = useRef<number | null>(null);
+  const answerBatchSentRef = useRef(false);
+
+  useEffect(() => {
+    void useGameStore.getState().refreshAcademyQuestions();
+  }, []);
 
   const questionsByCategoryAndTab = useMemo(() => {
     const map: Record<string, Record<string, AcademyUserQuestion[]>> = {};
@@ -1279,6 +1297,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
       setAnswerFeedback(null);
       setMagicCircles([]);
       setQuizPhase('playing');
+      answerBatchSentRef.current = false;
     },
     [academyUserQuestions]
   );
@@ -1315,8 +1334,6 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
           };
         }),
       }));
-      void persistAcademyAnswerAggregate(current.id, isCorrect);
-
       setQuizResults((prev) => [
         ...prev,
         { questionId: current.id, isCorrect, selectedDisplayIndex: displayIndex, elapsedSec, basePoint, timeBonus, totalPoint },
@@ -1382,6 +1399,31 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     return () => window.clearInterval(id);
   }, [finishCurrentAndMove, isLocked, questionStartedAt, quizPhase]);
 
+  useEffect(() => {
+    if (quizPhase !== 'result') return;
+    if (answerBatchSentRef.current) return;
+    if (quizResults.length < QUIZ_QUESTION_COUNT) return;
+
+    answerBatchSentRef.current = true;
+    const questionById = new Map(quizQuestions.map((q) => [q.id, q]));
+    const answers: AcademyAnswerBatchItem[] = quizResults.map((result) => {
+      const q = questionById.get(result.questionId);
+      let selectedChoiceIndex: number | null = null;
+      if (typeof result.selectedDisplayIndex === 'number') {
+        const mapped = q?.displayChoiceSourceIndices?.[result.selectedDisplayIndex];
+        if (typeof mapped === 'number' && mapped >= 0 && mapped <= 3) {
+          selectedChoiceIndex = mapped;
+        }
+      }
+      return {
+        questionId: result.questionId,
+        isCorrect: result.isCorrect,
+        selectedChoiceIndex,
+      };
+    });
+    void persistAcademyAnswerAggregateBatch(answers);
+  }, [quizPhase, quizQuestions, quizResults]);
+
   const handleBackToRoom = () => {
     if (feedbackAdvanceTimerRef.current !== null) {
       window.clearTimeout(feedbackAdvanceTimerRef.current);
@@ -1397,6 +1439,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     setQuestionStartedAt(0);
     setAnswerFeedback(null);
     setMagicCircles([]);
+    answerBatchSentRef.current = false;
   };
 
   const handleBackToCategories = () => {

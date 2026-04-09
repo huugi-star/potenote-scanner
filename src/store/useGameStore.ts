@@ -20,7 +20,7 @@ import { getJstDateString } from '@/lib/dateUtils';
 import { extractWords } from '@/lib/wordExtraction';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
 import { db, auth } from '@/lib/firebase';
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, orderBy, limit as fsLimit, onSnapshot, where, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, orderBy, limit as fsLimit, where, serverTimestamp } from 'firebase/firestore';
 
 // ===== Helper Functions =====
 
@@ -36,89 +36,159 @@ const isLocalDevelopment = (): boolean => {
 
 const ACADEMY_QUESTIONS_COLLECTION = 'academy_questions';
 const ACADEMY_OFFICIAL_QUESTIONS_COLLECTION = 'academy_official_questions';
+const ACADEMY_QUESTION_STATS_COLLECTION = 'academy_question_stats';
 const ACADEMY_LOGS_COLLECTION = 'academy_logs';
 
-let academyQuestionsUnsubscribe: (() => void) | null = null;
-let academyOfficialQuestionsUnsubscribe: (() => void) | null = null;
-let latestPostedAcademyQuestions: AcademyUserQuestion[] = [];
-let latestOfficialAcademyQuestions: AcademyUserQuestion[] = [];
+let academyQuestionRefreshInFlight: Promise<void> | null = null;
 
-/**
- * academy_questions / academy_official_questions の onSnapshot 購読を開始する。
- * uid に関係なくアプリ起動直後から購読し、正答率などをリアルタイム反映する。
- * 多重呼び出し防止のため既存購読があれば先に解除する。
- */
-const startAcademyQuestionsSubscription = (): void => {
-  if (!db) return;
-  if (academyQuestionsUnsubscribe) {
-    academyQuestionsUnsubscribe();
-    academyQuestionsUnsubscribe = null;
+const applyAcademyQuestionStats = (
+  questions: AcademyUserQuestion[],
+  statsMap: Map<string, {
+    playCount: number;
+    correctCount: number;
+    goodCount: number;
+    badCount: number;
+    choicePick0: number;
+    choicePick1: number;
+    choicePick2: number;
+    choicePick3: number;
+  }>
+): AcademyUserQuestion[] =>
+  questions.map((q) => {
+    const stats = statsMap.get(q.id);
+    if (!stats) return q;
+    return {
+      ...q,
+      playCount: Math.max(Number(q.playCount ?? 0), stats.playCount),
+      correctCount: Math.max(Number(q.correctCount ?? 0), stats.correctCount),
+      goodCount: Math.max(Number(q.goodCount ?? 0), stats.goodCount),
+      badCount: Math.max(Number(q.badCount ?? 0), stats.badCount),
+      choicePick0: Math.max(Number(q.choicePick0 ?? 0), stats.choicePick0),
+      choicePick1: Math.max(Number(q.choicePick1 ?? 0), stats.choicePick1),
+      choicePick2: Math.max(Number(q.choicePick2 ?? 0), stats.choicePick2),
+      choicePick3: Math.max(Number(q.choicePick3 ?? 0), stats.choicePick3),
+    };
+  });
+
+const getFirestoreErrorCode = (error: unknown): string => {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const c = (error as { code?: unknown }).code;
+    return typeof c === 'string' ? c : String(c ?? 'unknown');
   }
-  if (academyOfficialQuestionsUnsubscribe) {
-    academyOfficialQuestionsUnsubscribe();
-    academyOfficialQuestionsUnsubscribe = null;
-  }
-
-  latestPostedAcademyQuestions = [];
-  latestOfficialAcademyQuestions = [];
-
-  const firestore = db;
-  const applySnapshot = (
-    collectionName: string,
-    target: 'posted' | 'official',
-    snap: import('firebase/firestore').QuerySnapshot
-  ) => {
-    console.log(`[${collectionName}] snapshot received: ${snap.docs.length} docs`);
-    const normalized = snap.docs
-      .map((d) => {
-        const q = normalizeAcademyQuestion(d.id, d.data());
-        if (q) {
-          console.log(
-            `[${collectionName}] doc id=${d.id} playCount=${q.playCount} correctCount=${q.correctCount} status=${q.status}`
-          );
-        }
-        return q;
-      })
-      .filter((q): q is AcademyUserQuestion => q !== null && q.status === 'published');
-
-    if (target === 'posted') {
-      latestPostedAcademyQuestions = normalized;
-    } else {
-      latestOfficialAcademyQuestions = normalized;
-    }
-
-    useGameStore.setState({
-      academyUserQuestions: mergeSeedAndPostedAcademyQuestions(
-        latestOfficialAcademyQuestions,
-        latestPostedAcademyQuestions
-      ),
-    });
-  };
-
-  academyQuestionsUnsubscribe = onSnapshot(
-    query(
-      collection(firestore, ACADEMY_QUESTIONS_COLLECTION),
-      where('status', '==', 'published'),
-      fsLimit(300)
-    ),
-    (snap) => applySnapshot(ACADEMY_QUESTIONS_COLLECTION, 'posted', snap),
-    (error) => console.error('[academy_questions] snapshot error:', error)
-  );
-
-  academyOfficialQuestionsUnsubscribe = onSnapshot(
-    query(
-      collection(firestore, ACADEMY_OFFICIAL_QUESTIONS_COLLECTION),
-      where('status', '==', 'published'),
-      fsLimit(300)
-    ),
-    (snap) => applySnapshot(ACADEMY_OFFICIAL_QUESTIONS_COLLECTION, 'official', snap),
-    (error) => console.error('[academy_official_questions] snapshot error:', error)
-  );
+  return 'unknown';
 };
 
-// db が利用可能なら即時購読開始（uid 不要・ゲスト閲覧でも正答率を反映）
+const refreshAcademyQuestionsFromFirestore = async (): Promise<void> => {
+  if (!db) {
+    console.warn('[academy_questions] refresh skipped: db is null (setState not run)');
+    return;
+  }
+  if (academyQuestionRefreshInFlight) {
+    await academyQuestionRefreshInFlight;
+    return;
+  }
+
+  academyQuestionRefreshInFlight = (async () => {
+    try {
+      const firestore = db;
+      const [postedSnap, officialSnap] = await Promise.all([
+        getDocs(
+          query(
+            collection(firestore, ACADEMY_QUESTIONS_COLLECTION),
+            where('status', '==', 'published'),
+            fsLimit(300)
+          )
+        ),
+        getDocs(
+          query(
+            collection(firestore, ACADEMY_OFFICIAL_QUESTIONS_COLLECTION),
+            where('status', '==', 'published'),
+            fsLimit(300)
+          )
+        ),
+      ]);
+
+      console.log(`[academy_questions] academy_questions fetched: ${postedSnap.size} docs`);
+      console.log(`[academy_questions] academy_official_questions fetched: ${officialSnap.size} docs`);
+
+      const posted = postedSnap.docs
+        .map((d) => normalizeAcademyQuestion(d.id, d.data()))
+        .filter((q): q is AcademyUserQuestion => q !== null && q.status === 'published');
+      const official = officialSnap.docs
+        .map((d) => normalizeAcademyQuestion(d.id, d.data()))
+        .filter((q): q is AcademyUserQuestion => q !== null && q.status === 'published');
+
+      const statsMap = new Map<string, {
+        playCount: number;
+        correctCount: number;
+        goodCount: number;
+        badCount: number;
+        choicePick0: number;
+        choicePick1: number;
+        choicePick2: number;
+        choicePick3: number;
+      }>();
+      try {
+        const statsSnap = await getDocs(
+          query(collection(firestore, ACADEMY_QUESTION_STATS_COLLECTION), fsLimit(1200))
+        );
+        console.log(`[academy_questions] academy_question_stats fetched: ${statsSnap.size} docs`);
+        for (const d of statsSnap.docs) {
+          const raw = d.data();
+          const playCount = Math.max(0, Number(raw.playCount ?? 0));
+          const correctCount = Math.max(0, Number(raw.correctCount ?? 0));
+          const goodCount = Math.max(0, Number(raw.goodCount ?? 0));
+          const badCount = Math.max(0, Number(raw.badCount ?? 0));
+          const choicePick0 = Math.max(0, Number(raw.choicePick0 ?? 0));
+          const choicePick1 = Math.max(0, Number(raw.choicePick1 ?? 0));
+          const choicePick2 = Math.max(0, Number(raw.choicePick2 ?? 0));
+          const choicePick3 = Math.max(0, Number(raw.choicePick3 ?? 0));
+          statsMap.set(d.id, {
+            playCount,
+            correctCount,
+            goodCount,
+            badCount,
+            choicePick0,
+            choicePick1,
+            choicePick2,
+            choicePick3,
+          });
+        }
+      } catch (statsError) {
+        // stats 側が未デプロイ/権限未反映でも、問題本文の表示を止めない
+        const code = getFirestoreErrorCode(statsError);
+        console.warn(
+          `[academy_question_stats] fetch failed error.code=${code} (continuing without stats):`,
+          statsError
+        );
+      }
+
+      const merged = mergeSeedAndPostedAcademyQuestions(official, posted);
+      const nextAcademyUserQuestions = applyAcademyQuestionStats(merged, statsMap);
+      console.log(
+        `[academy_questions] academyUserQuestions final count: ${nextAcademyUserQuestions.length} (calling setState)`
+      );
+      useGameStore.setState({
+        academyUserQuestions: nextAcademyUserQuestions,
+      });
+      console.log('[academy_questions] refresh setState completed');
+    } catch (error) {
+      const code = getFirestoreErrorCode(error);
+      console.error(
+        `[academy_questions] refresh failed error.code=${code} — setState NOT reached:`,
+        error
+      );
+    } finally {
+      academyQuestionRefreshInFlight = null;
+    }
+  })();
+
+  await academyQuestionRefreshInFlight;
+};
+
+// db が利用可能なら即時取得（uid 不要・ゲスト閲覧でも正答率を反映）
 if (typeof window !== 'undefined') {
-  startAcademyQuestionsSubscription();
+  void refreshAcademyQuestionsFromFirestore();
 }
 
 const getAcademyAdminUids = (): string[] =>
@@ -203,6 +273,10 @@ const normalizeAcademyQuestion = (
     correctCount: typeof rec.correctCount === 'number' ? rec.correctCount : 0,
     goodCount: typeof rec.goodCount === 'number' ? rec.goodCount : 0,
     badCount: typeof rec.badCount === 'number' ? rec.badCount : 0,
+    choicePick0: typeof rec.choicePick0 === 'number' ? rec.choicePick0 : 0,
+    choicePick1: typeof rec.choicePick1 === 'number' ? rec.choicePick1 : 0,
+    choicePick2: typeof rec.choicePick2 === 'number' ? rec.choicePick2 : 0,
+    choicePick3: typeof rec.choicePick3 === 'number' ? rec.choicePick3 : 0,
     likeCount: typeof rec.likeCount === 'number' ? rec.likeCount : undefined,
   };
 };
@@ -558,6 +632,7 @@ interface GameActions {
   updateAcademyUserQuestion: (id: string, patch: Partial<Pick<AcademyUserQuestion, 'question' | 'choices' | 'answerIndex' | 'explanation'>>) => Promise<boolean>;
   deleteAcademyUserQuestion: (id: string) => Promise<boolean>;
   getAcademyUserQuestions: () => AcademyUserQuestion[];
+  refreshAcademyQuestions: () => Promise<void>;
   isAcademyAdmin: () => boolean;
 
   // 講義履歴管理
@@ -743,9 +818,8 @@ export const useGameStore = create<GameStore>()(
         // ローカルのUIDを更新
         set({ uid });
 
-        // academy_questions / academy_official_questions の onSnapshot は起動時に開始済み。
-        // ログイン/ログアウト時は再購読して最新データを取得する。
-        startAcademyQuestionsSubscription();
+        // academy_questions / academy_official_questions / academy_question_stats を通常取得で更新する。
+        void refreshAcademyQuestionsFromFirestore();
 
         if (!uid || !db) return;
 
@@ -1854,8 +1928,6 @@ export const useGameStore = create<GameStore>()(
             // authorUid は必ず auth.uid を採用（外部入力値は使わない）
             authorUid: uid,
             authorName: String(get().displayName ?? '').trim() || '匿名ユーザー',
-            playCount: 0,
-            correctCount: 0,
             goodCount: 0,
             badCount: 0,
             question: safeQuestion,
@@ -1960,6 +2032,9 @@ export const useGameStore = create<GameStore>()(
         }
       },
       getAcademyUserQuestions: () => get().academyUserQuestions ?? [],
+      refreshAcademyQuestions: async () => {
+        await refreshAcademyQuestionsFromFirestore();
+      },
       isAcademyAdmin: () => isAcademyAdminUid(get().uid),
 
       // ===== Lecture History Management =====
