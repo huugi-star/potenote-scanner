@@ -472,8 +472,12 @@ export const QuizResultView = ({
   const activeKey      = getKey(activeQ, safeTab);
   const activeReaction = activeQ ? reactions[activeQ.id] ?? null : null;
   const selectedIdx    = activeRes?.selectedDisplayIndex ?? null;
-  const activePlayCount = Math.max(0, Number(activeQ?.playCount ?? 0));
-  const activeCorrectCount = Math.max(0, Number(activeQ?.correctCount ?? 0));
+  const selectedSourceIdx =
+    activeQ && typeof selectedIdx === 'number' ? getSourceChoiceIndex(activeQ, selectedIdx) : null;
+  const activePlayCountBase = Math.max(0, Number(activeQ?.playCount ?? 0));
+  const activeCorrectCountBase = Math.max(0, Number(activeQ?.correctCount ?? 0));
+  const activePlayCount = activePlayCountBase + (activeRes ? 1 : 0);
+  const activeCorrectCount = activeCorrectCountBase + (activeRes?.isCorrect ? 1 : 0);
   const activeAccuracy = calcPercent(activeCorrectCount, activePlayCount);
   const activeReactionCounts = activeQ ? reactionCountsByQuestionId[activeQ.id] : undefined;
   const activeGoodCount = activeReactionCounts?.good ?? Math.max(0, Number(activeQ?.goodCount ?? 0));
@@ -794,14 +798,16 @@ export const QuizResultView = ({
                     {/* 選択肢 */}
                     {activeQ.displayChoices.map((choice, idx) => {
                       const sourceChoiceIndex = getSourceChoiceIndex(activeQ, idx);
-                      const pickCount = sourceChoiceIndex === null
+                      const basePickCount = sourceChoiceIndex === null
                         ? 0
                         : getChoicePickCount(activeQ, sourceChoiceIndex);
-                      const totalChoiceCount =
+                      const pickCount = basePickCount + (sourceChoiceIndex !== null && selectedSourceIdx === sourceChoiceIndex ? 1 : 0);
+                      const totalChoiceCountBase =
                         getChoicePickCount(activeQ, 0) +
                         getChoicePickCount(activeQ, 1) +
                         getChoicePickCount(activeQ, 2) +
                         getChoicePickCount(activeQ, 3);
+                      const totalChoiceCount = totalChoiceCountBase + (selectedSourceIdx !== null ? 1 : 0);
                       const pickPercent = calcPercent(pickCount, totalChoiceCount);
                       const isAns = idx === activeQ.displayAnswerIndex;
                       const isSel = selectedIdx === idx;
