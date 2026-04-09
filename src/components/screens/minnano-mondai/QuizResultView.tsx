@@ -109,6 +109,15 @@ const getChoicePickCount = (q: ShuffledQuestion, choiceIndex: number): number =>
 };
 const calcPercent = (numerator: number, denominator: number): number =>
   denominator > 0 ? Math.round((numerator / denominator) * 1000) / 10 : 0;
+const getSourceChoiceIndex = (q: ShuffledQuestion, displayIndex: number): number | null => {
+  const mapped = q.displayChoiceSourceIndices?.[displayIndex];
+  if (typeof mapped === 'number' && mapped >= 0 && mapped <= 3) return mapped;
+
+  const displayChoice = q.displayChoices?.[displayIndex];
+  if (typeof displayChoice !== 'string') return null;
+  const byText = q.choices.findIndex((c) => c === displayChoice);
+  return byText >= 0 ? byText : null;
+};
 type ReactionCounter = { good: number; bad: number };
 const REACTION_GUEST_KEY = 'academy_reaction_guest_key';
 const createGuestReactionKey = (): string => {
@@ -784,15 +793,15 @@ export const QuizResultView = ({
 
                     {/* 選択肢 */}
                     {activeQ.displayChoices.map((choice, idx) => {
-                      const sourceChoiceIndex = activeQ.displayChoiceSourceIndices?.[idx] ?? idx;
-                      const pickCount = getChoicePickCount(activeQ, sourceChoiceIndex);
-                      const totalChoiceCount = Math.max(
-                        0,
+                      const sourceChoiceIndex = getSourceChoiceIndex(activeQ, idx);
+                      const pickCount = sourceChoiceIndex === null
+                        ? 0
+                        : getChoicePickCount(activeQ, sourceChoiceIndex);
+                      const totalChoiceCount =
                         getChoicePickCount(activeQ, 0) +
-                          getChoicePickCount(activeQ, 1) +
-                          getChoicePickCount(activeQ, 2) +
-                          getChoicePickCount(activeQ, 3)
-                      );
+                        getChoicePickCount(activeQ, 1) +
+                        getChoicePickCount(activeQ, 2) +
+                        getChoicePickCount(activeQ, 3);
                       const pickPercent = calcPercent(pickCount, totalChoiceCount);
                       const isAns = idx === activeQ.displayAnswerIndex;
                       const isSel = selectedIdx === idx;

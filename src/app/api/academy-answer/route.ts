@@ -14,8 +14,6 @@ const AnswerItemSchema = z.object({
   questionId: z.string().min(1).max(200),
   isCorrect: z.boolean(),
   selectedChoiceIndex: z.number().int().min(0).max(3).nullable().optional(),
-  // 旧クライアント互換
-  selectedDisplayIndex: z.number().int().min(0).max(3).nullable().optional(),
 });
 
 const BodySchema = z.union([
@@ -69,11 +67,7 @@ export async function POST(req: Request) {
         });
       }
       const selectedChoiceIndex =
-        typeof answer.selectedChoiceIndex === 'number'
-          ? answer.selectedChoiceIndex
-          : typeof answer.selectedDisplayIndex === 'number'
-            ? answer.selectedDisplayIndex
-            : null;
+        typeof answer.selectedChoiceIndex === 'number' ? answer.selectedChoiceIndex : null;
       if (selectedChoiceIndex !== null && selectedChoiceIndex >= 0 && selectedChoiceIndex <= 3) {
         const target = aggregated.get(answer.questionId);
         if (target) {
