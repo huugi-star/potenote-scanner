@@ -960,6 +960,28 @@ export const QuizResultView = ({
                       </p>
                     )}
 
+                    {/* 解説 */}
+                    <div
+                      className="rounded-2xl p-3.5 border"
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        borderColor: 'rgba(255,255,255,0.10)',
+                      }}
+                    >
+                      <p className="text-[10px] font-black tracking-wide mb-1.5" style={{ color: 'rgba(200,190,255,0.75)' }}>
+                        解説
+                      </p>
+                      {typeof activeQ.explanation === 'string' && activeQ.explanation.trim() ? (
+                        <p className="text-sm font-semibold leading-relaxed" style={{ color: 'rgba(255,255,255,0.88)' }}>
+                          {activeQ.explanation}
+                        </p>
+                      ) : (
+                        <p className="text-xs" style={{ color: 'rgba(200,190,255,0.45)' }}>
+                          この問題には解説がありません。
+                        </p>
+                      )}
+                    </div>
+
                     {/* ナイス / イマイチ ボタン */}
                     <div className="flex flex-wrap items-center gap-3 pt-2">
                       {([
