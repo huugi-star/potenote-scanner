@@ -53,16 +53,14 @@ type LectureCategory = {
   tabs: LectureTab[];
 };
 
-const LIBERAL_SUBJECTS_BY_TAB: Record<'総合' | '中学受験' | '高校受験' | '大学受験', string[]> = {
+const LIBERAL_SUBJECTS_BY_TAB: Record<'総合' | '高校受験' | '大学受験', string[]> = {
   総合: ['英語', '国語', '社会', '日本史', '世界史', '地理', '政治経済', '倫理', '現代文', '古文', '漢文', '哲学', '心理学'],
-  中学受験: ['国語', '社会'],
   高校受験: ['英語', '国語', '社会', '地理'],
   大学受験: ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理'],
 };
 
-const SCIENCE_SUBJECTS_BY_TAB: Record<'総合' | '中学受験' | '高校受験' | '大学受験', string[]> = {
+const SCIENCE_SUBJECTS_BY_TAB: Record<'総合' | '高校受験' | '大学受験', string[]> = {
   総合: ['算数', '数学', '数学ⅠA', '数学ⅡB', '数学Ⅲ', '理科', '物理', '化学', '生物', '地学', '情報・統計'],
-  中学受験: ['算数', '理科'],
   高校受験: ['数学', '理科'],
   大学受験: ['数学ⅠA', '数学ⅡB', '数学Ⅲ', '物理', '化学', '生物', '地学'],
 };
@@ -181,13 +179,12 @@ const LECTURE_CATEGORIES: LectureCategory[] = [
     color: 'from-amber-500 via-yellow-400 to-orange-400',
     glow: '#f59e0b',
     border: 'border-amber-400/60',
-    description: '総合 / 中学受験 / 高校受験 / 大学受験',
+    description: '総合 / 高校受験 / 大学受験',
     ribbonColor: '#b45309',
     lightBg: 'linear-gradient(135deg, rgba(255,251,235,0.98) 0%, rgba(254,243,199,0.96) 100%)',
     lightBorder: 'rgba(245,158,11,0.28)',
     tabs: [
       { label: '総合', matches: (q) => isLiberal(q) },
-      { label: '中学受験', matches: (q) => isLiberal(q) && (eqAny(normalize(q.subCategory), ['国語', '社会']) || includesAny(normalize(q.subjectText), ['国語', '社会'])) },
       { label: '高校受験', matches: (q) => isLiberal(q) && (eqAny(normalize(q.subCategory), ['英語', '国語', '社会', '地理']) || includesAny(normalize(q.subjectText), ['英語', '国語', '社会', '地理'])) },
       { label: '大学受験', matches: (q) => isLiberal(q) && (eqAny(normalize(q.subCategory), ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理']) || includesAny(normalize(q.subjectText), ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理'])) },
     ],
@@ -202,13 +199,12 @@ const LECTURE_CATEGORIES: LectureCategory[] = [
     color: 'from-cyan-500 via-sky-500 to-blue-500',
     glow: '#06b6d4',
     border: 'border-cyan-400/60',
-    description: '総合 / 中学受験 / 高校受験 / 大学受験',
+    description: '総合 / 高校受験 / 大学受験',
     ribbonColor: '#0284c7',
     lightBg: 'linear-gradient(135deg, rgba(240,249,255,0.98) 0%, rgba(224,242,254,0.96) 100%)',
     lightBorder: 'rgba(6,182,212,0.28)',
     tabs: [
       { label: '総合', matches: (q) => isScience(q) },
-      { label: '中学受験', matches: (q) => isScience(q) && (eqAny(normalize(q.subCategory), ['算数', '理科']) || includesAny(normalize(q.subjectText), ['算数', '理科'])) },
       { label: '高校受験', matches: (q) => isScience(q) && (eqAny(normalize(q.subCategory), ['数学', '理科']) || includesAny(normalize(q.subjectText), ['数学', '理科'])) },
       { label: '大学受験', matches: (q) => isScience(q) && (eqAny(normalize(q.subCategory), ['数学ⅠA', '数学ⅡB', '数学Ⅲ', '物理', '化学', '生物', '地学']) || includesAny(normalize(q.subjectText), ['数学ⅠA', '数学ⅡB', '数学Ⅲ', '物理', '化学', '生物', '地学'])) },
     ],

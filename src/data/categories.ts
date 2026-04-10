@@ -108,16 +108,6 @@ export const STUDY_CATEGORIES: StudyCategoryDef[] = [
   // ── 受験ビュー ──
   {
     mode: 'study',
-    label: '中学受験',
-    ruby: 'ちゅうがくじゅけん',
-    icon: '🏫',
-    description: '算数・国語・理科・社会',
-    strandFilter: null,
-    examFilter: '中学受験',
-    grades: ['小4', '小5', '小6'],
-  },
-  {
-    mode: 'study',
     label: '高校受験',
     ruby: 'こうこうじゅけん',
     icon: '📝',

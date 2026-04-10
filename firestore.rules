@@ -95,6 +95,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // アカデミー問題の通報（作成は /api/academy-report のみ。将来は isAdmin() read を足しやすい）
+    match /academy_reports/{reportId} {
+      allow read, write: if false;
+    }
+
     // デフォルト deny（必要なコレクションは既存ルールに合わせて追記）
     match /{document=**} {
       allow read, write: if false;

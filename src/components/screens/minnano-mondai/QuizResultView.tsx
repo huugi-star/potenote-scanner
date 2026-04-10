@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, RotateCcw, Flag } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Flag, Check } from 'lucide-react';
 import type { QuizQuestionResult, ShuffledQuestion } from '../MinnanoMondaiScreen';
 import { useGameStore } from '@/store/useGameStore';
 
@@ -38,6 +38,8 @@ const RANK_CFG: Record<Rank, {
   shadow: string;
   bg: string;
   border: string;
+  /** 画面上部・BgFx 用の淡いスポット（rgba 完結文字列） */
+  ambient: string;
   /** message / sub 用（RANK ラベル・ランク文字の color は維持） */
   messageTextColor: string;
   message: string;
@@ -45,43 +47,47 @@ const RANK_CFG: Record<Rank, {
 }> = {
   S: {
     color: '#fbbf24',
-    shadow: '0 0 60px rgba(251,191,36,1), 0 0 120px rgba(251,191,36,0.55)',
-    bg: 'radial-gradient(ellipse at 50% 25%, rgba(236,228,200,0.96) 0%, rgba(238,234,218,0.94) 100%)',
-    border: 'rgba(251,191,36,0.75)',
-    messageTextColor: '#92400e',
+    shadow: '0 4px 28px rgba(251,191,36,0.22), 0 0 40px rgba(251,191,36,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
+    bg: 'radial-gradient(ellipse at 50% 32%, rgba(58,50,40,0.98) 0%, rgba(42,38,34,0.96) 100%)',
+    border: 'rgba(251,191,36,0.28)',
+    ambient: 'rgba(251,191,36,0.10)',
+    messageTextColor: '#f3e8d4',
     message: 'S判定だよ…かんぺきぃ',
     sub: '全問正解です！さすがですっ！',
   },
   A: {
     color: '#67e8f9',
-    shadow: '0 0 50px rgba(103,232,249,0.9), 0 0 100px rgba(103,232,249,0.45)',
-    bg: 'radial-gradient(ellipse at 50% 25%, rgba(200,226,238,0.96) 0%, rgba(210,232,242,0.94) 100%)',
-    border: 'rgba(103,232,249,0.6)',
-    messageTextColor: '#0e4f6e',
+    shadow: '0 4px 24px rgba(103,232,249,0.18), 0 0 36px rgba(103,232,249,0.06), inset 0 1px 0 rgba(255,255,255,0.05)',
+    bg: 'radial-gradient(ellipse at 50% 32%, rgba(32,44,56,0.98) 0%, rgba(24,36,46,0.96) 100%)',
+    border: 'rgba(103,232,249,0.28)',
+    ambient: 'rgba(103,232,249,0.10)',
+    messageTextColor: '#bae6fd',
     message: 'すごいよ。A判定',
     sub: 'あと少しでSランクだったよ！',
   },
   B: {
     color: '#6ee7b7',
-    shadow: '0 0 40px rgba(110,231,183,0.85), 0 0 80px rgba(110,231,183,0.4)',
-    bg: 'radial-gradient(ellipse at 50% 25%, rgba(200,234,220,0.96) 0%, rgba(214,242,230,0.94) 100%)',
-    border: 'rgba(110,231,183,0.55)',
-    messageTextColor: '#065f3e',
+    shadow: '0 4px 22px rgba(110,231,183,0.15), 0 0 32px rgba(110,231,183,0.05), inset 0 1px 0 rgba(255,255,255,0.05)',
+    bg: 'radial-gradient(ellipse at 50% 32%, rgba(32,50,44,0.98) 0%, rgba(26,40,36,0.96) 100%)',
+    border: 'rgba(110,231,183,0.26)',
+    ambient: 'rgba(110,231,183,0.10)',
+    messageTextColor: '#a7f3d0',
     message: 'もうちょっとでAだよ',
     sub: 'あと数問！次は届くよ！',
   },
   C: {
     color: '#c4b5fd',
-    shadow: '0 0 35px rgba(196,181,253,0.8), 0 0 70px rgba(196,181,253,0.35)',
-    bg: 'radial-gradient(ellipse at 50% 25%, rgba(218,212,236,0.96) 0%, rgba(224,220,240,0.94) 100%)',
-    border: 'rgba(196,181,253,0.45)',
-    messageTextColor: '#3b1f8c',
+    shadow: '0 4px 20px rgba(196,181,253,0.14), 0 0 28px rgba(196,181,253,0.05), inset 0 1px 0 rgba(255,255,255,0.05)',
+    bg: 'radial-gradient(ellipse at 50% 32%, rgba(46,38,62,0.98) 0%, rgba(34,30,48,0.96) 100%)',
+    border: 'rgba(196,181,253,0.28)',
+    ambient: 'rgba(196,181,253,0.10)',
+    messageTextColor: '#ddd6fe',
     message: '…もう一度挑戦しない？',
     sub: 'きっといけるって信じてるよ。',
   },
 };
 
-/** 明るいカード背景でもランク一文字が読めるよう、暗いアウトラインを重ねてから既存グローを載せる */
+/** 暗めカードでもランク一文字が読めるよう、暗いアウトラインを重ねてから控えめなグローを載せる */
 const rankLetterTextShadow = (glow: string) =>
   [
     '0 0 1px rgba(12,8,6,0.95)',
@@ -202,15 +208,15 @@ const PARTICLES = Array.from({ length: 38 }, (_, i) => ({
   del:  (i * 0.37)    % 5,
 }));
 
-const BgFx = ({ borderColor }: { borderColor: string }) => (
+const BgFx = ({ ambient }: { ambient: string }) => (
   <div className="absolute inset-0 pointer-events-none overflow-hidden">
     {PARTICLES.map((p) => (
       <div key={p.id} className="absolute rounded-full bg-white"
         style={{ width: p.w, height: p.w, left: `${p.left}%`, top: `${p.top}%`,
-          opacity: .12, animation: `qrv-tw ${p.dur}s ease-in-out ${p.del}s infinite` }} />
+          opacity: .07, animation: `qrv-tw ${p.dur}s ease-in-out ${p.del}s infinite` }} />
     ))}
     <div className="absolute inset-0"
-      style={{ background: `radial-gradient(ellipse at 50% 0%, ${borderColor}25 0%, transparent 55%)` }} />
+      style={{ background: `radial-gradient(ellipse at 50% 0%, ${ambient} 0%, transparent 55%)` }} />
   </div>
 );
 
@@ -253,22 +259,62 @@ type ReportReasonId = (typeof REPORT_REASONS)[number]['id'];
 
 const ReportModal = ({
   questionId,
+  reporterKey,
   onClose,
 }: {
   questionId: string;
+  reporterKey: string;
   onClose: () => void;
 }) => {
   const [checks, setChecks] = useState<Record<ReportReasonId, boolean>>({
     copyright: false, morals: false, wrong: false, spam: false,
   });
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const canSubmit = Object.values(checks).some(Boolean);
 
-  const handleSubmit = () => {
-    const selected = REPORT_REASONS.filter((r) => checks[r.id]).map((r) => r.label);
-    console.log('[Report]', questionId, selected);
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    if (!reporterKey.trim()) {
+      setSubmitError('通信の準備中です。しばらくしてからお試しください。');
+      return;
+    }
+    const reasons = REPORT_REASONS.filter((r) => checks[r.id]).map((r) => r.id);
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch('/api/academy-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questionId, reasons, reporterKey }),
+      });
+      let body: { success?: boolean; error?: string; message?: string } = {};
+      try {
+        body = (await res.json()) as { success?: boolean; error?: string; message?: string };
+      } catch {
+        /* ignore */
+      }
+      if (!res.ok) {
+        if (res.status === 404 && body?.error === 'QUESTION_NOT_FOUND') {
+          setSubmitError('問題が見つかりませんでした。');
+        } else if (res.status === 409 && body?.error === 'REPORT_ALREADY_CLOSED') {
+          setSubmitError(body?.message ?? 'この通報はすでに対応済みです。');
+        } else {
+          setSubmitError('送信に失敗しました。時間をおいて再度お試しください。');
+        }
+        return;
+      }
+      if (!body?.success) {
+        setSubmitError('送信に失敗しました。');
+        return;
+      }
+      setSubmitted(true);
+    } catch {
+      setSubmitError('送信に失敗しました。時間をおいて再度お試しください。');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -343,26 +389,33 @@ const ReportModal = ({
               虚偽の通報はご遠慮ください。内容は運営が確認します。
             </p>
 
+            {submitError && (
+              <p className="text-[11px] text-center text-red-300/90 pt-1">{submitError}</p>
+            )}
+
             <div className="grid grid-cols-2 gap-2 pt-1">
               <button
+                type="button"
                 onClick={onClose}
-                className="py-3 rounded-xl text-sm font-bold"
+                disabled={submitting}
+                className="py-3 rounded-xl text-sm font-bold disabled:opacity-45"
                 style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.13)', color: 'rgba(200,190,255,0.75)' }}
               >
                 キャンセル
               </button>
               <motion.button
-                onClick={handleSubmit}
-                disabled={!canSubmit}
+                type="button"
+                onClick={() => void handleSubmit()}
+                disabled={!canSubmit || submitting}
                 className="py-3 rounded-xl text-sm font-black text-white disabled:opacity-35"
                 style={{
-                  background: canSubmit ? 'linear-gradient(135deg,#dc2626,#ef4444)' : 'rgba(255,255,255,0.08)',
-                  boxShadow: canSubmit ? '0 0 18px rgba(239,68,68,0.5)' : 'none',
+                  background: canSubmit && !submitting ? 'linear-gradient(135deg,#dc2626,#ef4444)' : 'rgba(255,255,255,0.08)',
+                  boxShadow: canSubmit && !submitting ? '0 0 18px rgba(239,68,68,0.5)' : 'none',
                   border: '1px solid rgba(255,255,255,0.1)',
                 }}
-                whileTap={canSubmit ? { scale: 0.95 } : {}}
+                whileTap={canSubmit && !submitting ? { scale: 0.95 } : {}}
               >
-                通報する
+                {submitting ? '送信中…' : '通報する'}
               </motion.button>
             </div>
           </div>
@@ -481,7 +534,6 @@ export const QuizResultView = ({
   const activeAccuracy = calcPercent(activeCorrectCount, activePlayCount);
   const activeReactionCounts = activeQ ? reactionCountsByQuestionId[activeQ.id] : undefined;
   const activeGoodCount = activeReactionCounts?.good ?? Math.max(0, Number(activeQ?.goodCount ?? 0));
-  const activeBadCount = activeReactionCounts?.bad ?? Math.max(0, Number(activeQ?.badCount ?? 0));
   const isActiveReactionSaving = activeQ ? !!savingReactionByQuestionId[activeQ.id] : false;
 
   const toggleReaction = async (next: QuestionReaction) => {
@@ -534,10 +586,10 @@ export const QuizResultView = ({
         style={{ filter: 'blur(1px)' }}
         alt=""
       />
-      <div className="absolute inset-0" style={{ background: 'rgba(4,1,18,0.72)' }} />
+      <div className="absolute inset-0" style={{ background: 'rgba(6,10,20,0.84)' }} />
       <div
         className="absolute inset-0"
-        style={{ background: `radial-gradient(ellipse at 50% 0%, ${cfg.border}33 0%, transparent 55%)` }}
+        style={{ background: `radial-gradient(ellipse at 50% 0%, ${cfg.border}22 0%, transparent 55%)` }}
       />
 
       <style>{`
@@ -546,9 +598,9 @@ export const QuizResultView = ({
         @keyframes qrv-float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)} }
       `}</style>
 
-      <BgFx borderColor={cfg.border} />
+      <BgFx ambient={cfg.ambient} />
 
-      <div className="relative z-10 max-w-md mx-auto px-4 pt-10 space-y-4">
+      <div className="relative z-10 max-w-md mx-auto px-4 pt-10 space-y-6">
 
         {/* ━━━━━━━━ ① ランクカード ━━━━━━━━ */}
         <motion.div
@@ -614,46 +666,103 @@ export const QuizResultView = ({
           </div>
         </motion.div>
 
-        {/* ━━━━━━━━ ② スコアカード ━━━━━━━━ */}
+        {/* ━━━━━━━━ ② スコア（背景に溶け込む横並び） ━━━━━━━━ */}
         <AnimatePresence>
           {phase >= 1 && (
             <motion.div
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.38 }}
-              className="rounded-3xl overflow-hidden"
-              style={{ background: 'rgba(255,255,255,0.045)', border: `1px solid ${cfg.border}`, backdropFilter: 'blur(14px)' }}
+              className="px-1"
             >
-              {/* 3カラムグリッド */}
-              <div className="grid grid-cols-3 divide-x divide-white/10">
-                {[
-                  { label: '正解数', value: `${dispCorrect}/${questions.length}` },
-                  { label: '正答率', value: `${dispAcc}%` },
-                  { label: '正解点', value: `${basePoint}pt` },
-                ].map((s) => (
-                  <div key={s.label} className="px-2 py-3 text-center">
-                    <p className="text-[10px] mb-1" style={{ color: 'rgba(200,190,255,0.5)' }}>{s.label}</p>
-                    <p className="text-base font-black text-white">{s.value}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* 合計スコア行 */}
-              <div className="px-5 py-4 flex items-center justify-between border-t border-white/10">
-                <p className="text-xs" style={{ color: 'rgba(200,190,255,0.55)' }}>
-                  正解点 {basePoint}pt
-                  <span className="ml-2 font-bold" style={{ color: '#fbbf24' }}>
-                    ＋ 時間ボーナス {dispBonus}pt
-                  </span>
-                </p>
-                <div className="text-right">
-                  <p className="text-[10px] mb-0.5" style={{ color: 'rgba(200,190,255,0.45)' }}>合計スコア</p>
-                  <p className="font-black text-3xl leading-none"
-                    style={{ color: cfg.color, textShadow: `0 0 18px ${cfg.color}` }}>
-                    {dispTotal}
-                    <span className="text-sm font-bold text-white/45 ml-1">点</span>
+              <div className="flex items-stretch justify-center">
+                <div className="flex-1 min-w-0 text-center px-2 sm:px-3">
+                  <p className="text-[10px] font-bold tracking-widest mb-1.5" style={{ color: 'rgba(226,232,240,0.78)' }}>
+                    正解数
+                  </p>
+                  <p
+                    className="font-black tabular-nums leading-none text-[1.65rem] sm:text-[1.85rem]"
+                    style={{
+                      color: 'rgba(248,250,252,0.9)',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.65), 0 0 12px rgba(0,0,0,0.35)',
+                    }}
+                  >
+                    {dispCorrect}
+                    <span
+                      className="font-bold text-[1.05rem] sm:text-[1.15rem]"
+                      style={{ color: 'rgba(226,232,240,0.55)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}
+                    >
+                      /{questions.length}
+                    </span>
                   </p>
                 </div>
+                <div className="w-px shrink-0 bg-white/12 self-stretch my-1" aria-hidden />
+                <div className="flex-1 min-w-0 text-center px-2 sm:px-3">
+                  <p className="text-[10px] font-bold tracking-widest mb-1.5" style={{ color: 'rgba(226,232,240,0.78)' }}>
+                    正答率
+                  </p>
+                  <p
+                    className="font-black tabular-nums leading-none text-[1.65rem] sm:text-[1.85rem]"
+                    style={{
+                      color: 'rgba(248,250,252,0.9)',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.65), 0 0 12px rgba(0,0,0,0.35)',
+                    }}
+                  >
+                    {dispAcc}
+                    <span className="font-bold text-lg" style={{ color: 'rgba(226,232,240,0.6)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                      %
+                    </span>
+                  </p>
+                </div>
+                <div className="w-px shrink-0 bg-white/12 self-stretch my-1" aria-hidden />
+                <div className="flex-1 min-w-0 text-center px-2 sm:px-3">
+                  <p className="text-[10px] font-bold tracking-widest mb-1.5" style={{ color: 'rgba(226,232,240,0.78)' }}>
+                    合計スコア
+                  </p>
+                  <p
+                    className="font-black tabular-nums leading-none"
+                    style={{
+                      fontSize: 36,
+                      color: '#f5d78a',
+                      textShadow:
+                        '0 1px 3px rgba(0,0,0,0.75), 0 0 18px rgba(251,191,36,0.28), 0 2px 10px rgba(0,0,0,0.45)',
+                    }}
+                  >
+                    {dispTotal}
+                    <span
+                      className="text-sm font-bold ml-0.5"
+                      style={{ color: 'rgba(253,230,138,0.82)', textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}
+                    >
+                      点
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <div className="text-center mt-3">
+                <p
+                  className="text-xs"
+                  style={{
+                    color: 'rgba(226,232,240,0.82)',
+                    background: 'rgba(2,6,23,0.72)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    padding: '6px 12px',
+                    display: 'inline-block',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.45)',
+                  }}
+                >
+                  正解点{' '}
+                  <span className="font-semibold" style={{ color: 'rgba(248,250,252,0.92)' }}>
+                    {basePoint}pt
+                  </span>
+                  <span className="mx-1.5" style={{ color: 'rgba(148,163,184,0.45)' }}>
+                    |
+                  </span>
+                  時間ボーナス{' '}
+                  <span className="font-semibold" style={{ color: 'rgba(253,224,71,0.9)' }}>
+                    {dispBonus}pt
+                  </span>
+                </p>
               </div>
             </motion.div>
           )}
@@ -666,29 +775,29 @@ export const QuizResultView = ({
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.32 }}
-              className="grid grid-cols-2 gap-3"
+              className="flex flex-col items-stretch gap-3"
             >
               <motion.button
                 onClick={onRetry}
-                className="flex items-center justify-center gap-2 rounded-2xl py-4 text-white font-black text-sm"
+                className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-4 sm:py-5 text-white font-black text-base"
                 style={{
                   background: `linear-gradient(135deg,${cat.ribbonColor},${cat.glow})`,
-                  boxShadow: `0 4px 24px ${cat.ribbonColor}77`,
+                  boxShadow: `0 6px 28px ${cat.ribbonColor}88`,
                 }}
-                whileTap={{ scale: 0.93 }}
-                whileHover={{ scale: 1.03, boxShadow: `0 6px 30px ${cat.ribbonColor}99` }}
+                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: 1.01, boxShadow: `0 8px 34px ${cat.ribbonColor}aa` }}
               >
-                <RotateCcw className="w-4 h-4" /> もう一度！
+                <RotateCcw className="w-5 h-5 shrink-0" /> もう一度！
               </motion.button>
-              <motion.button
+              <button
+                type="button"
                 onClick={onBackToCategories}
-                className="flex items-center justify-center gap-2 rounded-2xl py-4 font-bold text-sm"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', color: 'rgba(220,210,255,0.88)' }}
-                whileTap={{ scale: 0.93 }}
-                whileHover={{ scale: 1.02 }}
+                className="self-center flex items-center gap-1.5 py-1 text-sm font-semibold transition-opacity hover:opacity-90"
+                style={{ color: 'rgba(200,190,255,0.65)' }}
               >
-                <ArrowLeft className="w-4 h-4" /> カテゴリへ
-              </motion.button>
+                <ArrowLeft className="w-3.5 h-3.5 opacity-70" />
+                カテゴリへ戻る
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
@@ -701,7 +810,11 @@ export const QuizResultView = ({
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.38, delay: 0.08 }}
               className="rounded-3xl overflow-hidden"
-              style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.09)', backdropFilter: 'blur(12px)' }}
+              style={{
+                background: 'rgba(10,5,30,0.85)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                backdropFilter: 'blur(14px)',
+              }}
             >
               <div className="px-4 pt-4 pb-3 border-b border-white/10 flex items-center gap-2">
                 <span>📋</span>
@@ -767,31 +880,21 @@ export const QuizResultView = ({
                       </p>
                     </div>
 
-                    {/* 統計（正答率 / ナイス / イマイチ） */}
-                    <div className="grid grid-cols-3 gap-2">
+                    {/* 統計（正答率 / ナイス問題） */}
+                    <div className="grid grid-cols-2 gap-2">
                       <div
                         className="rounded-xl px-3 py-2.5 border"
                         style={{ background: 'rgba(16,185,129,0.1)', borderColor: 'rgba(52,211,153,0.28)' }}
                       >
                         <p className="text-[10px] font-bold text-emerald-300/80 tracking-wide">正答率</p>
-                        <p className="text-sm font-black text-emerald-300 mt-0.5">{activeAccuracy.toFixed(1)}%</p>
-                        <p className="text-[10px] text-emerald-100/55 mt-0.5">
-                          {activeCorrectCount}/{activePlayCount}
-                        </p>
+                        <p className="text-sm font-black text-emerald-300 mt-1">{activeAccuracy.toFixed(1)}%</p>
                       </div>
                       <div
                         className="rounded-xl px-3 py-2.5 border"
                         style={{ background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(52,211,153,0.24)' }}
                       >
-                        <p className="text-[10px] font-bold text-emerald-200/80 tracking-wide">👍 ナイス問</p>
+                        <p className="text-[10px] font-bold text-emerald-200/80 tracking-wide">👍 ナイス問題</p>
                         <p className="text-sm font-black text-emerald-200 mt-1">{activeGoodCount}件</p>
-                      </div>
-                      <div
-                        className="rounded-xl px-3 py-2.5 border"
-                        style={{ background: 'rgba(244,114,182,0.08)', borderColor: 'rgba(244,114,182,0.24)' }}
-                      >
-                        <p className="text-[10px] font-bold text-pink-200/80 tracking-wide">👎 イマイチ</p>
-                        <p className="text-sm font-black text-pink-200 mt-1">{activeBadCount}件</p>
                       </div>
                     </div>
 
@@ -822,13 +925,17 @@ export const QuizResultView = ({
                         >
                           <div className="flex items-center gap-2">
                             <span className="font-black opacity-50 shrink-0 text-xs">{idx + 1}.</span>
-                            <span className="flex-1">{choice}</span>
-                            <span className="shrink-0 text-[11px] font-black opacity-80">{pickPercent.toFixed(1)}%</span>
-                            {isAns && <span className="shrink-0 text-emerald-400 font-black text-xs">✓正解</span>}
+                            <span className="flex-1 min-w-0">{choice}</span>
+                            {isAns && (
+                              <span className="shrink-0 flex items-center justify-center rounded-full bg-emerald-500/25 p-1 border border-emerald-400/45" aria-hidden>
+                                <Check className="w-6 h-6 text-emerald-300" strokeWidth={3} />
+                              </span>
+                            )}
+                            <span className="shrink-0 text-xs font-black opacity-85 tabular-nums">{pickPercent.toFixed(1)}%</span>
                             {!isAns && isSel && <span className="shrink-0 text-violet-300 font-bold text-xs">あなた</span>}
                           </div>
-                          <div className="mt-1.5">
-                            <div className="h-1.5 rounded-full bg-black/25 overflow-hidden">
+                          <div className="mt-2">
+                            <div className="h-2.5 rounded-full bg-black/30 overflow-hidden">
                               <div
                                 className="h-full rounded-full"
                                 style={{
@@ -841,9 +948,6 @@ export const QuizResultView = ({
                                 }}
                               />
                             </div>
-                            <p className="mt-1 text-[10px] opacity-60">
-                              選択数: {pickCount} / 全回答: {totalChoiceCount}
-                            </p>
                           </div>
                         </div>
                       );
@@ -857,7 +961,7 @@ export const QuizResultView = ({
                     )}
 
                     {/* ナイス / イマイチ ボタン */}
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex flex-wrap items-center gap-3 pt-2">
                       {([
                         { key: 'good' as QuestionReaction, label: '👍 ナイス問題', activeClr: 'rgba(16,185,129,0.35)', activeBd: 'rgba(52,211,153,0.75)', activeTx: '#6ee7b7' },
                         { key: 'bad'  as QuestionReaction, label: '👎 イマイチ',   activeClr: 'rgba(244,114,182,0.25)', activeBd: 'rgba(244,114,182,0.65)', activeTx: '#f9a8d4' },
@@ -868,16 +972,16 @@ export const QuizResultView = ({
                             key={String(btn.key)}
                             onClick={() => toggleReaction(btn.key)}
                             disabled={isActiveReactionSaving}
-                            className="px-3.5 py-2 rounded-full text-xs font-black border"
+                            className="px-6 py-3 rounded-full text-sm font-black border min-h-[48px]"
                             style={{
                               background:   on ? btn.activeClr : 'rgba(255,255,255,0.07)',
                               borderColor:  on ? btn.activeBd  : 'rgba(255,255,255,0.13)',
-                              color:        on ? btn.activeTx  : 'rgba(200,190,255,0.6)',
-                              boxShadow:    on ? `0 0 14px ${btn.activeBd}` : 'none',
+                              color:        on ? btn.activeTx  : 'rgba(200,190,255,0.65)',
+                              boxShadow:    on ? `0 0 16px ${btn.activeBd}` : 'none',
                               opacity:      isActiveReactionSaving ? 0.6 : 1,
                             }}
-                            whileTap={{ scale: 1.28 }}
-                            animate={on ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+                            whileTap={{ scale: 1.05 }}
+                            animate={on ? { scale: [1, 1.06, 1] } : { scale: 1 }}
                             transition={{ duration: 0.25 }}
                           >
                             {btn.label}
@@ -911,6 +1015,7 @@ export const QuizResultView = ({
         {reportTarget && (
           <ReportModal
             questionId={reportTarget}
+            reporterKey={voterKey}
             onClose={() => setReportTarget(null)}
           />
         )}
