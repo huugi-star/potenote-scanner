@@ -15,6 +15,7 @@ import type {
 } from '@/lib/suhimochiConversationTypes';
 import type { GeminiMessage, SuhimochiRequest } from '@/lib/suhimochiConversationEngine'; 
 import { ALL_ITEMS, getItemById } from '@/data/items';
+import { ACADEMY_SEED_QUESTIONS } from '@/data/academySeedQuestions';
 import { REWARDS, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
 import { getJstDateString } from '@/lib/dateUtils';
 import { extractWords } from '@/lib/wordExtraction';
@@ -281,17 +282,21 @@ const normalizeAcademyQuestion = (
   };
 };
 
+/** マージ後の上限。旧200だと公式seed+Firestore合算で末尾（日本史後半・世界史など）が落ち、高校受験「歴史」に揃わない。 */
+const ACADEMY_MERGED_QUESTIONS_MAX = 4000;
+
 const mergeSeedAndPostedAcademyQuestions = (
   official: AcademyUserQuestion[],
   posted: AcademyUserQuestion[]
 ): AcademyUserQuestion[] => {
-  // 同一idはユーザー投稿を優先（後勝ち）。
+  // ローカル `academySeedQuestions.ts` をベースにし、Firestore 公式で上書き、最後にユーザー投稿が同名idを優先。
   const byId = new Map<string, AcademyUserQuestion>();
+  for (const q of ACADEMY_SEED_QUESTIONS) byId.set(q.id, q);
   for (const q of official) byId.set(q.id, q);
   for (const q of posted) byId.set(q.id, q);
   return Array.from(byId.values())
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 200);
+    .slice(0, ACADEMY_MERGED_QUESTIONS_MAX);
 };
 
 const submitAcademyQuestionViaApi = async (
