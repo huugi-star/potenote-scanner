@@ -770,11 +770,9 @@ const LightAcademyBackground = () => (
 // ============================================================
 
 const CeremonyHeader = ({
-  totalCount,
   loginDays,
   onBack,
 }: {
-  totalCount: number;
   loginDays: number;
   onBack: () => void;
 }) => (
@@ -798,14 +796,14 @@ const CeremonyHeader = ({
       <div className="flex items-center justify-between max-w-md mx-auto">
         <motion.button
           onClick={onBack}
-          className="flex items-center gap-1 text-sm"
+          className="flex items-center gap-1 text-sm shrink-0"
           style={{ color: 'rgba(240,214,130,0.96)' }}
           whileTap={{ scale: 0.95 }}
         >
           <ArrowLeft className="w-4 h-4" />
           <span>戻る</span>
         </motion.button>
-        <div className="text-center">
+        <div className="text-center flex-1 px-2">
           <p className="text-[9px] tracking-[0.35em] uppercase mb-0.5" style={{ color: 'rgba(230,195,96,0.72)' }}>
             Magic Academy
           </p>
@@ -815,13 +813,7 @@ const CeremonyHeader = ({
             style={{ background: 'linear-gradient(to right, transparent, rgba(255,200,60,0.8), transparent)' }}
           />
         </div>
-        <div className="text-right">
-          <p className="text-[9px]" style={{ color: 'rgba(230,195,96,0.66)' }}>総問題数</p>
-          <p className="font-black text-sm" style={{ color: '#fde68a' }}>
-            {totalCount}
-            <span className="text-xs font-normal" style={{ color: 'rgba(220,220,220,0.55)' }}> 問</span>
-          </p>
-        </div>
+        <div className="w-[52px] shrink-0" aria-hidden />
       </div>
     </div>
 
@@ -853,7 +845,7 @@ const CeremonyHeader = ({
             受講カテゴリーを選択してください
           </p>
           <p className="text-[10px] mt-0.5" style={{ color: 'rgba(108,88,164,0.74)' }}>
-            {loginDays}日連続出席 ・ {totalCount}問の知識が待つ
+            {loginDays}日連続出席 ・ 入室後に科目ごとの問題数を表示します
           </p>
         </div>
       </div>
@@ -879,7 +871,8 @@ const CategoryCard = ({
   index: number;
 }) => {
   const isOpen = count > 0;
-  const difficulty = Math.min(5, Math.max(1, Math.ceil(count / 2)));
+  /** 受講カテゴリーでは件数を出さないため、星は「開放中か」のみで段階表示 */
+  const difficulty = isOpen ? Math.min(5, Math.max(2, Math.ceil(Math.log10(count + 1) * 2))) : 1;
 
   return (
     <motion.button
@@ -930,17 +923,30 @@ const CategoryCard = ({
           </div>
           <div className="flex flex-col items-end gap-1">
             <span style={{ fontSize: '22px', opacity: isOpen ? 0.95 : 0.62 }}>{cat.icon}</span>
-            <span
-              className="text-[10px] font-black px-1.5 py-0.5 rounded-full"
-              style={{
-                background: isOpen ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})` : 'rgba(120,120,150,0.18)',
-                color: isOpen ? '#fff' : 'rgba(100,100,130,0.80)',
-                border: isOpen ? '1px solid rgba(255,255,255,0.24)' : '1px solid rgba(150,150,180,0.18)',
-                boxShadow: isOpen ? `0 6px 16px ${cat.glow}30` : 'none',
-              }}
-            >
-              {count}問
-            </span>
+            {isOpen ? (
+              <span
+                className="text-[10px] font-black px-1.5 py-0.5 rounded-full"
+                style={{
+                  background: `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`,
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.24)',
+                  boxShadow: `0 6px 16px ${cat.glow}30`,
+                }}
+              >
+                挑戦可
+              </span>
+            ) : (
+              <span
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{
+                  background: 'rgba(120,120,150,0.18)',
+                  color: 'rgba(100,100,130,0.80)',
+                  border: '1px solid rgba(150,150,180,0.18)',
+                }}
+              >
+                準備中
+              </span>
+            )}
           </div>
         </div>
         <p className="text-[10px] leading-relaxed mb-2" style={{ color: isOpen ? 'rgba(67,54,98,0.92)' : 'rgba(100,100,120,0.72)', whiteSpace: 'pre' }}>
@@ -982,7 +988,6 @@ const CategoryCard = ({
 const ExamRoomInside = ({
   cat,
   selectedTabLabel,
-  tabCounts,
   detailedSubjects,
   detailSubjectCounts,
   selectedDetailSubject,
@@ -990,7 +995,6 @@ const ExamRoomInside = ({
   hsLiberalSubject,
   hsLiberalField,
   hsSubjectCounts,
-  hsFieldCounts,
   onChangeHsLiberalSubject,
   onChangeHsLiberalField,
   onBack,
@@ -1000,7 +1004,6 @@ const ExamRoomInside = ({
 }: {
   cat: LectureCategory;
   selectedTabLabel: string;
-  tabCounts: Record<string, number>;
   detailedSubjects: string[];
   detailSubjectCounts: Record<string, number>;
   selectedDetailSubject: string;
@@ -1008,7 +1011,6 @@ const ExamRoomInside = ({
   hsLiberalSubject: string;
   hsLiberalField: string;
   hsSubjectCounts: Record<string, number>;
-  hsFieldCounts: Record<string, number>;
   onChangeHsLiberalSubject: (v: string) => void;
   onChangeHsLiberalField: (v: string) => void;
   onBack: () => void;
@@ -1067,7 +1069,6 @@ const ExamRoomInside = ({
             <div className="flex flex-wrap gap-2">
               {cat.tabs.map((tab) => {
                 const selected = selectedTabLabel === tab.label;
-                const count = tabCounts[tab.label] ?? 0;
                 return (
                   <motion.button
                     key={tab.label}
@@ -1083,7 +1084,7 @@ const ExamRoomInside = ({
                     }}
                     whileTap={{ scale: 0.97 }}
                   >
-                    {tab.label}（{count}）
+                    {tab.label}
                   </motion.button>
                 );
               })}
@@ -1127,7 +1128,6 @@ const ExamRoomInside = ({
                     <div className="flex flex-wrap gap-2">
                       {['すべて', ...HS_LIBERAL_FIELDS[hsLiberalSubject as HsLiberalSubjectKey]].map((field) => {
                         const selected = hsLiberalField === field;
-                        const count = hsFieldCounts[field] ?? 0;
                         return (
                           <motion.button
                             key={`${hsLiberalSubject}-${field}`}
@@ -1143,7 +1143,7 @@ const ExamRoomInside = ({
                             }}
                             whileTap={{ scale: 0.97 }}
                           >
-                            {field}（{count}）
+                            {field}
                           </motion.button>
                         );
                       })}
@@ -1477,22 +1477,6 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     return next;
   }, [useHsLiberalTwoTier, selectedTabQuestions]);
 
-  const hsFieldCounts = useMemo(() => {
-    if (!useHsLiberalTwoTier) return {};
-    if (hsLiberalSubject === 'すべて') {
-      return { すべて: selectedTabQuestions.length };
-    }
-    const subj = hsLiberalSubject as HsLiberalSubjectKey;
-    const fields = HS_LIBERAL_FIELDS[subj];
-    if (!fields) return { すべて: 0 };
-    const inSubject = selectedTabQuestions.filter((q) => inferHsLiberalSubject(q) === subj);
-    const next: Record<string, number> = { すべて: inSubject.length };
-    for (const f of fields) {
-      next[f] = inSubject.filter((q) => inferHsLiberalField(q, subj) === f).length;
-    }
-    return next;
-  }, [useHsLiberalTwoTier, selectedTabQuestions, hsLiberalSubject]);
-
   const selectedLectureQuestions = useMemo(() => {
     if (useHsLiberalTwoTier) {
       return selectedTabQuestions.filter((q) =>
@@ -1739,12 +1723,6 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
       <ExamRoomInside
         cat={selectedCat}
         selectedTabLabel={selectedTabLabel}
-        tabCounts={Object.fromEntries(
-          selectedCat.tabs.map((tab) => [
-            tab.label,
-            questionsByCategoryAndTab[selectedCat.id]?.[tab.label]?.length ?? 0,
-          ])
-        )}
         onBack={() => {
           setSelectedCat(null);
           setSelectedTabLabel('');
@@ -1759,7 +1737,6 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
         hsLiberalSubject={hsLiberalSubject}
         hsLiberalField={hsLiberalField}
         hsSubjectCounts={hsSubjectCounts}
-        hsFieldCounts={hsFieldCounts}
         onChangeHsLiberalSubject={(v) => {
           setHsLiberalSubject(v);
           setHsLiberalField('すべて');
@@ -1782,11 +1759,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
       <LightAcademyBackground />
 
       <div className="sticky top-0 z-20">
-        <CeremonyHeader
-          totalCount={academyUserQuestions.length}
-          loginDays={consecutiveLoginDays}
-          onBack={onBack}
-        />
+        <CeremonyHeader loginDays={consecutiveLoginDays} onBack={onBack} />
       </div>
 
       <div className="relative z-10 max-w-md mx-auto px-4 pt-4">
