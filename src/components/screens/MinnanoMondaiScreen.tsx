@@ -55,8 +55,19 @@ type LectureCategory = {
 
 const LIBERAL_SUBJECTS_BY_TAB: Record<'総合' | '高校受験' | '大学受験', string[]> = {
   総合: ['英語', '国語', '社会', '日本史', '世界史', '地理', '政治経済', '倫理', '現代文', '古文', '漢文', '哲学', '心理学'],
-  高校受験: ['英語', '国語', '社会', '地理'],
+  /** 高校受験は「科目→分野」の2段UIのため、ここでは一覧を持たない */
+  高校受験: [],
   大学受験: ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理'],
+};
+
+/** 文系・高校受験：科目ごとの分野（UI表記は「分野」） */
+const HS_LIBERAL_SUBJECT_ORDER = ['英語', '国語', '社会'] as const;
+type HsLiberalSubjectKey = (typeof HS_LIBERAL_SUBJECT_ORDER)[number];
+
+const HS_LIBERAL_FIELDS: Record<HsLiberalSubjectKey, readonly string[]> = {
+  英語: ['英単語', '英文法', '英熟語'],
+  国語: ['現代文', '古文', '漢文'],
+  社会: ['歴史', '地理', '公民'],
 };
 
 const SCIENCE_SUBJECTS_BY_TAB: Record<'総合' | '高校受験' | '大学受験', string[]> = {
@@ -168,6 +179,82 @@ const matchDetailedSubject = (q: AcademyUserQuestion, subject: string): boolean 
   return sub === subject || subjectText.includes(subject) || keywords.includes(subject);
 };
 
+/** 高校受験（文系）タブ内で、問題が属する「科目」を推定 */
+const inferHsLiberalSubject = (q: AcademyUserQuestion): HsLiberalSubjectKey | null => {
+  const sub = normalize(q.subCategory);
+  const st = normalize(q.subjectText);
+  const kws = Array.isArray(q.keywords) ? q.keywords.map((x) => normalize(x)) : [];
+
+  if (sub === '国語') return '国語';
+  if (sub === '英語') return '英語';
+  if (eqAny(sub, ['社会', '地理', '日本史', '世界史', '政治経済', '倫理', '公民'])) return '社会';
+
+  if (['現代文', '古文', '漢文'].some((f) => st.includes(f) || kws.includes(f))) return '国語';
+  if (['英単語', '英文法', '英熟語', '高校英語'].some((f) => st.includes(f) || kws.includes(f))) return '英語';
+  if (
+    ['日本史', '世界史', '地理', '政治経済', '倫理', '公民', '歴史', '社会'].some(
+      (f) => st.includes(f) || kws.includes(f)
+    )
+  )
+    return '社会';
+
+  return null;
+};
+
+/** 科目が決まったうえで「分野」を推定 */
+const inferHsLiberalField = (q: AcademyUserQuestion, subject: HsLiberalSubjectKey): string => {
+  const sub = normalize(q.subCategory);
+  const st = normalize(q.subjectText);
+  const kws = Array.isArray(q.keywords) ? q.keywords.map((x) => normalize(x)) : [];
+
+  if (subject === '英語') {
+    if (kws.includes('英単語') || st.includes('英単語')) return '英単語';
+    if (kws.includes('英熟語') || st.includes('英熟語')) return '英熟語';
+    if (kws.includes('英文法') || st.includes('英文法') || kws.includes('文法')) return '英文法';
+    if (st === '高校英語') return '英文法';
+    return '英文法';
+  }
+  if (subject === '国語') {
+    if (st.includes('古文') || kws.includes('古文')) return '古文';
+    if (st.includes('漢文') || kws.includes('漢文')) return '漢文';
+    if (st.includes('現代文') || kws.includes('現代文')) return '現代文';
+    return '現代文';
+  }
+  if (subject === '社会') {
+    if (sub === '地理' || st.includes('地理') || kws.includes('地理')) return '地理';
+    if (
+      sub === '日本史' ||
+      sub === '世界史' ||
+      st.includes('日本史') ||
+      st.includes('世界史') ||
+      kws.includes('日本史') ||
+      kws.includes('世界史')
+    )
+      return '歴史';
+    if (
+      eqAny(sub, ['政治経済', '倫理', '公民']) ||
+      st.includes('政治') ||
+      st.includes('倫理') ||
+      st.includes('公民') ||
+      kws.includes('政治経済') ||
+      kws.includes('倫理') ||
+      kws.includes('公民')
+    )
+      return '公民';
+    if (sub === '社会') return '歴史';
+    return '歴史';
+  }
+  return '';
+};
+
+const matchHsLiberalSelection = (q: AcademyUserQuestion, subjectSel: string, fieldSel: string): boolean => {
+  if (subjectSel === 'すべて') return true;
+  const inferred = inferHsLiberalSubject(q);
+  if (!inferred || inferred !== subjectSel) return false;
+  if (fieldSel === 'すべて') return true;
+  return inferHsLiberalField(q, inferred) === fieldSel;
+};
+
 const LECTURE_CATEGORIES: LectureCategory[] = [
   {
     id: 'liberal',
@@ -185,8 +272,27 @@ const LECTURE_CATEGORIES: LectureCategory[] = [
     lightBorder: 'rgba(245,158,11,0.28)',
     tabs: [
       { label: '総合', matches: (q) => isLiberal(q) },
-      { label: '高校受験', matches: (q) => isLiberal(q) && (eqAny(normalize(q.subCategory), ['英語', '国語', '社会', '地理']) || includesAny(normalize(q.subjectText), ['英語', '国語', '社会', '地理'])) },
-      { label: '大学受験', matches: (q) => isLiberal(q) && (eqAny(normalize(q.subCategory), ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理']) || includesAny(normalize(q.subjectText), ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理'])) },
+      {
+        label: '高校受験',
+        matches: (q) =>
+          isLiberal(q) &&
+          normalize(q.bigCategory) !== '大学受験' &&
+          (normalize(q.bigCategory) === '高校受験' ||
+            eqAny(normalize(q.subCategory), [
+              '英語', '国語', '社会', '地理', '日本史', '世界史', '政治経済', '倫理', '公民',
+            ]) ||
+            includesAny(normalize(q.subjectText), [
+              '英語', '国語', '社会', '地理', '日本史', '世界史', '政治経済', '倫理', '公民', '歴史',
+            ])),
+      },
+      {
+        label: '大学受験',
+        matches: (q) =>
+          isLiberal(q) &&
+          normalize(q.bigCategory) !== '高校受験' &&
+          (eqAny(normalize(q.subCategory), ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理']) ||
+            includesAny(normalize(q.subjectText), ['英語', '現代文', '古文', '漢文', '日本史', '世界史', '地理', '政治経済', '倫理'])),
+      },
     ],
   },
   {
@@ -205,8 +311,21 @@ const LECTURE_CATEGORIES: LectureCategory[] = [
     lightBorder: 'rgba(6,182,212,0.28)',
     tabs: [
       { label: '総合', matches: (q) => isScience(q) },
-      { label: '高校受験', matches: (q) => isScience(q) && (eqAny(normalize(q.subCategory), ['数学', '理科']) || includesAny(normalize(q.subjectText), ['数学', '理科'])) },
-      { label: '大学受験', matches: (q) => isScience(q) && (eqAny(normalize(q.subCategory), ['数学ⅠA', '数学ⅡB', '数学Ⅲ', '物理', '化学', '生物', '地学']) || includesAny(normalize(q.subjectText), ['数学ⅠA', '数学ⅡB', '数学Ⅲ', '物理', '化学', '生物', '地学'])) },
+      {
+        label: '高校受験',
+        matches: (q) =>
+          isScience(q) &&
+          normalize(q.bigCategory) !== '大学受験' &&
+          (eqAny(normalize(q.subCategory), ['数学', '理科']) || includesAny(normalize(q.subjectText), ['数学', '理科'])),
+      },
+      {
+        label: '大学受験',
+        matches: (q) =>
+          isScience(q) &&
+          normalize(q.bigCategory) !== '高校受験' &&
+          (eqAny(normalize(q.subCategory), ['数学ⅠA', '数学ⅡB', '数学Ⅲ', '物理', '化学', '生物', '地学']) ||
+            includesAny(normalize(q.subjectText), ['数学ⅠA', '数学ⅡB', '数学Ⅲ', '物理', '化学', '生物', '地学'])),
+      },
     ],
   },
   {
@@ -865,7 +984,15 @@ const ExamRoomInside = ({
   selectedTabLabel,
   tabCounts,
   detailedSubjects,
+  detailSubjectCounts,
   selectedDetailSubject,
+  useHsLiberalTwoTier,
+  hsLiberalSubject,
+  hsLiberalField,
+  hsSubjectCounts,
+  hsFieldCounts,
+  onChangeHsLiberalSubject,
+  onChangeHsLiberalField,
   onBack,
   onChangeTab,
   onChangeDetailSubject,
@@ -875,7 +1002,15 @@ const ExamRoomInside = ({
   selectedTabLabel: string;
   tabCounts: Record<string, number>;
   detailedSubjects: string[];
+  detailSubjectCounts: Record<string, number>;
   selectedDetailSubject: string;
+  useHsLiberalTwoTier: boolean;
+  hsLiberalSubject: string;
+  hsLiberalField: string;
+  hsSubjectCounts: Record<string, number>;
+  hsFieldCounts: Record<string, number>;
+  onChangeHsLiberalSubject: (v: string) => void;
+  onChangeHsLiberalField: (v: string) => void;
   onBack: () => void;
   onChangeTab: (label: string) => void;
   onChangeDetailSubject: (subject: string) => void;
@@ -953,35 +1088,101 @@ const ExamRoomInside = ({
                 );
               })}
             </div>
-            {detailedSubjects.length > 0 && (
-              <div className="mt-3">
-                <p className="text-[11px] font-bold mb-2" style={{ color: 'rgba(67,54,98,0.82)' }}>
-                  科目を選択
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {['すべて', ...detailedSubjects].map((subject) => {
-                    const selected = selectedDetailSubject === subject;
-                    return (
-                      <motion.button
-                        key={subject}
-                        onClick={() => onChangeDetailSubject(subject)}
-                        className="px-3 py-1.5 rounded-full text-xs font-bold border"
-                        style={{
-                          color: selected ? '#fff' : 'rgba(67,54,98,0.9)',
-                          background: selected
-                            ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`
-                            : 'rgba(255,255,255,0.92)',
-                          borderColor: selected ? 'rgba(255,255,255,0.35)' : 'rgba(160,150,210,0.24)',
-                          boxShadow: selected ? `0 8px 18px ${cat.glow}28` : 'none',
-                        }}
-                        whileTap={{ scale: 0.97 }}
-                      >
-                        {subject}
-                      </motion.button>
-                    );
-                  })}
+            {useHsLiberalTwoTier ? (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <p className="text-[11px] font-bold mb-2" style={{ color: 'rgba(67,54,98,0.82)' }}>
+                    科目を選択
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(['すべて', ...HS_LIBERAL_SUBJECT_ORDER] as const).map((subject) => {
+                      const selected = hsLiberalSubject === subject;
+                      const count = hsSubjectCounts[subject] ?? 0;
+                      return (
+                        <motion.button
+                          key={subject}
+                          onClick={() => onChangeHsLiberalSubject(subject)}
+                          className="px-3 py-1.5 rounded-full text-xs font-bold border"
+                          style={{
+                            color: selected ? '#fff' : 'rgba(67,54,98,0.9)',
+                            background: selected
+                              ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`
+                              : 'rgba(255,255,255,0.92)',
+                            borderColor: selected ? 'rgba(255,255,255,0.35)' : 'rgba(160,150,210,0.24)',
+                            boxShadow: selected ? `0 8px 18px ${cat.glow}28` : 'none',
+                          }}
+                          whileTap={{ scale: 0.97 }}
+                        >
+                          {subject}（{count}）
+                        </motion.button>
+                      );
+                    })}
+                  </div>
                 </div>
+                {hsLiberalSubject !== 'すべて' && HS_LIBERAL_FIELDS[hsLiberalSubject as HsLiberalSubjectKey] && (
+                  <div>
+                    <p className="text-[11px] font-bold mb-2" style={{ color: 'rgba(67,54,98,0.82)' }}>
+                      分野を選択
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {['すべて', ...HS_LIBERAL_FIELDS[hsLiberalSubject as HsLiberalSubjectKey]].map((field) => {
+                        const selected = hsLiberalField === field;
+                        const count = hsFieldCounts[field] ?? 0;
+                        return (
+                          <motion.button
+                            key={`${hsLiberalSubject}-${field}`}
+                            onClick={() => onChangeHsLiberalField(field)}
+                            className="px-3 py-1.5 rounded-full text-xs font-bold border"
+                            style={{
+                              color: selected ? '#fff' : 'rgba(67,54,98,0.9)',
+                              background: selected
+                                ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`
+                                : 'rgba(255,255,255,0.92)',
+                              borderColor: selected ? 'rgba(255,255,255,0.35)' : 'rgba(160,150,210,0.24)',
+                              boxShadow: selected ? `0 8px 18px ${cat.glow}28` : 'none',
+                            }}
+                            whileTap={{ scale: 0.97 }}
+                          >
+                            {field}（{count}）
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
+            ) : (
+              detailedSubjects.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[11px] font-bold mb-2" style={{ color: 'rgba(67,54,98,0.82)' }}>
+                    科目を選択
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {['すべて', ...detailedSubjects].map((subject) => {
+                      const selected = selectedDetailSubject === subject;
+                      const count = detailSubjectCounts[subject] ?? 0;
+                      return (
+                        <motion.button
+                          key={subject}
+                          onClick={() => onChangeDetailSubject(subject)}
+                          className="px-3 py-1.5 rounded-full text-xs font-bold border"
+                          style={{
+                            color: selected ? '#fff' : 'rgba(67,54,98,0.9)',
+                            background: selected
+                              ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`
+                              : 'rgba(255,255,255,0.92)',
+                            borderColor: selected ? 'rgba(255,255,255,0.35)' : 'rgba(160,150,210,0.24)',
+                            boxShadow: selected ? `0 8px 18px ${cat.glow}28` : 'none',
+                          }}
+                          whileTap={{ scale: 0.97 }}
+                        >
+                          {subject}（{count}）
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )
             )}
           </div>
 
@@ -1208,6 +1409,10 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   const [selectedCat, setSelectedCat] = useState<LectureCategory | null>(null);
   const [selectedTabLabel, setSelectedTabLabel] = useState<string>('');
   const [selectedDetailSubject, setSelectedDetailSubject] = useState<string>('すべて');
+  /** 文系・高校受験：科目（英語 / 国語 / 社会） */
+  const [hsLiberalSubject, setHsLiberalSubject] = useState<string>('すべて');
+  /** 文系・高校受験：分野（英単語 等） */
+  const [hsLiberalField, setHsLiberalField] = useState<string>('すべて');
   const [quizQuestions, setQuizQuestions] = useState<ShuffledQuestion[]>([]);
   const [quizPhase, setQuizPhase] = useState<'idle' | 'playing' | 'result'>('idle');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -1245,15 +1450,63 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     return questionsByCategoryAndTab[selectedCat.id]?.[selectedTabLabel] ?? [];
   }, [questionsByCategoryAndTab, selectedCat, selectedTabLabel]);
 
+  const useHsLiberalTwoTier =
+    !!selectedCat && selectedCat.id === 'liberal' && selectedTabLabel === '高校受験';
+
   const detailedSubjects = useMemo(() => {
     if (!selectedCat) return [];
+    if (useHsLiberalTwoTier) return [];
     return getDetailedSubjects(selectedCat.id, selectedTabLabel);
-  }, [selectedCat, selectedTabLabel]);
+  }, [selectedCat, selectedTabLabel, useHsLiberalTwoTier]);
 
-  const selectedLectureQuestions = useMemo(
-    () => selectedTabQuestions.filter((q) => matchDetailedSubject(q, selectedDetailSubject)),
-    [selectedTabQuestions, selectedDetailSubject]
-  );
+  const detailSubjectCounts = useMemo(() => {
+    const next: Record<string, number> = {};
+    next['すべて'] = selectedTabQuestions.length;
+    for (const subject of detailedSubjects) {
+      next[subject] = selectedTabQuestions.filter((q) => matchDetailedSubject(q, subject)).length;
+    }
+    return next;
+  }, [detailedSubjects, selectedTabQuestions]);
+
+  const hsSubjectCounts = useMemo(() => {
+    if (!useHsLiberalTwoTier) return {};
+    const next: Record<string, number> = { すべて: selectedTabQuestions.length };
+    for (const s of HS_LIBERAL_SUBJECT_ORDER) {
+      next[s] = selectedTabQuestions.filter((q) => inferHsLiberalSubject(q) === s).length;
+    }
+    return next;
+  }, [useHsLiberalTwoTier, selectedTabQuestions]);
+
+  const hsFieldCounts = useMemo(() => {
+    if (!useHsLiberalTwoTier) return {};
+    if (hsLiberalSubject === 'すべて') {
+      return { すべて: selectedTabQuestions.length };
+    }
+    const subj = hsLiberalSubject as HsLiberalSubjectKey;
+    const fields = HS_LIBERAL_FIELDS[subj];
+    if (!fields) return { すべて: 0 };
+    const inSubject = selectedTabQuestions.filter((q) => inferHsLiberalSubject(q) === subj);
+    const next: Record<string, number> = { すべて: inSubject.length };
+    for (const f of fields) {
+      next[f] = inSubject.filter((q) => inferHsLiberalField(q, subj) === f).length;
+    }
+    return next;
+  }, [useHsLiberalTwoTier, selectedTabQuestions, hsLiberalSubject]);
+
+  const selectedLectureQuestions = useMemo(() => {
+    if (useHsLiberalTwoTier) {
+      return selectedTabQuestions.filter((q) =>
+        matchHsLiberalSelection(q, hsLiberalSubject, hsLiberalField)
+      );
+    }
+    return selectedTabQuestions.filter((q) => matchDetailedSubject(q, selectedDetailSubject));
+  }, [
+    useHsLiberalTwoTier,
+    selectedTabQuestions,
+    hsLiberalSubject,
+    hsLiberalField,
+    selectedDetailSubject,
+  ]);
 
   const categoryAllQuestionsById = useMemo(() => {
     const map: Record<string, AcademyUserQuestion[]> = {};
@@ -1443,6 +1696,8 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     setSelectedCat(null);
     setSelectedTabLabel('');
     setSelectedDetailSubject('すべて');
+    setHsLiberalSubject('すべて');
+    setHsLiberalField('すべて');
   };
 
   // ============================================================
@@ -1494,12 +1749,27 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
           setSelectedCat(null);
           setSelectedTabLabel('');
           setSelectedDetailSubject('すべて');
+          setHsLiberalSubject('すべて');
+          setHsLiberalField('すべて');
         }}
         detailedSubjects={detailedSubjects}
+        detailSubjectCounts={detailSubjectCounts}
         selectedDetailSubject={selectedDetailSubject}
+        useHsLiberalTwoTier={useHsLiberalTwoTier}
+        hsLiberalSubject={hsLiberalSubject}
+        hsLiberalField={hsLiberalField}
+        hsSubjectCounts={hsSubjectCounts}
+        hsFieldCounts={hsFieldCounts}
+        onChangeHsLiberalSubject={(v) => {
+          setHsLiberalSubject(v);
+          setHsLiberalField('すべて');
+        }}
+        onChangeHsLiberalField={setHsLiberalField}
         onChangeTab={(label) => {
           setSelectedTabLabel(label);
           setSelectedDetailSubject('すべて');
+          setHsLiberalSubject('すべて');
+          setHsLiberalField('すべて');
         }}
         onChangeDetailSubject={setSelectedDetailSubject}
         onChallenge={() => startQuiz(selectedLectureQuestions)}
@@ -1537,6 +1807,8 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
                 setSelectedCat(cat);
                 setSelectedTabLabel(cat.tabs[0]?.label ?? '');
                 setSelectedDetailSubject('すべて');
+                setHsLiberalSubject('すべて');
+                setHsLiberalField('すべて');
               }}
               index={i}
             />
