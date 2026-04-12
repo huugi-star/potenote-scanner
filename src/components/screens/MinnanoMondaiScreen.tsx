@@ -101,8 +101,8 @@ const isLiberal = (q: AcademyUserQuestion): boolean => {
   const sub = normalize(q.subCategory);
   const subject = normalize(q.subjectText);
   if (big === '文系学問') return true;
-  return eqAny(sub, ['英語', '国語', '社会', '日本史', '世界史', '地理', '政治経済', '倫理', '現代文', '古文', '漢文', '哲学', '心理学']) ||
-    includesAny(subject, ['英語', '国語', '社会', '日本史', '世界史', '地理', '政治経済', '倫理', '現代文', '古文', '漢文', '哲学', '心理学']);
+  return eqAny(sub, ['英語', '国語', '社会', '日本史', '世界史', '地理', '政治経済', '倫理', '公民', '現代文', '古文', '漢文', '哲学', '心理学']) ||
+    includesAny(subject, ['英語', '国語', '社会', '日本史', '世界史', '地理', '政治経済', '倫理', '公民', '現代文', '古文', '漢文', '哲学', '心理学']);
 };
 
 const isScience = (q: AcademyUserQuestion): boolean => {
