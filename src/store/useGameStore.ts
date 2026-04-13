@@ -735,7 +735,8 @@ const initialState: GameState = {
   tickets: isLocalDevelopment() ? 999 : 0,
   stamina: STAMINA.MAX,
   
-  isVIP: isLocalDevelopment() ? true : false,
+  // VIP機能は廃止（常にfalseとして扱う）
+  isVIP: false,
   vipExpiresAt: undefined,
   
   dailyScanCount: 0,
@@ -854,10 +855,9 @@ export const useGameStore = create<GameStore>()(
               coins: cloudData.userState?.coins ?? state.coins,
               tickets: cloudData.userState?.tickets ?? state.tickets,
               stamina: cloudData.userState?.stamina ?? state.stamina,
-              isVIP: cloudData.userState?.isVIP ?? state.isVIP,
-              vipExpiresAt: cloudData.userState?.vipExpiresAt
-                ? new Date(cloudData.userState.vipExpiresAt)
-                : state.vipExpiresAt,
+              // VIP機能は廃止（クラウド値も取り込まない）
+              isVIP: false,
+              vipExpiresAt: undefined,
               dailyScanCount: cloudData.userState?.dailyScanCount ?? state.dailyScanCount,
               lastScanDate: cloudData.userState?.lastScanDate ?? state.lastScanDate,
               bonusScanBalance: cloudData.userState?.bonusScanBalance ?? state.bonusScanBalance,
@@ -2595,33 +2595,17 @@ export const useGameStore = create<GameStore>()(
       
       // ===== VIP =====
       
-      activateVIP: (expiresAt) => {
-        set({
-          isVIP: true,
-          vipExpiresAt: expiresAt,
-        });
+      activateVIP: (_expiresAt) => {
+        // VIP機能は廃止（互換のため残すが何もしない）
+        set({ isVIP: false, vipExpiresAt: undefined });
       },
       
       deactivateVIP: () => {
-        set({
-          isVIP: false,
-          vipExpiresAt: undefined,
-        });
+        set({ isVIP: false, vipExpiresAt: undefined });
       },
       
       checkVIPStatus: () => {
-        const state = get();
-        
-        if (!state.isVIP) {
-          return false;
-        }
-        
-        if (state.vipExpiresAt && new Date(state.vipExpiresAt) < new Date()) {
-          get().deactivateVIP();
-          return false;
-        }
-        
-        return true;
+        return false;
       },
       
       // ===== Map & Journey =====
@@ -2951,6 +2935,9 @@ export const useGameStore = create<GameStore>()(
         return {
           ...currentState,
           ...persisted,
+          // VIP機能は廃止（永続化データがあっても無効化）
+          isVIP: false,
+          vipExpiresAt: undefined,
           academyUserQuestions: mergeSeedAndPostedAcademyQuestions([], []),
         };
       },
@@ -3055,8 +3042,6 @@ export const useGameStore = create<GameStore>()(
         displayName: state.displayName,
         tickets: state.tickets,
         stamina: state.stamina,
-        isVIP: state.isVIP,
-        vipExpiresAt: state.vipExpiresAt,
         dailyScanCount: state.dailyScanCount,
         lastScanDate: state.lastScanDate,
         bonusScanBalance: state.bonusScanBalance,
@@ -3108,10 +3093,9 @@ export const useGameStore = create<GameStore>()(
 
 // ===== Selectors =====
 
-export const selectIsVIP = (state: GameState) => state.isVIP;
+export const selectIsVIP = (_state: GameState) => false;
 
 export const selectCanScan = (state: GameState) => {
-  if (state.isVIP) return true;
   const today = getTodayString();
   const dailyScanCount = state.lastScanDate !== today ? 0 : state.dailyScanCount;
   const freeRemaining = Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - dailyScanCount);
@@ -3121,7 +3105,6 @@ export const selectCanScan = (state: GameState) => {
 export const selectRemainingScanCount = (state: GameState) => {
   // ローカル環境では制限を外す
   if (isLocalDevelopment()) return Infinity;
-  if (state.isVIP) return Infinity;
   const today = getTodayString();
   const dailyScanCount = state.lastScanDate !== today ? 0 : state.dailyScanCount;
   const freeRemaining = Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - dailyScanCount);

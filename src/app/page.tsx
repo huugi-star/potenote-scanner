@@ -199,10 +199,7 @@ const HomeScreen = ({
   const coins = useGameStore(state => state.coins);
   const isVIP = useGameStore(state => state.isVIP);
   const equipment = useGameStore(state => state.equipment);
-  // const [showShop, setShowShop] = useState(false); // 一時的に非表示
-  // const activateVIP = useGameStore(state => state.activateVIP); // 一時的に非表示
 
-  // 装備アイテムの詳細を取得（useMemoで安定化）
   const equippedDetails = useMemo(() => ({
     head: equipment.head ? getItemById(equipment.head) : undefined,
     body: equipment.body ? getItemById(equipment.body) : undefined,
@@ -210,86 +207,85 @@ const HomeScreen = ({
     accessory: equipment.accessory ? getItemById(equipment.accessory) : undefined,
   }), [equipment.head, equipment.body, equipment.face, equipment.accessory]);
 
-  // VIP購入（一時的に非表示）
-  // const handleVIPPurchase = () => {
-  //   const expiresAt = new Date();
-  //   expiresAt.setMonth(expiresAt.getMonth() + 1);
-  //   activateVIP(expiresAt);
-  //   setShowShop(false);
-  // };
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4 pb-24">
-      {/* ヘッダー */}
-      <div className="max-w-md mx-auto pt-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold gradient-text">
-              Potenote Scanner
-            </h1>
-            {/* VIPバッジ（購入ボタンは一時的に非表示） */}
+    // ★ 背景画像レイヤー追加
+    <div className="relative min-h-screen pb-24">
+
+      {/* ── 背景画像（public/images/backgrounds/home.png に置くと表示） ── */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          backgroundImage: 'url(/images/backgrounds/home.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center top',
+          backgroundRepeat: 'no-repeat',
+        }}
+      />
+      {/* 背景に重ねるグラデーションオーバーレイ（画像がない場合は従来の背景色として機能） */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background: 'linear-gradient(to bottom, rgba(17,24,39,0.45) 0%, rgba(31,41,55,0.70) 50%, rgba(17,24,39,0.90) 100%)',
+        }}
+      />
+      {/* 画像がない場合のフォールバック背景色 */}
+      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900" />
+
+      {/* ── コンテンツ（z-10 で背景の上に） ── */}
+      <div className="relative z-10 p-4 max-w-md mx-auto pt-6">
+
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between mb-6 gap-2">
+
+          {/* ★ タイトル部分を修正 */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="min-w-0">
+              {/* whitespace-nowrap を外して折り返し可能に。フォントサイズも可変に */}
+              <h1 className="text-lg font-bold gradient-text leading-tight">
+                すうひもちと
+              </h1>
+              <p className="text-[10px] font-semibold text-gray-300/80 leading-tight">
+                失われたことば図書館
+              </p>
+            </div>
             {isVIP && (
-              <div className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+              <div className="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
                 <Crown className="w-3 h-3 text-yellow-400" />
                 VIP
               </div>
             )}
           </div>
-          {/* 右上: シェアボタンとGoogleログインボタン */}
-          <div className="flex items-center gap-2">
-          <button
-  onClick={() => {
-    vibrateLight();
-    onOpenMyPage();
-  }}
-  className="px-3 py-2 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors text-sm font-semibold whitespace-nowrap"
-  title="マイページ"
->
+
+          {/* 右上ボタン群 */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => { vibrateLight(); onOpenMyPage(); }}
+              className="px-3 py-2 rounded-full bg-gray-700/80 hover:bg-gray-600 text-gray-200 transition-colors text-sm font-semibold whitespace-nowrap backdrop-blur-sm"
+            >
               マイページ
             </button>
             <button
-              onClick={() => {
-                vibrateLight();
-                onShowShare();
-              }}
-              className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
-              title="シェア"
+              onClick={() => { vibrateLight(); onShowShare(); }}
+              className="p-2 rounded-full bg-gray-700/80 hover:bg-gray-600 text-gray-300 transition-colors backdrop-blur-sm"
             >
               <Share2 className="w-5 h-5" />
             </button>
             <AuthButton />
           </div>
-          {/* <button
-            onClick={() => {
-              vibrateLight();
-              setShowShop(true);
-            }}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1 ${
-              isVIP 
-                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            <Crown className={`w-4 h-4 ${isVIP ? 'text-yellow-400' : ''}`} />
-            {isVIP ? 'VIP' : 'VIPになる'}
-          </button> */}
         </div>
 
         {/* ステータスバー */}
         <div className="mb-8">
-          <div className="flex items-center gap-2 px-4 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
+          <div className="flex items-center gap-2 px-4 py-2 bg-gray-800/60 rounded-xl border border-gray-700/80 backdrop-blur-sm">
             <Coins className="w-5 h-5 text-yellow-400" />
             <span className="text-white font-bold">{coins}</span>
           </div>
         </div>
 
-        {/* ポテトアバター（タップで着せ替え） */}
-        <motion.button 
+        {/* ポテトアバター */}
+        <motion.button
           className="flex justify-center mb-4 mx-auto relative"
-          onClick={() => {
-            vibrateLight();
-            onNavigate('dressup');
-          }}
+          onClick={() => { vibrateLight(); onNavigate('dressup'); }}
           whileTap={{ scale: 0.97 }}
         >
           <PotatoAvatar
@@ -304,13 +300,10 @@ const HomeScreen = ({
           </div>
         </motion.button>
 
-        {/* 主導線（中央の大ボタン） */}
+        {/* メインボタン群 */}
         <div className="space-y-3">
           <motion.button
-            onClick={() => {
-              vibrateLight();
-              onNavigate('suhimochi_room');
-            }}
+            onClick={() => { vibrateLight(); onNavigate('suhimochi_room'); }}
             className="w-full py-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -320,23 +313,17 @@ const HomeScreen = ({
           </motion.button>
 
           <motion.button
-            onClick={() => {
-              vibrateLight();
-              onNavigate('academy');
-            }}
+            onClick={() => { vibrateLight(); onNavigate('academy'); }}
             className="w-full py-5 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-indigo-500/25"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
             <GraduationCap className="w-7 h-7" />
-            ぽてっとクイズ
+            ことば図書館
           </motion.button>
 
           <motion.button
-            onClick={() => {
-              vibrateLight();
-              onNavigate('adventure_menu');
-            }}
+            onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
             className="w-full py-5 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-amber-500/25"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -347,13 +334,9 @@ const HomeScreen = ({
         </div>
 
         {/* サブアクション */}
-        {/* ガチャ & 研究員図鑑（並列） */}
         <div className="mt-4 grid grid-cols-2 gap-3">
           <motion.button
-            onClick={() => {
-              vibrateLight();
-              onNavigate('gacha');
-            }}
+            onClick={() => { vibrateLight(); onNavigate('gacha'); }}
             className="py-4 rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 text-white font-bold flex items-center justify-center gap-2"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -363,10 +346,7 @@ const HomeScreen = ({
           </motion.button>
 
           <motion.button
-            onClick={() => {
-              vibrateLight();
-              onNavigate('researcher_dex');
-            }}
+            onClick={() => { vibrateLight(); onNavigate('researcher_dex'); }}
             className="py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -376,17 +356,8 @@ const HomeScreen = ({
           </motion.button>
         </div>
 
-        {/* 開発者支援セクション */}
         <DeveloperSupport />
       </div>
-
-      {/* ショップモーダル（一時的に非表示） */}
-      {/* <ShopModal
-        isOpen={showShop}
-        onClose={() => setShowShop(false)}
-        onPurchase={handleVIPPurchase}
-        isVIP={isVIP}
-      /> */}
     </div>
   );
 };

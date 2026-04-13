@@ -423,7 +423,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_02',
@@ -435,7 +435,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_03',
@@ -447,7 +447,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_04',
@@ -459,7 +459,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_05',
@@ -471,7 +471,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_06',
@@ -483,7 +483,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_07',
@@ -495,7 +495,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_08',
@@ -507,7 +507,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_09',
@@ -519,7 +519,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_10',
@@ -531,7 +531,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_11',
@@ -543,7 +543,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_12',
@@ -555,7 +555,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_13',
@@ -567,7 +567,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_14',
@@ -579,7 +579,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_15',
@@ -591,7 +591,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_16',
@@ -603,7 +603,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_17',
@@ -615,7 +615,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_18',
@@ -627,7 +627,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_19',
@@ -639,7 +639,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_20',
@@ -651,7 +651,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_21',
@@ -663,7 +663,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_22',
@@ -675,7 +675,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_23',
@@ -687,7 +687,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_24',
@@ -699,7 +699,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_25',
@@ -711,7 +711,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_26',
@@ -723,7 +723,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_27',
@@ -735,7 +735,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_28',
@@ -747,7 +747,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_29',
@@ -759,7 +759,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
   {
     id: 'academy_seed_koukou_eigo_30',
@@ -771,7 +771,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     keywords: ['高校受験', '英語', '英文法'],
     bigCategory: '高校受験',
     subCategory: '英語',
-    subjectText: '英文法',
+    subjectText: '中学英文法',
   },
 
   // --- 高校受験・英語・英単語（公式seed） ---

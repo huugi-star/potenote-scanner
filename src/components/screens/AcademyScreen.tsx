@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Users,
   Sparkles,
   Flame,
   BookOpen,
+  Library,
   PenSquare,
   FolderOpen,
   Lock,
@@ -313,6 +315,7 @@ const CardHeader = ({
 // ============================================================
 
 export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
+  const router = useRouter();
   const { addToast } = useToast();
   const consecutiveLoginDays = useGameStore((s) => s.consecutiveLoginDays);
   const quizHistory          = useGameStore((s) => s.quizHistory);
@@ -1423,6 +1426,22 @@ if (subview === 'create_detail') {
             <BookOpen className="w-6 h-6" />
             みんなの問題
           </motion.button>
+
+          <motion.button
+  type="button"
+  onClick={() => router.push('/library')}
+  className="w-full py-4 rounded-xl text-white font-bold text-lg flex items-center justify-center gap-3 shadow-lg"
+  style={{
+    background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 50%, #4f46e5 100%)',
+    boxShadow: '0 4px 20px rgba(109,40,217,0.35)',
+  }}
+  whileHover={{ scale: 1.02 }}
+  whileTap={{ scale: 0.98 }}
+>
+  <Library className="w-6 h-6" />
+  ことば図書館
+</motion.button>
+
 
           <div className="grid grid-cols-2 gap-3">
             <motion.button

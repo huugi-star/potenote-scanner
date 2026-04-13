@@ -18,10 +18,10 @@ export const DeveloperSupport = () => {
       <div className="text-4xl mb-3">🔬✨</div>
       
       {/* タイトル & メッセージ */}
-      <h3 className="font-bold text-gray-800 text-lg mb-3">Potenote Scannerを応援する</h3>
+      <h3 className="font-bold text-gray-800 text-lg mb-3">すうひもちコレクションを応援する</h3>
       <p className="text-sm text-gray-600 mb-6 leading-relaxed text-left">
       <strong className="block text-center">【あなたに寄り添う。言の葉の世界】</strong><br/>
-      Potenote Scanner は、ことばの世界を少しずつ広げていく学習RPGです。<br/>
+      すうひもちコレクション は、失われたことば図書館を少しずつ復興していく学習RPGです。<br/>
 現在 AI利用料や開発費を負担しながら、個人で開発・運営しています。<br/>
   「面白い」「続いてほしい」と感じていただけたら、<br/>
   note からご支援いただけると開発継続の大きな力になります。<br/>

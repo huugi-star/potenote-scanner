@@ -42,7 +42,7 @@ export const ShareModal = ({ isOpen, onClose }: ShareModalProps) => {
   const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
   
   // シェアテキスト
-  const shareText = 'Potenote Scannerで英語を学ぼう！友達と一緒に勉強して、ガチャを回そう！';
+  const shareText = 'すうひもちコレクションで学ぼう！失われたことば図書館を復興して、みんなで成長を記録しよう！';
   
   // URLをコピー
   const handleCopyUrl = async () => {
@@ -106,7 +106,7 @@ export const ShareModal = ({ isOpen, onClose }: ShareModalProps) => {
               <div className="w-10 h-10 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 flex items-center justify-center">
                 <Share2 className="w-5 h-5 text-white" />
               </div>
-              <h2 className="text-xl font-bold text-white">Potenote Scannerをシェア</h2>
+              <h2 className="text-xl font-bold text-white">すうひもちコレクションをシェア</h2>
             </div>
             <button
               onClick={() => {
