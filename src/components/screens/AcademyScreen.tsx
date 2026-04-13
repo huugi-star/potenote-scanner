@@ -1375,7 +1375,7 @@ if (subview === 'create_detail') {
     <div className="relative min-h-screen p-4 pb-24" style={academyScreenRootBg}>
       <AcademyScreenBackdrop />
       <div className="relative z-10 max-w-md mx-auto pt-6">
-        <CardHeader title="🎓 ことばの図書館" onBack={onBack} tone="onLight" />
+        <CardHeader title="🎓 ことば図書館" onBack={onBack} tone="onLight" />
 
         {/* マジックアカデミーヘッダー */}
         <div className="rounded-2xl p-5 mb-5 border border-indigo-500/30 bg-gradient-to-br from-indigo-900/80 via-purple-900/70 to-slate-900/80">
@@ -1439,7 +1439,7 @@ if (subview === 'create_detail') {
   whileTap={{ scale: 0.98 }}
 >
   <Library className="w-6 h-6" />
-  ことば図書館
+  みんなの図書館
 </motion.button>
 
 

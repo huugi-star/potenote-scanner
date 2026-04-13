@@ -24,57 +24,70 @@ export type StoryLine =
 export const storyIntroPages: StoryIntroPage[] = [
   {
     label: 'Prologue',
-    title: 'ことばが失われた世界',
+    title: 'すうひもち図書館',
     titleImageKey: 'library2',
     body: [
-      {
-        type: 'narration',
-        text: 'かつてこの世界には、\n無数のことばが積み重なっていました。',
-      },
-      { type: 'spacer' },
-      {
-        type: 'narration',
-        text: '国も時代、世界をこえて、\nあらゆることばが、この本棚に眠っていました。',
-      },
-      {
-        type: 'emphasis',
-        prefix: 'しかしある日、',
-        word: '"崩れたことば"',
-        suffix: 'が現れます。',
-      },
-      { type: 'spacer' },
-      {
-        type: 'narration',
-        text: 'それは触れたことばを侵し、\n意味を失わせ、形を崩していきました。',
-      },
-      {
-        type: 'narration',
-        text: 'やがて世界から、\nほとんどのことばが消えてしまいます。',
-      },
+     
       { type: 'spacer' },
       {
         type: 'dialogue',
-        speaker: 'すうひもちの王',
+        speaker: 'すうひもち',
+        speakerImageKey: 'suuhiou',
+        lines: ['「……きこえる？」', '「やっと……つながった」'],
+      },
+      { type: 'spacer' },
+      {
+        type: 'narration',
+        text: '■ 状況',
+      },
+      {
+        type: 'dialogue',
+        speaker: 'すうひもち',
+        speakerImageKey: 'suuhiou',
+        lines: ['「ここは、“すうひもち図書館”」', '「ことばが集められていた場所」'],
+      },
+      { type: 'spacer' },
+      {
+        type: 'narration',
+        text: '■ ことばが消えた世界',
+      },
+      {
+        type: 'dialogue',
+        speaker: 'すうひもち',
+        speakerImageKey: 'suuhiou',
+        lines: ['「でも今——」', '「ことばが、消えてしまってる」'],
+      },
+      { type: 'spacer' },
+      {
+        type: 'narration',
+        text: '■ 使命',
+      },
+      {
+        type: 'dialogue',
+        speaker: 'すうひもち',
+        speakerImageKey: 'suuhiou',
+        lines: ['「……わたしは、命令を受けてきたの」', '「“ことばを集められる人”を探してって」'],
+      },
+      { type: 'spacer' },
+      {
+        type: 'narration',
+        text: '■ 選定',
+      },
+      {
+        type: 'dialogue',
+        speaker: 'すうひもち',
         speakerImageKey: 'suuhiou',
         lines: [
-          '「マスターを見つけよ。\nそして、ことばを集めるのだ」',
-          '「集めたことばの数だけ、\nマスターと共に高みへと至る」',
-          '「すべてのことばを取り戻したとき、\n次の王となる者を選ぼう」',
+          '「ずっと探してた」',
+          '「でも——」',
+          '「反応があったのは、あなただけ」',
+          '「ひとりじゃ、全部は無理だった」',
+          '「だから——」',
+          '「一緒に、ことばを取り戻してほしい」',
+          '「まずは、みんなの問題から\nことばを解いてきて」',
+          '「取り戻したことばは、\nこの図書館に記録されていくよ」',
+          '「……いこう」',
         ],
-      },
-      { type: 'spacer' },
-      {
-        type: 'narration',
-        text: 'その言葉に応え、すうひもちは動き出します。',
-      },
-      {
-        type: 'climax',
-        text: 'マスターである、あなたとともに。',
-      },
-      { type: 'spacer' },
-      {
-        type: 'narration',
-        text: '失われた世界に、\n再びことの葉を満たすために。',
       },
     ],
   },
