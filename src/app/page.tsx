@@ -225,7 +225,7 @@ const HomeScreen = ({
       <div
         className="pointer-events-none absolute inset-0 z-0"
         style={{
-          background: 'linear-gradient(to bottom, rgba(17,24,39,0.45) 0%, rgba(31,41,55,0.70) 50%, rgba(17,24,39,0.90) 100%)',
+          background: 'linear-gradient(to bottom, rgba(17,24,39,0.15) 0%, rgba(31,41,55,0.70) 50%, rgba(17,24,39,0.90) 100%)',
         }}
       />
       {/* 画像がない場合のフォールバック背景色 */}

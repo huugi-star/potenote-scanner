@@ -9,6 +9,28 @@ import type { AcademyUserQuestion } from '@/types';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
 import { getItemById } from '@/data/items';
 
+// ============================================================
+// 背景画像の設定
+// ============================================================
+
+/**
+ * 背景画像のパス。
+ * public/images/library-bg.png に画像を置けばそのまま表示される。
+ * null にするとグラデーション背景にフォールバックする。
+ */
+const LIBRARY_BG_IMAGE = '/images/backgrounds/library.png';
+
+/**
+ * 背景画像の上に重ねる白オーバーレイの不透明度。
+ * 0.0 = 画像そのまま  /  1.0 = 真っ白
+ * 0.65〜0.75 がコンテンツを読みやすく保ちつつ画像が透けるバランス。
+ */
+const OVERLAY_OPACITY = 0.70;
+
+// ============================================================
+// 定数・型
+// ============================================================
+
 const BOOK_SIZE = 30;
 const BOOKS_PER_SHELF = 8;
 const PAGE_SIZE = 10;
@@ -22,6 +44,10 @@ type ShelfDef = {
 type BookEntry = { id: string; title: string; pages: AcademyUserQuestion[]; recoveredCount: number; spineColor: string; spineWidth: number; };
 type SubjectEntry = { name: string; books: BookEntry[]; recoveredCount: number; totalCount: number; };
 type ShelfEntry = ShelfDef & { subjects: SubjectEntry[]; recoveredCount: number; totalCount: number; };
+
+// ============================================================
+// カテゴリ判定
+// ============================================================
 
 const normalize = (v: unknown): string => String(v ?? '').trim();
 const includesAny = (v: string, words: string[]) => words.some((w) => v.includes(w));
@@ -37,7 +63,6 @@ const isLiberalCategory = (q: AcademyUserQuestion): boolean => {
     includesAny(subject, ['英語', '国語', '社会', '日本史', '世界史', '地理', '政治経済', '倫理', '公民', '現代文', '古文', '漢文', '哲学', '心理学'])
   );
 };
-
 const isScienceCategory = (q: AcademyUserQuestion): boolean => {
   const big = normalize(q.bigCategory);
   const sub = normalize(q.subCategory);
@@ -48,48 +73,54 @@ const isScienceCategory = (q: AcademyUserQuestion): boolean => {
     includesAny(subject, ['算数', '数学', '数学ⅠA', '数学ⅡB', '数学Ⅲ', '理科', '物理', '化学', '生物', '地学', '情報・統計'])
   );
 };
-
 const isLanguageCategory = (q: AcademyUserQuestion): boolean => {
   const big = normalize(q.bigCategory);
   const sub = normalize(q.subCategory);
   if (big === '語学' || big === '言語' || big === '英語' || big === '韓国語・中国語' || big === 'その他言語') return true;
   return eqAny(sub, ['英語', '英単語', '英文法', '英熟語', '英会話', '韓国語', '中国語', 'フランス語', 'スペイン語', 'ドイツ語']);
 };
-
 const isAnimeMangaCategory = (q: AcademyUserQuestion): boolean => {
   const big = normalize(q.bigCategory);
   const sub = normalize(q.subCategory);
   return big === 'アニメ・漫画' || (big === 'エンタメ' && eqAny(sub, ['漫画・アニメ', 'ゲーム']));
 };
-
 const isEntertainmentCategory = (q: AcademyUserQuestion): boolean => {
   const big = normalize(q.bigCategory);
   const sub = normalize(q.subCategory);
   return big === '芸能' || (big === 'エンタメ' && eqAny(sub, ['映画', '音楽', 'ドラマ']));
 };
-
 const isHobbyCategory = (q: AcademyUserQuestion): boolean => normalize(q.bigCategory) === '趣味・教養';
-
 const isCreativeCategory = (q: AcademyUserQuestion): boolean => {
   const big = normalize(q.bigCategory);
   const sub = normalize(q.subCategory);
   return big === '創作' || big === 'オリジナル' || eqAny(sub, ['ユーザー創作問題', '自由テーマ', 'コラボ', '期間限定']);
 };
 
+// ============================================================
+// 本棚マスタ
+// ============================================================
+
 const shelfDefinitions: ShelfDef[] = [
-  { id: 'liberal', title: '文系学問の本棚', icon: '📚', accent: '#db2777', bgFrom: '#fce7f3', bgTo: '#fdf2f8', tagBg: '#fce7f3', tagText: '#9d174d', spineColors: ['#f472b6','#ec4899','#db2777','#be185d','#fbcfe8','#f9a8d4','#fda4af','#fb7185'], matches: (q) => isLiberalCategory(q) },
-  { id: 'science', title: '理系学問の本棚', icon: '🔬', accent: '#2563eb', bgFrom: '#dbeafe', bgTo: '#eff6ff', tagBg: '#dbeafe', tagText: '#1e40af', spineColors: ['#60a5fa','#3b82f6','#2563eb','#1d4ed8','#93c5fd','#bfdbfe','#7dd3fc','#38bdf8'], matches: (q) => isScienceCategory(q) },
-  { id: 'cert', title: '資格の本棚', icon: '🏅', accent: '#d97706', bgFrom: '#fef3c7', bgTo: '#fffbeb', tagBg: '#fef3c7', tagText: '#92400e', spineColors: ['#fbbf24','#f59e0b','#d97706','#b45309','#fde68a','#fef08a','#fcd34d','#fb923c'], matches: (q) => normalize(q.bigCategory) === '資格' },
-  { id: 'language', title: '語学の本棚', icon: '🌍', accent: '#0891b2', bgFrom: '#cffafe', bgTo: '#ecfeff', tagBg: '#cffafe', tagText: '#164e63', spineColors: ['#22d3ee','#06b6d4','#0891b2','#0e7490','#a5f3fc','#67e8f9','#38bdf8','#7dd3fc'], matches: (q) => isLanguageCategory(q) },
-  { id: 'anime', title: 'アニメ・漫画の本棚', icon: '🎬', accent: '#9333ea', bgFrom: '#f3e8ff', bgTo: '#faf5ff', tagBg: '#f3e8ff', tagText: '#6b21a8', spineColors: ['#c084fc','#a855f7','#9333ea','#7e22ce','#ddd6fe','#e9d5ff','#f0abfc','#d946ef'], matches: (q) => isAnimeMangaCategory(q) },
-  { id: 'entertainment', title: '芸能の本棚', icon: '🎤', accent: '#e11d48', bgFrom: '#ffe4e6', bgTo: '#fff1f2', tagBg: '#ffe4e6', tagText: '#9f1239', spineColors: ['#fb7185','#f43f5e','#e11d48','#be123c','#fecdd3','#fda4af','#fda4af','#fb7185'], matches: (q) => isEntertainmentCategory(q) },
-  { id: 'hobby', title: '教養の本棚', icon: '🧩', accent: '#059669', bgFrom: '#dcfce7', bgTo: '#f0fdf4', tagBg: '#dcfce7', tagText: '#065f46', spineColors: ['#34d399','#10b981','#059669','#047857','#a7f3d0','#6ee7b7','#5eead4','#2dd4bf'], matches: (q) => isHobbyCategory(q) },
-  { id: 'creative', title: '創作の本棚', icon: '✍️', accent: '#f59e0b', bgFrom: '#fef3c7', bgTo: '#fff7ed', tagBg: '#fef3c7', tagText: '#92400e', spineColors: ['#fbbf24','#f59e0b','#d97706','#b45309','#fde68a','#fcd34d','#fdba74','#fb923c'], matches: (q) => isCreativeCategory(q) },
+  { id: 'liberal',       title: '文系学問の本棚',     icon: '📚', accent: '#db2777', bgFrom: '#fce7f3', bgTo: '#fdf2f8', tagBg: '#fce7f3', tagText: '#9d174d', spineColors: ['#f472b6','#ec4899','#db2777','#be185d','#fbcfe8','#f9a8d4','#fda4af','#fb7185'], matches: isLiberalCategory },
+  { id: 'science',       title: '理系学問の本棚',     icon: '🔬', accent: '#2563eb', bgFrom: '#dbeafe', bgTo: '#eff6ff', tagBg: '#dbeafe', tagText: '#1e40af', spineColors: ['#60a5fa','#3b82f6','#2563eb','#1d4ed8','#93c5fd','#bfdbfe','#7dd3fc','#38bdf8'], matches: isScienceCategory },
+  { id: 'cert',          title: '資格の本棚',         icon: '🏅', accent: '#d97706', bgFrom: '#fef3c7', bgTo: '#fffbeb', tagBg: '#fef3c7', tagText: '#92400e', spineColors: ['#fbbf24','#f59e0b','#d97706','#b45309','#fde68a','#fef08a','#fcd34d','#fb923c'], matches: (q) => normalize(q.bigCategory) === '資格' },
+  { id: 'language',      title: '語学の本棚',         icon: '🌍', accent: '#0891b2', bgFrom: '#cffafe', bgTo: '#ecfeff', tagBg: '#cffafe', tagText: '#164e63', spineColors: ['#22d3ee','#06b6d4','#0891b2','#0e7490','#a5f3fc','#67e8f9','#38bdf8','#7dd3fc'], matches: isLanguageCategory },
+  { id: 'anime',         title: 'アニメ・漫画の本棚', icon: '🎬', accent: '#9333ea', bgFrom: '#f3e8ff', bgTo: '#faf5ff', tagBg: '#f3e8ff', tagText: '#6b21a8', spineColors: ['#c084fc','#a855f7','#9333ea','#7e22ce','#ddd6fe','#e9d5ff','#f0abfc','#d946ef'], matches: isAnimeMangaCategory },
+  { id: 'entertainment', title: '芸能の本棚',         icon: '🎤', accent: '#e11d48', bgFrom: '#ffe4e6', bgTo: '#fff1f2', tagBg: '#ffe4e6', tagText: '#9f1239', spineColors: ['#fb7185','#f43f5e','#e11d48','#be123c','#fecdd3','#fda4af','#fda4af','#fb7185'], matches: isEntertainmentCategory },
+  { id: 'hobby',         title: '教養の本棚',         icon: '🧩', accent: '#059669', bgFrom: '#dcfce7', bgTo: '#f0fdf4', tagBg: '#dcfce7', tagText: '#065f46', spineColors: ['#34d399','#10b981','#059669','#047857','#a7f3d0','#6ee7b7','#5eead4','#2dd4bf'], matches: isHobbyCategory },
+  { id: 'creative',      title: '創作の本棚',         icon: '✍️', accent: '#f59e0b', bgFrom: '#fef3c7', bgTo: '#fff7ed', tagBg: '#fef3c7', tagText: '#92400e', spineColors: ['#fbbf24','#f59e0b','#d97706','#b45309','#fde68a','#fcd34d','#fdba74','#fb923c'], matches: isCreativeCategory },
 ];
 
-// ① 半角数字 → 全角数字（縦書き背表紙用）
+// ============================================================
+// ユーティリティ
+// ============================================================
+
 const toVerticalNum = (n: number): string =>
   String(n).split('').map((c) => String.fromCharCode(c.charCodeAt(0) + 0xfee0)).join('');
+
+// ============================================================
+// データ構築
+// ============================================================
 
 const buildShelves = (questions: AcademyUserQuestion[]): ShelfEntry[] => {
   const sorted = [...questions].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -110,14 +141,7 @@ const buildShelves = (questions: AcademyUserQuestion[]): ShelfEntry[] => {
         const bookNum = Math.floor(i / BOOK_SIZE) + 1;
         const spineColor = def.spineColors[globalBookIdx % def.spineColors.length];
         const spineWidth = Math.min(36, Math.max(24, 22 + Math.floor(chunk.length / 8) * 3));
-        books.push({
-          id: `${def.id}-${name}-${bookNum}`,
-          // ① 2冊目以降の番号を全角縦書き用数字に変換
-          title: bookNum === 1 ? name : `${name}${toVerticalNum(bookNum)}`,
-          pages: chunk,
-          recoveredCount: chunk.filter((p) => (p.correctCount ?? 0) > 0).length,
-          spineColor, spineWidth,
-        });
+        books.push({ id: `${def.id}-${name}-${bookNum}`, title: bookNum === 1 ? name : `${name}${toVerticalNum(bookNum)}`, pages: chunk, recoveredCount: chunk.filter((p) => (p.correctCount ?? 0) > 0).length, spineColor, spineWidth });
         globalBookIdx++;
       }
       return { name, books, recoveredCount: books.reduce((s, b) => s + b.recoveredCount, 0), totalCount: books.reduce((s, b) => s + b.pages.length, 0) };
@@ -126,13 +150,17 @@ const buildShelves = (questions: AcademyUserQuestion[]): ShelfEntry[] => {
   });
 };
 
+// ============================================================
+// 共通コンポーネント
+// ============================================================
+
 const RestoreBar = ({ rate, accent }: { rate: number; accent: string }) => (
   <div style={{ height: 6, borderRadius: 100, background: 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
     <motion.div initial={{ width: 0 }} animate={{ width: `${Math.round(rate * 100)}%` }} transition={{ duration: 1.1, ease: 'easeOut' }} style={{ height: '100%', borderRadius: 100, background: accent, boxShadow: `0 2px 6px ${accent}55` }} />
   </div>
 );
 
-const BookshelfRow = ({ books, onSelectBook, rowIndex }: { books: BookEntry[]; onSelectBook: (book: BookEntry) => void; rowIndex: number; }) => {
+const BookshelfRow = ({ books, onSelectBook, rowIndex }: { books: BookEntry[]; onSelectBook: (book: BookEntry) => void; rowIndex: number }) => {
   const emptySlots = Math.max(0, 4 - books.length);
   return (
     <div style={{ borderRadius: rowIndex === 0 ? '16px 16px 0 0' : '0', overflow: 'hidden', background: 'linear-gradient(to bottom, #faf5eb, #f5f0e0)', border: '2px solid #d4b896', borderBottom: 'none', boxShadow: '0 2px 8px rgba(139,90,43,0.08)' }}>
@@ -144,31 +172,21 @@ const BookshelfRow = ({ books, onSelectBook, rowIndex }: { books: BookEntry[]; o
           const hasAny = book.recoveredCount > 0;
           const spineHeight = hasAny ? Math.max(44, Math.round(44 + rate * 36)) : 44;
           return (
-            <motion.button key={book.id} onClick={() => onSelectBook(book)}
-              style={{ width: book.spineWidth, height: spineHeight, borderRadius: '4px 4px 0 0', flexShrink: 0, background: hasAny ? `linear-gradient(to right, ${book.spineColor}cc, ${book.spineColor}, ${book.spineColor}dd)` : 'linear-gradient(to right, #e5e7eb, #d1d5db)', boxShadow: hasAny ? '2px 0 6px rgba(0,0,0,0.15), inset 2px 0 4px rgba(255,255,255,0.3)' : '1px 0 4px rgba(0,0,0,0.08)', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
-              initial={{ height: 20, opacity: 0.4 }} animate={{ height: spineHeight, opacity: 1 }} transition={{ delay: i * 0.06, type: 'spring', stiffness: 160, damping: 20 }}
-              whileHover={{ y: -5 }} whileTap={{ scale: 0.96 }}
-            >
-              {hasAny && (
-                <p style={{ writingMode: 'vertical-rl', fontSize: 8, fontWeight: 800, color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 3px rgba(0,0,0,0.4)', letterSpacing: '0.05em', maxHeight: '80%', overflow: 'hidden' }}>
-                  {book.title}
-                </p>
-              )}
+            <motion.button key={book.id} onClick={() => onSelectBook(book)} style={{ width: book.spineWidth, height: spineHeight, borderRadius: '4px 4px 0 0', flexShrink: 0, background: hasAny ? `linear-gradient(to right, ${book.spineColor}cc, ${book.spineColor}, ${book.spineColor}dd)` : 'linear-gradient(to right, #e5e7eb, #d1d5db)', boxShadow: hasAny ? '2px 0 6px rgba(0,0,0,0.15), inset 2px 0 4px rgba(255,255,255,0.3)' : '1px 0 4px rgba(0,0,0,0.08)', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} initial={{ height: 20, opacity: 0.4 }} animate={{ height: spineHeight, opacity: 1 }} transition={{ delay: i * 0.06, type: 'spring', stiffness: 160, damping: 20 }} whileHover={{ y: -5 }} whileTap={{ scale: 0.96 }}>
+              {hasAny && <p style={{ writingMode: 'vertical-rl', fontSize: 8, fontWeight: 800, color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 3px rgba(0,0,0,0.4)', letterSpacing: '0.05em', maxHeight: '80%', overflow: 'hidden' }}>{book.title}</p>}
               {isComplete && <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} style={{ position: 'absolute', top: 2, right: 1, fontSize: 7 }}>✨</motion.div>}
               <div style={{ position: 'absolute', top: 0, left: 0, width: '35%', height: '100%', background: 'linear-gradient(to right, rgba(255,255,255,0.22), transparent)', pointerEvents: 'none' }} />
             </motion.button>
           );
         })}
-        {Array.from({ length: emptySlots }).map((_, i) => (
-          <div key={`e-${i}`} style={{ width: 26, height: 44, borderRadius: '4px 4px 0 0', background: 'linear-gradient(to right, #f3f4f6, #e9ecef)', border: '1px dashed #d1d5db', opacity: 0.45 }} />
-        ))}
+        {Array.from({ length: emptySlots }).map((_, i) => <div key={`e-${i}`} style={{ width: 26, height: 44, borderRadius: '4px 4px 0 0', background: 'linear-gradient(to right, #f3f4f6, #e9ecef)', border: '1px dashed #d1d5db', opacity: 0.45 }} />)}
       </div>
       <div style={{ height: 14, background: 'linear-gradient(to bottom, #b8946e, #a07850)', boxShadow: '0 3px 8px rgba(100,60,20,0.20)' }} />
     </div>
   );
 };
 
-const BookshelfVisual = ({ shelf, onSelectBook }: { shelf: ShelfEntry; onSelectBook: (book: BookEntry) => void; }) => {
+const BookshelfVisual = ({ shelf, onSelectBook }: { shelf: ShelfEntry; onSelectBook: (book: BookEntry) => void }) => {
   const allBooks = shelf.subjects.flatMap((s) => s.books);
   const rows: BookEntry[][] = [];
   for (let i = 0; i < allBooks.length; i += BOOKS_PER_SHELF) rows.push(allBooks.slice(i, i + BOOKS_PER_SHELF));
@@ -187,7 +205,7 @@ const SuhimochiComment = ({ message, emoji }: { message: string; emoji: string }
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, type: 'spring', stiffness: 180 }} style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginBottom: 16 }}>
       <div style={{ flexShrink: 0 }}><PotatoAvatar equipped={equippedDetails} emotion="happy" size={68} ssrEffect={false} showShadow={false} /></div>
-      <motion.div style={{ background: 'white', borderRadius: '18px 18px 18px 4px', padding: '10px 14px', boxShadow: '0 4px 16px rgba(0,0,0,0.10)', border: '2px solid #f3e8ff', flex: 1 }} animate={{ y: [0, -4, 0] }} transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}>
+      <motion.div style={{ background: 'rgba(255,255,255,0.92)', borderRadius: '18px 18px 18px 4px', padding: '10px 14px', boxShadow: '0 4px 16px rgba(0,0,0,0.10)', border: '2px solid #f3e8ff', flex: 1, backdropFilter: 'blur(8px)' }} animate={{ y: [0, -4, 0] }} transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}>
         <p style={{ fontSize: 12, fontWeight: 700, color: '#6b21a8', lineHeight: 1.5 }}>{emoji} {message}</p>
       </motion.div>
     </motion.div>
@@ -236,16 +254,14 @@ const QuestionDetailSheet = ({ page, accent, onClose }: { page: AcademyUserQuest
   );
 };
 
-const PageSelector = ({ current, total, accent, tagBg, tagText, onChange }: { current: number; total: number; accent: string; tagBg: string; tagText: string; onChange: (p: number) => void; }) => {
+const PageSelector = ({ current, total, accent, tagBg, tagText, onChange }: { current: number; total: number; accent: string; tagBg: string; tagText: string; onChange: (p: number) => void }) => {
   if (total <= 1) return null;
   const getPageNums = () => {
     const nums: (number | '...')[] = [];
     if (total <= 7) { for (let i = 0; i < total; i++) nums.push(i); return nums; }
-    nums.push(0);
-    if (current > 2) nums.push('...');
+    nums.push(0); if (current > 2) nums.push('...');
     for (let i = Math.max(1, current - 1); i <= Math.min(total - 2, current + 1); i++) nums.push(i);
-    if (current < total - 3) nums.push('...');
-    nums.push(total - 1);
+    if (current < total - 3) nums.push('...'); nums.push(total - 1);
     return nums;
   };
   return (
@@ -256,6 +272,10 @@ const PageSelector = ({ current, total, accent, tagBg, tagText, onChange }: { cu
     </div>
   );
 };
+
+// ============================================================
+// メインページ
+// ============================================================
 
 type NavPhase = 'shelves' | 'subjects' | 'books' | 'pages';
 
@@ -298,13 +318,37 @@ export default function LibraryPage() {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #fdf4ff 0%, #f0f9ff 40%, #f0fdf4 100%)', paddingBottom: 80, fontFamily: "'Noto Sans JP', sans-serif", position: 'relative', overflow: 'hidden' }}>
-      <style>{`@keyframes lib-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}.lib-deco{position:absolute;pointer-events:none;}`}</style>
-      <div className="lib-deco" style={{ top: -60, right: -60, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, #f3e8ff88, transparent)' }} />
-      <div className="lib-deco" style={{ bottom: 100, left: -40, width: 160, height: 160, borderRadius: '50%', background: 'radial-gradient(circle, #dbeafe66, transparent)' }} />
+    <div style={{ minHeight: '100vh', background: '#f5f0ff', paddingBottom: 80, fontFamily: "'Noto Sans JP', sans-serif", position: 'relative', overflow: 'hidden' }}>
+      <style>{`@keyframes lib-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}.lib-deco{position:absolute;pointer-events:none;z-index:1;}`}</style>
+
+      {/* ── 背景画像レイヤー ─────────────────────────────────────
+          画像: public/images/library-bg.png に置くと表示される。
+          存在しない場合は下の fallback グラデーションが見える。    */}
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 0,
+        backgroundImage: `url(${LIBRARY_BG_IMAGE})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
+        /* 画像がない場合のフォールバック */
+        background: `url(${LIBRARY_BG_IMAGE}) center top / cover no-repeat, linear-gradient(160deg, #fdf4ff 0%, #f0f9ff 40%, #f0fdf4 100%)`,
+      }} />
+
+      {/* ── 白オーバーレイ（コンテンツを読みやすくする） ──────────
+          OVERLAY_OPACITY の値（0.0〜1.0）を変えるだけで調整可能。
+          薄くしたい → 0.55 / 画像をほぼ消したい → 0.88         */}
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 0,
+        background: `rgba(255, 248, 255, ${OVERLAY_OPACITY})`,
+      }} />
+
+      {/* 装飾 */}
+      <div className="lib-deco" style={{ top: -60, right: -60, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, #f3e8ff55, transparent)' }} />
+      <div className="lib-deco" style={{ bottom: 100, left: -40, width: 160, height: 160, borderRadius: '50%', background: 'radial-gradient(circle, #dbeafe44, transparent)' }} />
       {(['✦','★','✦','⭐'] as const).map((s, i) => (<span key={i} className="lib-deco" style={{ left: `${[8,88,5,92][i]}%`, top: `${[10,6,55,35][i]}%`, fontSize: [14,10,8,12][i], color: ['#c084fc','#93c5fd','#86efac','#fcd34d'][i], opacity: 0.45, animation: `lib-float ${[2.2,3.1,2.7,3.5][i]}s ease-in-out ${[0,0.8,1.2,0.4][i]}s infinite` }}>{s}</span>))}
 
-      <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(12px)', borderBottom: '2px solid #f3e8ff', boxShadow: '0 2px 12px rgba(168,85,247,0.08)' }}>
+      {/* ── ヘッダー（z-index: 20 で背景の上に） ── */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(14px)', borderBottom: '2px solid #f3e8ff', boxShadow: '0 2px 12px rgba(168,85,247,0.08)' }}>
         <div style={{ maxWidth: 440, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}>
           {phase === 'shelves' ? (<Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#7c3aed', textDecoration: 'none', fontWeight: 700 }}><ArrowLeft style={{ width: 14, height: 14 }} />戻る</Link>) : (<button onClick={handleBack} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#7c3aed', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer' }}><ArrowLeft style={{ width: 14, height: 14 }} />戻る</button>)}
           <div style={{ textAlign: 'center' }}><p style={{ fontSize: 9, letterSpacing: '0.2em', color: '#c084fc', textTransform: 'uppercase', marginBottom: 1 }}>Kotoba Library</p><p style={{ fontSize: 15, fontWeight: 900, color: '#6b21a8' }}>📚 ことば図書館</p></div>
@@ -317,12 +361,15 @@ export default function LibraryPage() {
         )}
       </div>
 
-      <div style={{ maxWidth: 440, margin: '0 auto', padding: '16px 16px 0' }}>
+      {/* ── コンテンツ（z-index: 10） ── */}
+      <div style={{ maxWidth: 440, margin: '0 auto', padding: '16px 16px 0', position: 'relative', zIndex: 10 }}>
         <AnimatePresence mode="wait">
+
+          {/* フェーズ1：本棚一覧 */}
           {phase === 'shelves' && (
             <motion.div key="shelves" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.25 }}>
               <SuhimochiComment message={stage.message} emoji={stage.emoji} />
-              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} style={{ borderRadius: 20, padding: '16px 18px', marginBottom: 20, background: 'white', border: '2px solid #f3e8ff', boxShadow: '0 4px 20px rgba(168,85,247,0.10)' }}>
+              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} style={{ borderRadius: 20, padding: '16px 18px', marginBottom: 20, background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(12px)', border: '2px solid #f3e8ff', boxShadow: '0 4px 20px rgba(168,85,247,0.10)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg, #f3e8ff, #ddd6fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Sparkles style={{ width: 16, height: 16, color: '#7c3aed' }} /></div>
                   <div style={{ flex: 1 }}>
@@ -347,14 +394,20 @@ export default function LibraryPage() {
             </motion.div>
           )}
 
+          {/* フェーズ2：科目一覧 */}
           {phase === 'subjects' && selectedShelf && (
             <motion.div key="subjects" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 30 }} transition={{ duration: 0.25 }}>
               <div style={{ marginBottom: 12 }}><BookshelfVisual shelf={selectedShelf} onSelectBook={(book) => { const sub = selectedShelf.subjects.find((s) => s.books.some((b) => b.id === book.id)); if (sub) goToBook(book, selectedShelf.id, sub.name); }} /></div>
               <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', marginBottom: 14, fontWeight: 600 }}>科目を選んでください</p>
-              {selectedShelf.subjects.length === 0 ? (<div style={{ borderRadius: 16, padding: '24px', textAlign: 'center', background: 'white', border: '2px dashed #e5e7eb' }}><p style={{ fontSize: 32, marginBottom: 8 }}>📭</p><p style={{ fontSize: 13, color: '#9ca3af', lineHeight: 1.7, fontWeight: 600 }}>まだ本がありません。<br />みんなの問題を解いて本棚を埋めよう！</p></div>) : (
+              {selectedShelf.subjects.length === 0 ? (
+                <div style={{ borderRadius: 16, padding: '24px', textAlign: 'center', background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(8px)', border: '2px dashed #e5e7eb' }}>
+                  <p style={{ fontSize: 32, marginBottom: 8 }}>📭</p>
+                  <p style={{ fontSize: 13, color: '#9ca3af', lineHeight: 1.7, fontWeight: 600 }}>まだ本がありません。<br />みんなの問題を解いて本棚を埋めよう！</p>
+                </div>
+              ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {selectedShelf.subjects.map((subject, i) => { const rate = subject.totalCount > 0 ? subject.recoveredCount / subject.totalCount : 0; return (
-                    <motion.button key={subject.name} onClick={() => handleSelectSubject(subject)} style={{ borderRadius: 16, border: `2px solid ${rate >= 1 ? selectedShelf.accent + '66' : subject.recoveredCount > 0 ? selectedShelf.accent + '33' : '#e5e7eb'}`, background: subject.recoveredCount > 0 ? `linear-gradient(135deg, ${selectedShelf.bgFrom}88, ${selectedShelf.bgTo}88)` : '#f9fafb', padding: '12px 14px', textAlign: 'left', width: '100%', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }}>
+                    <motion.button key={subject.name} onClick={() => handleSelectSubject(subject)} style={{ borderRadius: 16, border: `2px solid ${rate >= 1 ? selectedShelf.accent + '66' : subject.recoveredCount > 0 ? selectedShelf.accent + '33' : '#e5e7eb'}`, background: subject.recoveredCount > 0 ? `linear-gradient(135deg, ${selectedShelf.bgFrom}cc, ${selectedShelf.bgTo}cc)` : 'rgba(249,250,251,0.88)', backdropFilter: 'blur(8px)', padding: '12px 14px', textAlign: 'left', width: '100%', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }}>
                       <div style={{ flex: 1, minWidth: 0 }}><p style={{ fontSize: 14, fontWeight: 700, color: subject.recoveredCount > 0 ? '#1f2937' : '#9ca3af', marginBottom: 6 }}>{subject.name}</p><RestoreBar rate={rate} accent={selectedShelf.accent} /><p style={{ fontSize: 10, color: subject.recoveredCount > 0 ? selectedShelf.accent : '#d1d5db', marginTop: 4 }}>{subject.books.length}冊 ・ {subject.recoveredCount}/{subject.totalCount} 回収済み</p></div>
                       <ChevronRight style={{ width: 16, height: 16, color: '#d1d5db', flexShrink: 0 }} />
                     </motion.button>
@@ -364,12 +417,13 @@ export default function LibraryPage() {
             </motion.div>
           )}
 
+          {/* フェーズ3：冊一覧 */}
           {phase === 'books' && selectedSubject && selectedShelf && (
             <motion.div key="books" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 30 }} transition={{ duration: 0.25 }}>
               <p style={{ fontSize: 13, fontWeight: 800, color: '#374151', marginBottom: 12 }}>{selectedSubject.name} の本</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {selectedSubject.books.map((book, i) => { const rate = book.pages.length > 0 ? book.recoveredCount / book.pages.length : 0; return (
-                  <motion.button key={book.id} onClick={() => handleSelectBook(book)} style={{ borderRadius: 16, border: `2px solid ${rate >= 1 ? selectedShelf.accent + '66' : book.recoveredCount > 0 ? selectedShelf.accent + '33' : '#e5e7eb'}`, background: book.recoveredCount > 0 ? `linear-gradient(135deg, ${selectedShelf.bgFrom}88, ${selectedShelf.bgTo}88)` : '#f9fafb', padding: '12px 14px', textAlign: 'left', width: '100%', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }}>
+                  <motion.button key={book.id} onClick={() => handleSelectBook(book)} style={{ borderRadius: 16, border: `2px solid ${rate >= 1 ? selectedShelf.accent + '66' : book.recoveredCount > 0 ? selectedShelf.accent + '33' : '#e5e7eb'}`, background: book.recoveredCount > 0 ? `linear-gradient(135deg, ${selectedShelf.bgFrom}cc, ${selectedShelf.bgTo}cc)` : 'rgba(249,250,251,0.88)', backdropFilter: 'blur(8px)', padding: '12px 14px', textAlign: 'left', width: '100%', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.97 }}>
                     <div style={{ width: 10, height: 48, borderRadius: 5, flexShrink: 0, background: book.recoveredCount > 0 ? book.spineColor : '#e5e7eb', boxShadow: book.recoveredCount > 0 ? `0 2px 8px ${book.spineColor}55` : 'none' }} />
                     <div style={{ flex: 1, minWidth: 0 }}><p style={{ fontSize: 14, fontWeight: 700, color: book.recoveredCount > 0 ? '#1f2937' : '#9ca3af', marginBottom: 6 }}>{book.title}</p><RestoreBar rate={rate} accent={selectedShelf.accent} /><p style={{ fontSize: 10, color: book.recoveredCount > 0 ? selectedShelf.accent : '#d1d5db', marginTop: 4 }}>{book.recoveredCount}/{book.pages.length} ページ回収済み</p></div>
                     {rate >= 1 && <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 100, background: selectedShelf.tagBg, color: selectedShelf.tagText, border: `1px solid ${selectedShelf.accent}44`, flexShrink: 0 }}>✨ 完成</span>}
@@ -380,6 +434,7 @@ export default function LibraryPage() {
             </motion.div>
           )}
 
+          {/* フェーズ4：問題一覧 */}
           {phase === 'pages' && selectedBook && selectedShelf && (
             <motion.div key="pages" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 30 }} transition={{ duration: 0.25 }}>
               <div style={{ borderRadius: '16px 16px 0 0', padding: '14px 16px', background: `linear-gradient(135deg, ${selectedShelf.bgFrom}, ${selectedShelf.bgTo})`, border: `2px solid ${selectedShelf.accent}33`, borderBottom: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -389,10 +444,10 @@ export default function LibraryPage() {
                 </div>
                 <div style={{ textAlign: 'right' }}><p style={{ fontSize: 16, fontWeight: 900, color: selectedShelf.accent }}>{Math.round((selectedBook.recoveredCount / Math.max(selectedBook.pages.length, 1)) * 100)}%</p><p style={{ fontSize: 9, color: '#9ca3af' }}>{selectedBook.recoveredCount}/{selectedBook.pages.length}</p></div>
               </div>
-              <div style={{ borderRadius: '0 0 16px 16px', border: `2px solid ${selectedShelf.accent}22`, borderTop: 'none', background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(8px)', overflow: 'hidden' }}>
+              <div style={{ borderRadius: '0 0 16px 16px', border: `2px solid ${selectedShelf.accent}22`, borderTop: 'none', background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(12px)', overflow: 'hidden' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 12px 8px' }}>
                   {pagedQuestions.map((page, i) => { const recovered = (page.correctCount ?? 0) > 0; const globalIdx = pageIndex * PAGE_SIZE + i; return (
-                    <motion.button key={page.id} onClick={() => setDetailPage(page)} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', borderRadius: 12, textAlign: 'left', width: '100%', cursor: 'pointer', background: recovered ? 'rgba(255,255,255,0.9)' : 'rgba(249,250,251,0.8)', border: `1.5px solid ${recovered ? selectedShelf.accent + '33' : '#e5e7eb'}`, boxShadow: recovered ? `0 2px 8px ${selectedShelf.accent}11` : 'none' }} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }} whileHover={{ scale: 1.01, x: 2 }} whileTap={{ scale: 0.98 }}>
+                    <motion.button key={page.id} onClick={() => setDetailPage(page)} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', borderRadius: 12, textAlign: 'left', width: '100%', cursor: 'pointer', background: recovered ? 'rgba(255,255,255,0.95)' : 'rgba(249,250,251,0.85)', border: `1.5px solid ${recovered ? selectedShelf.accent + '33' : '#e5e7eb'}`, boxShadow: recovered ? `0 2px 8px ${selectedShelf.accent}11` : 'none' }} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }} whileHover={{ scale: 1.01, x: 2 }} whileTap={{ scale: 0.98 }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 5, flexShrink: 0, background: recovered ? selectedShelf.accent : '#d1d5db', boxShadow: recovered ? `0 0 6px ${selectedShelf.accent}66` : 'none' }} />
                       <div style={{ flex: 1, minWidth: 0 }}><p style={{ fontSize: 10, color: recovered ? selectedShelf.accent : '#9ca3af', marginBottom: 3, fontWeight: 700 }}>ページ {globalIdx + 1}　{recovered ? '✓ 回収済み' : '未回収'}</p><p style={{ fontSize: 13, color: recovered ? '#1f2937' : '#9ca3af', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{page.question}</p></div>
                       <ChevronRight style={{ width: 14, height: 14, color: '#d1d5db', flexShrink: 0, marginTop: 2 }} />
@@ -403,6 +458,7 @@ export default function LibraryPage() {
               </div>
             </motion.div>
           )}
+
         </AnimatePresence>
       </div>
 
