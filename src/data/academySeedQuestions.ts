@@ -9,6 +9,7 @@ import type { AcademyUserQuestion } from '@/types';
  * - 高校受験・英語の塊は `bigCategory: '高校受験'`・`subCategory: '英語'`・`subjectText` は分野（例: `英文法`・`英単語`・`英熟語`）で識別しやすくしている。
  * - 高校受験・国語（漢文）の塊は `bigCategory: '高校受験'`・`subCategory: '国語'`・`subjectText: '漢文'` で識別しやすくしている。
  * - 高校受験・国語（古文）の塊は `bigCategory: '高校受験'`・`subCategory: '国語'`・`subjectText: '古文'` で識別しやすくしている。
+ * - 高校受験・国語（現代文）の塊は `bigCategory: '高校受験'`・`subCategory: '国語'`・`subjectText: '現代文'` で識別しやすくしている。
  * - 高校受験・社会（日本史＝分野「歴史」）の塊は `bigCategory: '高校受験'`・`subCategory: '日本史'`・`subjectText: '日本史'`・`keywords` に `社会` を含める。
  * - 高校受験・社会（世界史＝分野「歴史」）の塊は `bigCategory: '高校受験'`・`subCategory: '世界史'`・`subjectText: '世界史'`・`keywords` に `社会` を含める。
  * - 高校受験・社会（地理＝分野「地理」）の塊は `bigCategory: '高校受験'`・`subCategory: '地理'`・`subjectText: '地理'`・`keywords` に `社会` を含める。
@@ -1918,6 +1919,487 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     bigCategory: '高校受験',
     subCategory: '国語',
     subjectText: '漢文',
+  },
+
+  // --- 高校受験・国語・現代文（公式seed） ---
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_01',
+    createdAt: '2026-04-12T10:00:00.000Z',
+    question:
+      '【本文】努力は大切である。しかし、方向を誤れば成果は出ない。\n\n筆者の主張として最も適切なのはどれ？',
+    choices: ['努力は無意味である', '努力の方向が重要である', '努力すれば必ず成功する', '成果は必要ない'],
+    answerIndex: 1,
+    explanation:
+      '「しかし」は逆接で後ろが主張になる。\n\n【誤答の理由】\n①本文と逆\n③前半のみの内容\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '接続詞'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_02',
+    createdAt: '2026-04-12T10:00:01.000Z',
+    question:
+      '【本文】本を読むことは有益である。それによって考える力が育つ。\n\n「それ」が指す内容はどれ？',
+    choices: ['考える力', '本を読むこと', '有益さ', '人間'],
+    answerIndex: 1,
+    explanation:
+      '直前の行為を指す。\n\n【誤答の理由】\n①結果であり対象ではない\n③抽象的すぎる\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '指示語'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_03',
+    createdAt: '2026-04-12T10:00:02.000Z',
+    question:
+      '【本文】便利な道具は生活を楽にするが、依存しすぎると問題も生じる。\n\n筆者の考えとして最も適切なのはどれ？',
+    choices: ['道具は不要である', '依存しすぎは問題になる', '便利さは不要', '問題は存在しない'],
+    answerIndex: 1,
+    explanation:
+      '逆接後の内容が主張。\n\n【誤答の理由】\n①極端\n③本文にない\n④本文と逆',
+    keywords: ['高校受験', '国語', '現代文', '主張'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_04',
+    createdAt: '2026-04-12T10:00:03.000Z',
+    question:
+      '【本文】運動は健康に良いが、過度に行うと体に負担がかかる。\n\n本文の内容として誤っているものはどれ？',
+    choices: ['運動は健康に良い', '運動はやりすぎると問題になる', '運動は常に安全である', '適度な運動が望ましい'],
+    answerIndex: 2,
+    explanation:
+      '本文は過度な運動を否定。\n\n【誤答の理由】\n①本文と一致\n②本文と一致\n④本文から読み取れる',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_05',
+    createdAt: '2026-04-12T10:00:04.000Z',
+    question:
+      '【本文】多くの人は結果を重視する。一方で過程にも価値がある。\n\n筆者の主張はどれ？',
+    choices: ['結果が全てである', '過程にも価値がある', '結果は不要である', '価値は存在しない'],
+    answerIndex: 1,
+    explanation:
+      '「一方で」は対比で後ろが主張。\n\n【誤答の理由】\n①前半の内容\n③極端\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '接続詞'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_06',
+    createdAt: '2026-04-12T10:00:05.000Z',
+    question:
+      '【本文】情報は便利だが、それを使いこなす力が重要である。\n\n「それ」が指すものはどれ？',
+    choices: ['力', '情報', '便利さ', '重要性'],
+    answerIndex: 1,
+    explanation: '直前の名詞を指す。\n\n【誤答の理由】\n①結果\n③抽象\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '指示語'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_07',
+    createdAt: '2026-04-12T10:00:06.000Z',
+    question:
+      '【本文】失敗は悪いものではない。それをどう活かすかが重要である。\n\n筆者の主張はどれ？',
+    choices: ['失敗は避けるべき', '失敗を活かすことが重要', '失敗は無意味', '成功だけが重要'],
+    answerIndex: 1,
+    explanation: '「重要である」が主張。\n\n【誤答の理由】\n①逆\n③逆\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '主張'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_08',
+    createdAt: '2026-04-12T10:00:07.000Z',
+    question:
+      '【本文】人は経験から学ぶが、同じ失敗を繰り返すこともある。\n\n正しい内容はどれ？',
+    choices: ['人は常に学ぶ', '失敗は繰り返されることもある', '経験は不要', '学びは存在しない'],
+    answerIndex: 1,
+    explanation: '逆接で両面提示。\n\n【誤答の理由】\n①言い過ぎ\n③本文にない\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_09',
+    createdAt: '2026-04-12T10:00:08.000Z',
+    question:
+      '【本文】環境問題は深刻である。したがって対策が必要だ。\n\n関係として正しいものはどれ？',
+    choices: ['対比', '原因と結果', '例示', '逆接'],
+    answerIndex: 1,
+    explanation:
+      '「したがって」は結果。\n\n【誤答の理由】\n①対立ではない\n③例ではない\n④逆接ではない',
+    keywords: ['高校受験', '国語', '現代文', '接続詞'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_10',
+    createdAt: '2026-04-12T10:00:09.000Z',
+    question:
+      '【本文】読書は知識を広げるが、それだけで十分とは言えない。\n\n誤っているものはどれ？',
+    choices: ['読書は知識を広げる', '読書だけで十分である', '読書には限界がある', '知識は増える'],
+    answerIndex: 1,
+    explanation:
+      '本文は「それだけでは不十分」と述べる。\n\n【誤答の理由】\n①一致\n③一致\n④一致',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_11',
+    createdAt: '2026-04-12T10:00:10.000Z',
+    question:
+      '【本文】時間は限られている。だからこそ、使い方が重要になる。\n\n主張はどれ？',
+    choices: ['時間は無限である', '時間の使い方が重要', '時間は不要', '努力は無意味'],
+    answerIndex: 1,
+    explanation: '結論部分が主張。\n\n【誤答の理由】\n①逆\n③本文にない\n④無関係',
+    keywords: ['高校受験', '国語', '現代文', '主張'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_12',
+    createdAt: '2026-04-12T10:00:11.000Z',
+    question:
+      '【本文】人は情報を多く持つほど良いと考えがちだ。しかし、それが正しい判断につながるとは限らない。\n\n筆者の主張はどれ？',
+    choices: ['情報は多いほど良い', '情報量より判断力が重要', '情報は不要である', '人は判断できない'],
+    answerIndex: 1,
+    explanation:
+      '「しかし」で逆接、後ろが主張。\n\n【誤答の理由】\n①前半の内容で否定されている\n③極端で本文にない\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '接続詞'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_13',
+    createdAt: '2026-04-12T10:00:12.000Z',
+    question:
+      '【本文】AIは多くの作業を効率化する。それにより人間は創造的な活動に集中できる。\n\n「それ」が指すものはどれ？',
+    choices: ['創造的活動', 'AIの効率化', '人間', '作業'],
+    answerIndex: 1,
+    explanation:
+      '直前の内容（AIによる効率化）を指す。\n\n【誤答の理由】\n①結果であり対象ではない\n③本文にない\n④一部のみで不十分',
+    keywords: ['高校受験', '国語', '現代文', '指示語'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_14',
+    createdAt: '2026-04-12T10:00:13.000Z',
+    question:
+      '【本文】知識は重要だが、それを使いこなす力がなければ意味がない。\n\n筆者の主張はどれ？',
+    choices: ['知識は不要である', '知識を使う力が重要', '知識が全てである', '意味は存在しない'],
+    answerIndex: 1,
+    explanation:
+      '逆接後の「使いこなす力」が主張。\n\n【誤答の理由】\n①本文と逆\n③前半のみ\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '主張'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_15',
+    createdAt: '2026-04-12T10:00:14.000Z',
+    question:
+      '【本文】経験は大切だが、それだけに頼ると新しい発想が生まれにくい。\n\n正しい内容はどれ？',
+    choices: ['経験だけで十分である', '経験には限界がある', '経験は不要である', '発想は生まれない'],
+    answerIndex: 1,
+    explanation:
+      '逆接で経験の限界を指摘。\n\n【誤答の理由】\n①言い過ぎ\n③本文と逆\n④極端',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_16',
+    createdAt: '2026-04-12T10:00:15.000Z',
+    question:
+      '【本文】努力は必要である。つまり、継続することが成功につながる。\n\n「つまり」の役割はどれ？',
+    choices: ['対比', '言い換え', '原因', '逆接'],
+    answerIndex: 1,
+    explanation:
+      '前の内容を別の言葉で説明。\n\n【誤答の理由】\n①対立していない\n③原因ではない\n④逆接ではない',
+    keywords: ['高校受験', '国語', '現代文', '接続詞'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_17',
+    createdAt: '2026-04-12T10:00:16.000Z',
+    question:
+      '【本文】スマートフォンは便利だが、それに依存しすぎると問題が生じる。\n\n「それ」が指すものはどれ？',
+    choices: ['問題', 'スマートフォン', '便利さ', '依存'],
+    answerIndex: 1,
+    explanation: '直前の具体物を指す。\n\n【誤答の理由】\n①結果\n③抽象\n④一部のみ',
+    keywords: ['高校受験', '国語', '現代文', '指示語'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_18',
+    createdAt: '2026-04-12T10:00:17.000Z',
+    question:
+      '【本文】比較することは成長につながる。しかし、他人と比べすぎると自分を見失う。\n\n筆者の主張はどれ？',
+    choices: ['比較は必要ない', '比較しすぎは問題である', '成長は不要', '他人は重要でない'],
+    answerIndex: 1,
+    explanation:
+      '逆接後の内容が主張。\n\n【誤答の理由】\n①極端\n③本文にない\n④無関係',
+    keywords: ['高校受験', '国語', '現代文', '主張'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_19',
+    createdAt: '2026-04-12T10:00:18.000Z',
+    question:
+      '【本文】計画は重要だが、柔軟に対応することも同じくらい大切である。\n\n誤っているものはどれ？',
+    choices: ['計画は重要である', '柔軟さも必要である', '計画だけで十分である', '対応力が求められる'],
+    answerIndex: 2,
+    explanation: '本文は両方の重要性を述べる。\n\n【誤答の理由】\n①一致\n②一致\n④一致',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_20',
+    createdAt: '2026-04-12T10:00:19.000Z',
+    question:
+      '【本文】人はミスをする。そのため、確認作業が重要になる。\n\n関係はどれ？',
+    choices: ['対比', '原因と結果', '例示', '逆接'],
+    answerIndex: 1,
+    explanation:
+      '原因→結果の流れ。\n\n【誤答の理由】\n①対立なし\n③例ではない\n④逆接なし',
+    keywords: ['高校受験', '国語', '現代文', '接続詞'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_21',
+    createdAt: '2026-04-12T10:00:20.000Z',
+    question:
+      '【本文】新しい技術は便利であるが、それによって失われるものもある。\n\n正しい内容はどれ？',
+    choices: ['技術は全て良い', '技術には欠点もある', '技術は不要', '便利さは存在しない'],
+    answerIndex: 1,
+    explanation:
+      '逆接で欠点も示す。\n\n【誤答の理由】\n①言い過ぎ\n③逆\n④本文と逆',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_22',
+    createdAt: '2026-04-12T10:00:21.000Z',
+    question:
+      '【本文】他人の意見を聞くことは大切だが、自分で考えることも同じくらい重要である。\n\n主張はどれ？',
+    choices: ['他人の意見だけが重要', '自分で考えることも重要', '意見は不要', '考える必要はない'],
+    answerIndex: 1,
+    explanation:
+      '後半の強調部分が主張。\n\n【誤答の理由】\n①偏っている\n③本文にない\n④逆',
+    keywords: ['高校受験', '国語', '現代文', '主張'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_23',
+    createdAt: '2026-04-12T10:00:22.000Z',
+    question:
+      '【本文】努力は成功の可能性を高めるが、必ず成功するわけではない。\n\n本文の内容として誤っているものはどれ？',
+    choices: [
+      '努力は成功につながる可能性がある',
+      '努力すれば必ず成功する',
+      '成功は確実ではない',
+      '努力は無意味ではない',
+    ],
+    answerIndex: 1,
+    explanation:
+      '本文は「必ず成功するわけではない」と述べる。\n\n【誤答の理由】\n①本文と一致\n③本文と一致\n④本文から読み取れる',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_24',
+    createdAt: '2026-04-12T10:00:23.000Z',
+    question:
+      '【本文】人は感情に左右される。一方で、冷静な判断も必要である。\n\n筆者の主張はどれ？',
+    choices: ['感情が全てである', '冷静な判断も必要である', '判断は不要である', '感情は必要ない'],
+    answerIndex: 1,
+    explanation:
+      '「一方で」は対比で後ろが主張。\n\n【誤答の理由】\n①前半のみ\n③本文にない\n④極端',
+    keywords: ['高校受験', '国語', '現代文', '接続詞'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_25',
+    createdAt: '2026-04-12T10:00:24.000Z',
+    question:
+      '【本文】本を読むことは大切だ。それによって語彙力が向上する。\n\n「それ」が指すものはどれ？',
+    choices: ['語彙力', '本を読むこと', '大切さ', '人間'],
+    answerIndex: 1,
+    explanation: '直前の行為を指す。\n\n【誤答の理由】\n①結果\n③抽象\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '指示語'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_26',
+    createdAt: '2026-04-12T10:00:25.000Z',
+    question:
+      '【本文】時間を有効に使うことは大切だが、休むことも同じくらい重要である。\n\n主張はどれ？',
+    choices: ['休む必要はない', '休むことも重要である', '時間は無意味である', '努力が全てである'],
+    answerIndex: 1,
+    explanation:
+      '逆接後が主張。\n\n【誤答の理由】\n①本文と逆\n③無関係\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '主張'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_27',
+    createdAt: '2026-04-12T10:00:26.000Z',
+    question:
+      '【本文】情報は役に立つが、正確であるとは限らない。\n\n正しい内容はどれ？',
+    choices: ['情報は常に正しい', '情報には誤りもある', '情報は不要', '情報は役に立たない'],
+    answerIndex: 1,
+    explanation:
+      '逆接で不確実性を示す。\n\n【誤答の理由】\n①言い過ぎ\n③本文にない\n④逆',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_28',
+    createdAt: '2026-04-12T10:00:27.000Z',
+    question:
+      '【本文】人は失敗から学ぶことができるが、それを活かせるかどうかは別の問題である。\n\n誤っているものはどれ？',
+    choices: [
+      '失敗は学びになる',
+      '失敗を活かせない場合もある',
+      '失敗は常に活かせる',
+      '活かすかどうかは別問題',
+    ],
+    answerIndex: 2,
+    explanation:
+      '本文は「必ず活かせるとは言っていない」。\n\n【誤答の理由】\n①一致\n②一致\n④一致',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_29',
+    createdAt: '2026-04-12T10:00:28.000Z',
+    question:
+      '【本文】多くの人は結果を求める。つまり、過程よりも成果を重視している。\n\n「つまり」の役割はどれ？',
+    choices: ['対比', '言い換え', '逆接', '原因'],
+    answerIndex: 1,
+    explanation:
+      '前文を別表現で説明。\n\n【誤答の理由】\n①対立なし\n③逆接ではない\n④因果ではない',
+    keywords: ['高校受験', '国語', '現代文', '接続詞'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_30',
+    createdAt: '2026-04-12T10:00:29.000Z',
+    question:
+      '【本文】便利なものは生活を豊かにするが、それに頼りすぎると問題が生じる。\n\n本文の内容として正しいものはどれ？',
+    choices: ['便利なものは常に良い', '頼りすぎると問題がある', '便利さは不要', '問題は存在しない'],
+    answerIndex: 1,
+    explanation:
+      '逆接後が重要。\n\n【誤答の理由】\n①言い過ぎ\n③本文にない\n④逆',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_31',
+    createdAt: '2026-04-12T10:00:30.000Z',
+    question:
+      '【本文】努力は重要だが、効率も考えなければならない。\n\n主張はどれ？',
+    choices: ['努力だけでよい', '効率も重要である', '努力は不要', '考える必要はない'],
+    answerIndex: 1,
+    explanation:
+      '逆接後が主張。\n\n【誤答の理由】\n①前半のみ\n③逆\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '主張'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_32',
+    createdAt: '2026-04-12T10:00:31.000Z',
+    question:
+      '【本文】経験は役立つが、それだけで全てが解決するわけではない。\n\n誤っているものはどれ？',
+    choices: ['経験は役立つ', '経験だけで解決できる', '他の要素も必要', '万能ではない'],
+    answerIndex: 1,
+    explanation:
+      '「だけではない」と否定。\n\n【誤答の理由】\n①一致\n③一致\n④一致',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_33',
+    createdAt: '2026-04-12T10:00:32.000Z',
+    question:
+      '【本文】人は成長する。しかし、その過程には困難が伴う。\n\n主張はどれ？',
+    choices: ['成長は簡単である', '成長には困難がある', '困難は存在しない', '成長は不要'],
+    answerIndex: 1,
+    explanation:
+      '逆接後が主張。\n\n【誤答の理由】\n①逆\n③逆\n④無関係',
+    keywords: ['高校受験', '国語', '現代文', '接続詞'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
+  },
+  {
+    id: 'academy_seed_koukou_kokugo_gendaibun_34',
+    createdAt: '2026-04-12T10:00:33.000Z',
+    question:
+      '【本文】比較は成長のきっかけになるが、それだけでは不十分である。\n\n正しい内容はどれ？',
+    choices: ['比較だけで十分', '比較は役立つが不十分', '比較は不要', '成長は存在しない'],
+    answerIndex: 1,
+    explanation:
+      '両面提示。\n\n【誤答の理由】\n①言い過ぎ\n③逆\n④本文にない',
+    keywords: ['高校受験', '国語', '現代文', '誤答'],
+    bigCategory: '高校受験',
+    subCategory: '国語',
+    subjectText: '現代文',
   },
 
   // --- 高校受験・国語・古文（公式seed） ---

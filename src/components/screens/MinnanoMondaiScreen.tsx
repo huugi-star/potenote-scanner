@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 /**
  * MinnanoMondaiScreen.tsx
@@ -22,7 +22,10 @@ import { useGameStore } from '@/store/useGameStore';
 import type { AcademyUserQuestion } from '@/types';
 import { QuizResultView } from './minnano-mondai/QuizResultView';
 
-const QUIZ_QUESTION_COUNT = 5;
+/** 受講カテゴリー講義の出題数 */
+const LECTURE_QUIZ_MODES = [5, 10, 30] as const;
+export type LectureQuizModeCount = (typeof LECTURE_QUIZ_MODES)[number];
+const DEFAULT_LECTURE_QUIZ_COUNT: LectureQuizModeCount = 5;
 const QUIZ_TIME_LIMIT_SEC = 10;
 const QUIZ_TIME_LIMIT_MS = QUIZ_TIME_LIMIT_SEC * 1000;
 /** 魔法陣アニメーション完了後にフィードバック(○×)を表示するまでの遅延 */
@@ -523,7 +526,7 @@ function shuffleQuestions(items: AcademyUserQuestion[]): AcademyUserQuestion[] {
 function buildQuizQuestions(
   categoryQuestions: AcademyUserQuestion[],
   allQuestions: AcademyUserQuestion[],
-  count = QUIZ_QUESTION_COUNT
+  count = DEFAULT_LECTURE_QUIZ_COUNT
 ): ShuffledQuestion[] {
   const chosen = shuffleQuestions(categoryQuestions).slice(0, count);
   const filled =
@@ -1000,6 +1003,8 @@ const ExamRoomInside = ({
   onBack,
   onChangeTab,
   onChangeDetailSubject,
+  lectureQuizMode,
+  onChangeLectureQuizMode,
   onChallenge,
 }: {
   cat: LectureCategory;
@@ -1016,6 +1021,8 @@ const ExamRoomInside = ({
   onBack: () => void;
   onChangeTab: (label: string) => void;
   onChangeDetailSubject: (subject: string) => void;
+  lectureQuizMode: LectureQuizModeCount;
+  onChangeLectureQuizMode: (n: LectureQuizModeCount) => void;
   onChallenge: () => void;
 }) => {
   const [glowing, setGlowing] = useState(false);
@@ -1186,6 +1193,36 @@ const ExamRoomInside = ({
             )}
           </div>
 
+          <div className="rounded-2xl p-3" style={{ border: '1px solid rgba(160,150,210,0.18)', background: 'rgba(255,255,255,0.88)' }}>
+            <p className="text-[11px] font-bold mb-2" style={{ color: 'rgba(67,54,98,0.82)' }}>
+              出題数
+            </p>
+            <div className="flex gap-2">
+              {LECTURE_QUIZ_MODES.map((n) => {
+                const selected = lectureQuizMode === n;
+                return (
+                  <motion.button
+                    key={n}
+                    type="button"
+                    onClick={() => onChangeLectureQuizMode(n)}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-black border transition-colors"
+                    style={{
+                      color: selected ? '#fff' : 'rgba(67,54,98,0.88)',
+                      background: selected
+                        ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`
+                        : 'rgba(255,255,255,0.95)',
+                      borderColor: selected ? 'rgba(255,255,255,0.35)' : 'rgba(160,150,210,0.22)',
+                      boxShadow: selected ? `0 6px 14px ${cat.glow}22` : 'none',
+                    }}
+                    whileTap={{ scale: 0.97 }}
+                  >
+                    {n}問
+                  </motion.button>
+                );
+              })}
+            </div>
+          </div>
+
           <motion.button
             onClick={onChallenge}
             className="relative w-full overflow-hidden rounded-2xl py-5 font-black text-white text-xl"
@@ -1198,7 +1235,7 @@ const ExamRoomInside = ({
             <div className="flex items-center justify-center gap-3">
               <Swords className="w-6 h-6" />
               講義開始
-              <span className="text-sm font-normal opacity-80">（{QUIZ_QUESTION_COUNT}問）</span>
+              <span className="text-sm font-normal opacity-80">（{lectureQuizMode}問）</span>
             </div>
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
           </motion.button>
@@ -1424,9 +1461,12 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   const [quizResults, setQuizResults] = useState<QuizQuestionResult[]>([]);
   const [answerFeedback, setAnswerFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [magicCircles, setMagicCircles] = useState<MagicCircleState[]>([]);
+  const [lectureQuizMode, setLectureQuizMode] = useState<LectureQuizModeCount>(DEFAULT_LECTURE_QUIZ_COUNT);
   const magicIdRef = useRef(0);
   const feedbackAdvanceTimerRef = useRef<number | null>(null);
   const answerBatchSentRef = useRef(false);
+  /** 進行・集計で参照（タイマー内でも現在セッションの問数と一致） */
+  const activeQuizQuestionCountRef = useRef<number>(DEFAULT_LECTURE_QUIZ_COUNT);
 
   useEffect(() => {
     void useGameStore.getState().refreshAcademyQuestions();
@@ -1514,12 +1554,15 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   }, [academyUserQuestions]);
 
   const startQuiz = useCallback(
-    (categoryQuestions: AcademyUserQuestion[]) => {
-      const picked = buildQuizQuestions(categoryQuestions, academyUserQuestions, QUIZ_QUESTION_COUNT);
-      if (picked.length < QUIZ_QUESTION_COUNT) {
-        alert('問題数が不足しています。5問以上登録してください。');
+    (categoryQuestions: AcademyUserQuestion[], questionCount: LectureQuizModeCount) => {
+      const picked = buildQuizQuestions(categoryQuestions, academyUserQuestions, questionCount);
+      if (picked.length < questionCount) {
+        alert(
+          `問題数が不足しています。${questionCount}問分そろいません（登録数や対象分野を確認してください）。`
+        );
         return;
       }
+      activeQuizQuestionCountRef.current = picked.length;
       setQuizQuestions(picked);
       setQuizResults([]);
       setCurrentQuestionIndex(0);
@@ -1604,7 +1647,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
 
       setCurrentQuestionIndex((prev) => {
         const next = prev + 1;
-        if (next >= QUIZ_QUESTION_COUNT) {
+        if (next >= activeQuizQuestionCountRef.current) {
           setQuizPhase('result');
           return prev;
         }
@@ -1635,7 +1678,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   useEffect(() => {
     if (quizPhase !== 'result') return;
     if (answerBatchSentRef.current) return;
-    if (quizResults.length < QUIZ_QUESTION_COUNT) return;
+    if (quizResults.length < activeQuizQuestionCountRef.current) return;
 
     answerBatchSentRef.current = true;
     const questionById = new Map(quizQuestions.map((q) => [q.id, q]));
@@ -1713,7 +1756,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
           cat={selectedCat}
           questions={quizQuestions}
           results={quizResults}
-          onRetry={() => startQuiz(selectedLectureQuestions)}
+          onRetry={() => startQuiz(selectedLectureQuestions, lectureQuizMode)}
           onBackToCategories={handleBackToCategories}
         />
       );
@@ -1749,7 +1792,9 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
           setHsLiberalField('すべて');
         }}
         onChangeDetailSubject={setSelectedDetailSubject}
-        onChallenge={() => startQuiz(selectedLectureQuestions)}
+        lectureQuizMode={lectureQuizMode}
+        onChangeLectureQuizMode={setLectureQuizMode}
+        onChallenge={() => startQuiz(selectedLectureQuestions, lectureQuizMode)}
       />
     );
   }
@@ -1782,6 +1827,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
                 setSelectedDetailSubject('すべて');
                 setHsLiberalSubject('すべて');
                 setHsLiberalField('すべて');
+                setLectureQuizMode(DEFAULT_LECTURE_QUIZ_COUNT);
               }}
               index={i}
             />

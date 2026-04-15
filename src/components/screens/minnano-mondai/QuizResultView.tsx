@@ -448,7 +448,11 @@ export const QuizResultView = ({
   const timeBonus    = results.reduce((s, r) => s + r.timeBonus, 0);
   const totalPoint   = basePoint + timeBonus;
   const accuracy     = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
-  const rank         = calcRank(totalPoint);
+  /** 出題数が変わっても閾値が破綻しないよう、1問あたり最大20点（基本10＋タイム10）で正規化 */
+  const maxPossibleTotal = questions.length > 0 ? questions.length * 20 : 0;
+  const rankScore =
+    maxPossibleTotal > 0 ? Math.min(100, Math.round((totalPoint / maxPossibleTotal) * 100)) : 0;
+  const rank         = calcRank(rankScore);
   const cfg          = RANK_CFG[rank];
 
   // ── フェーズ制御 ──
