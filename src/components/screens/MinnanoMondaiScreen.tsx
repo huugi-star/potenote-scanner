@@ -21,6 +21,8 @@ import {
 import { useGameStore } from '@/store/useGameStore';
 import type { AcademyUserQuestion } from '@/types';
 import { QuizResultView } from './minnano-mondai/QuizResultView';
+import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
+import { getItemById } from '@/data/items';
 
 /** 受講カテゴリー講義の出題数 */
 const LECTURE_QUIZ_MODES = [5, 10, 30] as const;
@@ -1249,6 +1251,69 @@ const ExamRoomInside = ({
 // クイズ回答画面（魔法陣エフェクト＋シャッフル対応）
 // ============================================================
 
+// ============================================================
+// アバター（クイズマジックアカデミー風）
+// ============================================================
+type AvatarMood = 'idle' | 'correct' | 'wrong' | 'thinking';
+
+const QuizAvatar = ({ mood }: { mood: AvatarMood }) => {
+  const equipment = useGameStore((s) => s.equipment);
+  const equippedDetails = useMemo(
+    () => ({
+      head: equipment.head ? getItemById(equipment.head) : undefined,
+      body: equipment.body ? getItemById(equipment.body) : undefined,
+      face: equipment.face ? getItemById(equipment.face) : undefined,
+      accessory: equipment.accessory ? getItemById(equipment.accessory) : undefined,
+    }),
+    [equipment.accessory, equipment.body, equipment.face, equipment.head]
+  );
+
+  const glowColor: Record<AvatarMood, string> = {
+    idle: 'rgba(34,211,238,0.45)',
+    correct: 'rgba(251,191,36,0.65)',
+    wrong: 'rgba(236,72,153,0.55)',
+    thinking: 'rgba(59,130,246,0.45)',
+  };
+
+  return (
+    <div className="relative flex flex-col items-center select-none">
+      <motion.div
+        className="relative"
+        style={{
+          filter: `drop-shadow(0 0 18px ${glowColor[mood]})`,
+        }}
+        animate={
+          mood === 'correct'
+            ? { scale: [1, 1.28, 0.92, 1.12, 1], rotate: [0, -8, 8, -4, 0] }
+            : mood === 'wrong'
+              ? { x: [0, -6, 6, -5, 5, -3, 3, 0], rotate: [0, 2, -2, 0], scale: [1, 0.94, 1] }
+              : mood === 'thinking'
+                ? { y: [0, -3, 0], scale: [1, 1.05, 1] }
+                : { scale: [1, 1.03, 1] }
+        }
+        transition={
+          mood === 'idle' || mood === 'thinking'
+            ? { duration: 2.0, repeat: Infinity, ease: 'easeInOut' }
+            : { duration: 0.55, ease: 'easeOut' }
+        }
+      >
+        <div className="relative">
+          <PotatoAvatar
+            equipped={equippedDetails}
+            emotion={mood === 'correct' ? 'happy' : mood === 'wrong' ? 'confused' : mood === 'thinking' ? 'smart' : 'normal'}
+            pose={mood === 'correct' ? 'wave' : 'idle'}
+            facing="right"
+            size={128}
+            ssrEffect={mood === 'correct'}
+            showShadow={false}
+            armsInFrontOfHead
+          />
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const QuizPlayView = ({
   cat,
   questions,
@@ -1258,6 +1323,8 @@ const QuizPlayView = ({
   isLocked,
   answerFeedback,
   magicCircles,
+  correctCount,
+  currentScore,
   onRemoveMagicCircle,
   onAnswer,
   onBackToRoom,
@@ -1270,6 +1337,8 @@ const QuizPlayView = ({
   isLocked: boolean;
   answerFeedback: 'correct' | 'wrong' | null;
   magicCircles: MagicCircleState[];
+  correctCount: number;
+  currentScore: number;
   onRemoveMagicCircle: (id: number) => void;
   /** displayIndex（表示上のインデックス）を渡す */
   onAnswer: (displayIndex: number, clientX: number, clientY: number) => void;
@@ -1278,6 +1347,13 @@ const QuizPlayView = ({
   const current = questions[currentQuestionIndex];
   const timeLeftSec = Math.max(0, Math.ceil(timeLeftMs / 1000));
   const progress = Math.max(0, Math.min(100, (timeLeftMs / QUIZ_TIME_LIMIT_MS) * 100));
+  const isUrgent = timeLeftSec <= 3 && !isLocked;
+  const [displayScore, setDisplayScore] = useState(currentScore);
+  const prevScoreRef = useRef(currentScore);
+  const [scoreFxKey, setScoreFxKey] = useState(0);
+  const [lastGain, setLastGain] = useState<number | null>(null);
+  const [avatarLine, setAvatarLine] = useState<{ id: number; text: string; tone: 'good' | 'bad' } | null>(null);
+  const avatarLineIdRef = useRef(0);
   const safePlayCount = typeof current?.playCount === 'number' ? Math.max(0, current.playCount) : 0;
   const safeCorrectCount = typeof current?.correctCount === 'number' ? Math.max(0, current.correctCount) : 0;
   const correctRate = safePlayCount > 0
@@ -1289,8 +1365,75 @@ const QuizPlayView = ({
 
   if (!current) return null;
 
+  useEffect(() => {
+    if (displayScore === currentScore) return;
+    const from = displayScore;
+    const to = currentScore;
+    const diff = to - from;
+    const duration = 450;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const p = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setDisplayScore(Math.round(from + diff * eased));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentScore]);
+
+  useEffect(() => {
+    const prev = prevScoreRef.current;
+    if (currentScore > prev) {
+      setLastGain(currentScore - prev);
+      setScoreFxKey((k) => k + 1);
+    }
+    prevScoreRef.current = currentScore;
+  }, [currentScore]);
+
+  useEffect(() => {
+    if (!lastGain || lastGain <= 0) return;
+    const t = window.setTimeout(() => setLastGain(null), 1200);
+    return () => window.clearTimeout(t);
+  }, [lastGain, scoreFxKey]);
+
+  useEffect(() => {
+    if (!answerFeedback) return;
+
+    const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+    const isFast = timeLeftSec >= 7; // 体感「速い」判定（残り7秒以上）
+
+    if (answerFeedback === 'correct') {
+      const text = isFast
+        ? pick(['完璧！', '速いね！'])
+        : pick(['正解だよ！', 'いいよ！', 'ナイスだよ！']);
+      setAvatarLine({ id: ++avatarLineIdRef.current, text, tone: 'good' });
+      return;
+    }
+
+    const text = pick(['ちがう…', '惜しい！', 'もう一回！']);
+    setAvatarLine({ id: ++avatarLineIdRef.current, text, tone: 'bad' });
+  }, [answerFeedback, timeLeftSec]);
+
+  useEffect(() => {
+    if (!avatarLine) return;
+    const t = window.setTimeout(() => setAvatarLine(null), 850);
+    return () => window.clearTimeout(t);
+  }, [avatarLine?.id]);
+
+  const avatarMood: AvatarMood =
+    answerFeedback === 'correct'
+      ? 'correct'
+      : answerFeedback === 'wrong'
+        ? 'wrong'
+        : isUrgent
+          ? 'thinking'
+          : 'idle';
+
   return (
-    <div className="relative min-h-screen pb-24 overflow-hidden">
+    <div className="relative min-h-screen pb-20 overflow-hidden">
       <LightAcademyBackground />
 
       {/* 魔法陣オーバーレイ */}
@@ -1333,7 +1476,11 @@ const QuizPlayView = ({
         {/* 問題文（正答率:右上 / 出題者:右下） */}
         <div
           className="relative rounded-2xl p-4 mb-3 pb-7"
-          style={{ border: '1px solid rgba(160,150,210,0.22)', background: 'rgba(255,255,255,0.94)', boxShadow: '0 12px 28px rgba(80,60,160,0.08)' }}
+          style={{
+            background: 'rgba(255,255,255,0.94)',
+            border: '1px solid rgba(160,150,210,0.22)',
+            boxShadow: '0 12px 28px rgba(80,60,160,0.08)',
+          }}
         >
           <div
             className="absolute top-2.5 right-2.5 z-[1] rounded-lg px-2.5 py-1 text-xs font-black tabular-nums shadow-md"
@@ -1367,10 +1514,17 @@ const QuizPlayView = ({
         {/* タイマー */}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[11px] font-bold" style={{ color: 'rgba(67,54,98,0.74)' }}>制限時間</span>
-            <span className="text-sm font-black" style={{ color: timeLeftSec <= 3 ? '#dc2626' : '#6d28d9' }}>
-              {timeLeftSec}s
+            <span className="text-[11px] font-bold" style={{ color: 'rgba(67,54,98,0.74)' }}>
+              制限時間
             </span>
+            <motion.span
+              className="font-black tabular-nums"
+              style={{ fontSize: 28, color: isUrgent ? '#ef4444' : '#6d28d9' }}
+              animate={isUrgent ? { opacity: [1, 0.25, 1] } : { opacity: 1 }}
+              transition={isUrgent ? { duration: 0.6, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }}
+            >
+              {timeLeftSec}s
+            </motion.span>
           </div>
           <div className="h-2 rounded-full bg-white/70 border border-violet-200 overflow-hidden">
             <div
@@ -1383,52 +1537,259 @@ const QuizPlayView = ({
           </div>
         </div>
 
-        {/* 選択肢（シャッフル済み displayChoices を使用） */}
-        <div className="space-y-2.5">
-          {current.displayChoices.map((choiceText, displayIdx) => {
-            const isSelected = selectedDisplayIndex === displayIdx;
-            const isCorrectDisplay = displayIdx === current.displayAnswerIndex;
+        {/* 選択肢 + すうひもち（左に配置して存在感UP） */}
+        <div className="flex items-center gap-3">
+          <div className="shrink-0 pointer-events-none -mt-1 relative">
+            <QuizAvatar mood={avatarMood} />
+            <AnimatePresence>
+              {avatarLine && (
+                <motion.div
+                  key={avatarLine.id}
+                  className="absolute left-1/2 -translate-x-1/2 -top-6 z-20"
+                  initial={{ opacity: 0, y: 6, scale: 0.92 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                >
+                  <motion.div
+                    className="relative rounded-2xl px-3 py-2 text-sm font-black whitespace-nowrap"
+                    style={{
+                      color: avatarLine.tone === 'good' ? '#052e16' : '#450a0a',
+                      background:
+                        avatarLine.tone === 'good'
+                          ? 'linear-gradient(135deg, rgba(220,252,231,0.98), rgba(187,247,208,0.98))'
+                          : 'linear-gradient(135deg, rgba(254,226,226,0.98), rgba(252,165,165,0.90))',
+                      border:
+                        avatarLine.tone === 'good'
+                          ? '1px solid rgba(34,197,94,0.30)'
+                          : '1px solid rgba(239,68,68,0.28)',
+                      boxShadow:
+                        avatarLine.tone === 'good'
+                          ? '0 10px 24px rgba(34,197,94,0.18)'
+                          : '0 10px 24px rgba(239,68,68,0.16)',
+                    }}
+                    animate={
+                      avatarLine.tone === 'good'
+                        ? { scale: [1, 1.06, 1] }
+                        : { x: [0, -2, 2, -1, 1, 0] }
+                    }
+                    transition={{ duration: 0.35, ease: 'easeOut' }}
+                  >
+                    {avatarLine.text}
+                    <div
+                      className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 h-3 w-3 rotate-45"
+                      style={{
+                        background:
+                          avatarLine.tone === 'good'
+                            ? 'rgba(205,250,224,0.98)'
+                            : 'rgba(253,200,200,0.96)',
+                      }}
+                    />
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-            let bg = 'rgba(255,255,255,0.92)';
-            let border = '1px solid rgba(160,150,210,0.24)';
-            let shadow = '0 8px 16px rgba(80,60,160,0.06)';
-            let textColor = 'rgba(55,38,105,0.95)';
+          <div className="flex-1 space-y-2.5">
+            {current.displayChoices.map((choiceText, displayIdx) => {
+              const isSelected = selectedDisplayIndex === displayIdx;
+              const isCorrectDisplay = displayIdx === current.displayAnswerIndex;
 
-            if (answerFeedback && isLocked) {
-              if (isCorrectDisplay) {
-                bg = 'linear-gradient(135deg, rgba(220,252,231,0.98), rgba(187,247,208,0.98))';
-                border = '1.5px solid rgba(34,197,94,0.60)';
-                shadow = '0 10px 24px rgba(34,197,94,0.20)';
-                textColor = '#14532d';
-              } else if (isSelected && answerFeedback === 'wrong') {
-                bg = 'linear-gradient(135deg, rgba(254,226,226,0.98), rgba(252,165,165,0.90))';
-                border = '1.5px solid rgba(239,68,68,0.55)';
-                shadow = '0 10px 24px rgba(239,68,68,0.18)';
-                textColor = '#7f1d1d';
+              let bg = 'rgba(255,255,255,0.92)';
+              let border = '1px solid rgba(160,150,210,0.24)';
+              let shadow = '0 8px 16px rgba(80,60,160,0.06)';
+              let textColor = 'rgba(55,38,105,0.95)';
+
+              if (answerFeedback && isLocked) {
+                if (isCorrectDisplay) {
+                  bg = 'linear-gradient(135deg, rgba(220,252,231,0.98), rgba(187,247,208,0.98))';
+                  border = '1.5px solid rgba(34,197,94,0.60)';
+                  shadow = '0 10px 24px rgba(34,197,94,0.20)';
+                  textColor = '#14532d';
+                } else if (isSelected && answerFeedback === 'wrong') {
+                  bg = 'linear-gradient(135deg, rgba(254,226,226,0.98), rgba(252,165,165,0.90))';
+                  border = '1.5px solid rgba(239,68,68,0.55)';
+                  shadow = '0 10px 24px rgba(239,68,68,0.18)';
+                  textColor = '#7f1d1d';
+                }
+              } else if (isSelected) {
+                bg = 'linear-gradient(135deg, rgba(238,242,255,0.96), rgba(224,231,255,0.96))';
+                border = '1px solid rgba(99,102,241,0.66)';
+                shadow = '0 10px 20px rgba(99,102,241,0.16)';
               }
-            } else if (isSelected) {
-              bg = 'linear-gradient(135deg, rgba(238,242,255,0.96), rgba(224,231,255,0.96))';
-              border = '1px solid rgba(99,102,241,0.66)';
-              shadow = '0 10px 20px rgba(99,102,241,0.16)';
-            }
 
-            return (
-              <motion.button
-                key={`${current.id}-display-${displayIdx}`}
-                onClick={(e) => {
-                  if (isLocked) return;
-                  onAnswer(displayIdx, e.clientX, e.clientY);
+              return (
+                <motion.button
+                  key={`${current.id}-display-${displayIdx}`}
+                  onClick={(e) => {
+                    if (isLocked) return;
+                    onAnswer(displayIdx, e.clientX, e.clientY);
+                  }}
+                  className="w-full rounded-2xl px-4 py-3 text-left transition-colors duration-200"
+                  style={{
+                    border,
+                    background: bg,
+                    boxShadow: shadow,
+                    color: textColor,
+                    cursor: isLocked ? 'default' : 'pointer',
+                  }}
+                  animate={answerFeedback && isCorrectDisplay ? { scale: [1, 1.03, 1] } : { scale: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <span className="text-sm font-black mr-2">{ANSWER_LABELS[displayIdx]}</span>
+                  <span className="text-sm font-semibold">{choiceText}</span>
+                </motion.button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* 画面最下部 固定ステータスバー */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-[70]"
+        style={{
+          height: 56,
+          background: 'rgba(10,5,30,0.92)',
+          borderTop: '1px solid rgba(255,255,255,0.1)',
+          backdropFilter: 'blur(12px)',
+        }}
+      >
+        <div className="max-w-md mx-auto h-full px-4 flex items-center justify-between">
+          <div className="text-sm font-black text-white tabular-nums">
+            {currentQuestionIndex + 1} / {questions.length}
+          </div>
+          <div className="text-sm font-black text-white tabular-nums">
+            ⭕ {correctCount}問
+          </div>
+          <div className="relative font-black tabular-nums text-white">
+            <AnimatePresence>
+              {lastGain && lastGain > 0 && (
+                <motion.div
+                  key={`gain-${scoreFxKey}`}
+                  className="absolute -top-5 right-0 text-[12px] font-black tabular-nums"
+                  style={{
+                    color:
+                      displayScore >= 76
+                        ? '#fef3c7'
+                        : displayScore >= 56
+                          ? '#f472b6'
+                          : displayScore >= 36
+                            ? '#c4b5fd'
+                            : displayScore >= 16
+                              ? '#60a5fa'
+                              : '#67e8f9',
+                    textShadow:
+                      displayScore >= 76
+                        ? '0 0 12px rgba(253,230,138,0.55)'
+                        : displayScore >= 56
+                          ? '0 0 12px rgba(244,114,182,0.60)'
+                          : displayScore >= 36
+                            ? '0 0 12px rgba(167,139,250,0.55)'
+                            : displayScore >= 16
+                              ? '0 0 12px rgba(96,165,250,0.55)'
+                              : '0 0 12px rgba(103,232,249,0.55)',
+                  }}
+                  initial={{ opacity: 0, y: 8, scale: 0.8 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.9 }}
+                  transition={{ duration: 0.55, ease: 'easeOut' }}
+                >
+                  +{lastGain}
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <motion.span
+              key={`score-${scoreFxKey}`}
+              className="inline-flex items-baseline gap-1.5"
+              initial={{ scale: 1, filter: 'drop-shadow(0 0 0 rgba(0,0,0,0))' }}
+              animate={{
+                scale: [1, 1.35, 0.92, 1.18, 1],
+                color:
+                  displayScore >= 76
+                    ? ['#f8fafc', '#fde68a', '#f8fafc'] // 白金
+                    : displayScore >= 56
+                      ? ['#ffe4f3', '#f472b6', '#ffe4f3'] // 赤紫(マゼンタ)
+                      : displayScore >= 36
+                        ? ['#ede9fe', '#a78bfa', '#ede9fe'] // 紫
+                        : displayScore >= 16
+                          ? ['#dbeafe', '#3b82f6', '#dbeafe'] // 青
+                          : ['#cffafe', '#22d3ee', '#cffafe'], // 水色
+                filter: [
+                  `drop-shadow(0 0 0px rgba(0,0,0,0))`,
+                  displayScore >= 76
+                    ? `drop-shadow(0 0 20px rgba(253,230,138,0.80))`
+                    : displayScore >= 56
+                      ? `drop-shadow(0 0 20px rgba(244,114,182,0.85))`
+                      : displayScore >= 36
+                        ? `drop-shadow(0 0 20px rgba(167,139,250,0.80))`
+                        : displayScore >= 16
+                          ? `drop-shadow(0 0 20px rgba(59,130,246,0.75))`
+                          : `drop-shadow(0 0 20px rgba(34,211,238,0.75))`,
+                  displayScore >= 76
+                    ? `drop-shadow(0 0 10px rgba(253,230,138,0.55))`
+                    : displayScore >= 56
+                      ? `drop-shadow(0 0 10px rgba(244,114,182,0.60))`
+                      : displayScore >= 36
+                        ? `drop-shadow(0 0 10px rgba(167,139,250,0.55))`
+                        : displayScore >= 16
+                          ? `drop-shadow(0 0 10px rgba(59,130,246,0.50))`
+                          : `drop-shadow(0 0 10px rgba(34,211,238,0.50))`,
+                  `drop-shadow(0 0 0px rgba(0,0,0,0))`,
+                ],
+              }}
+              transition={{ duration: 0.55, ease: 'easeOut' }}
+            >
+              <span
+                style={{
+                  color:
+                    displayScore >= 76
+                      ? '#fde68a'
+                      : displayScore >= 56
+                        ? '#f472b6'
+                        : displayScore >= 36
+                          ? '#a78bfa'
+                          : displayScore >= 16
+                            ? '#3b82f6'
+                            : '#22d3ee',
+                  textShadow:
+                    displayScore >= 76
+                      ? '0 0 12px rgba(253,230,138,0.55)'
+                      : displayScore >= 56
+                        ? '0 0 12px rgba(244,114,182,0.60)'
+                        : displayScore >= 36
+                          ? '0 0 12px rgba(167,139,250,0.55)'
+                          : displayScore >= 16
+                            ? '0 0 12px rgba(59,130,246,0.55)'
+                            : '0 0 12px rgba(34,211,238,0.55)',
                 }}
-                className="w-full rounded-2xl px-4 py-3 text-left transition-colors duration-200"
-                style={{ border, background: bg, boxShadow: shadow, color: textColor, cursor: isLocked ? 'default' : 'pointer' }}
-                animate={answerFeedback && isCorrectDisplay ? { scale: [1, 1.03, 1] } : { scale: 1 }}
-                transition={{ duration: 0.3 }}
               >
-                <span className="text-sm font-black mr-2">{ANSWER_LABELS[displayIdx]}</span>
-                <span className="text-sm font-semibold">{choiceText}</span>
-              </motion.button>
-            );
-          })}
+                ★
+              </span>
+              <span
+                className="leading-none"
+                style={{
+                  fontSize: 24,
+                  textShadow:
+                    displayScore >= 76
+                      ? '0 0 14px rgba(253,230,138,0.45)'
+                      : displayScore >= 56
+                        ? '0 0 14px rgba(244,114,182,0.45)'
+                        : displayScore >= 36
+                          ? '0 0 14px rgba(167,139,250,0.42)'
+                          : displayScore >= 16
+                            ? '0 0 14px rgba(59,130,246,0.38)'
+                            : '0 0 14px rgba(34,211,238,0.38)',
+                }}
+              >
+                {displayScore}
+              </span>
+              <span className="text-[10px] font-black" style={{ color: 'rgba(255,255,255,0.70)' }}>
+                pt
+              </span>
+            </motion.span>
+          </div>
         </div>
       </div>
     </div>
@@ -1733,6 +2094,8 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
 
   if (selectedCat) {
     if (quizPhase === 'playing') {
+      const currentScore = quizResults.reduce((s, r) => s + r.totalPoint, 0);
+      const correctCount = quizResults.filter((r) => r.isCorrect).length;
       return (
         <QuizPlayView
           cat={selectedCat}
@@ -1743,6 +2106,8 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
           isLocked={isLocked}
           answerFeedback={answerFeedback}
           magicCircles={magicCircles}
+          currentScore={currentScore}
+          correctCount={correctCount}
           onRemoveMagicCircle={(id) => setMagicCircles((prev) => prev.filter((c) => c.id !== id))}
           onAnswer={(displayIdx, cx, cy) => finishCurrentAndMove(displayIdx, cx, cy)}
           onBackToRoom={handleBackToRoom}
