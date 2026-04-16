@@ -35,7 +35,7 @@ type RequestBody = {
 // 入力トークン制限（最大3000文字）
 // ============================================================
 
-const MAX_INPUT_CHARS = 900;
+const MAX_INPUT_CHARS = 1200;
 
 /**
  * systemPrompt + userTurn + conversationHistory の合算が
