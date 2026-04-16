@@ -103,7 +103,7 @@ const GENERATION_CONFIG = {
   temperature: 0.85,
   topP: 0.92,
   topK: 40,
-  maxOutputTokens: 70,
+  maxOutputTokens: 150,
   stopSequences: [], // 特定パターンで止めたい場合はここに追加
 };
 
