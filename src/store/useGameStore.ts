@@ -704,7 +704,7 @@ interface GameActions {
   setSuhimochiCurrentRequest: (req: SuhimochiRequest | null) => void;
   answerSuhimochiRequest: () => void;
   registerAnataZukanWords: (entries: AnataZukanExtractedEntry[]) => void;
-  updateAnataZukanEntry: (id: string, patch: Partial<Pick<AnataZukanEntry, 'name' | 'relation' | 'category'>>) => void;
+  updateAnataZukanEntry: (id: string, patch: Partial<Pick<AnataZukanEntry, 'name' | 'relation' | 'category' | 'likePoint'>>) => void;
   deleteAnataZukanEntry: (id: string) => void;
   
   reset: () => void;
@@ -2844,6 +2844,7 @@ export const useGameStore = create<GameStore>()(
           const name = String(raw.name ?? '').trim();
           if (!name || name.length < 2) continue;
           if (raw.confidence < 0.7) continue;
+          const likePoint = String((raw as { likePoint?: unknown }).likePoint ?? '').trim();
 
           const normalizedName = normalizeName(name);
           if (!normalizedName) continue;
@@ -2857,6 +2858,7 @@ export const useGameStore = create<GameStore>()(
               category: raw.confidence >= prev.confidence ? raw.category : prev.category,
               confidence: Math.max(prev.confidence, raw.confidence),
               sourceText: raw.sourceText || prev.sourceText,
+              likePoint: likePoint || prev.likePoint,
               mentionCount: prev.mentionCount + 1,
               updatedAt: now,
             });
@@ -2867,6 +2869,7 @@ export const useGameStore = create<GameStore>()(
               normalizedName,
               relation: raw.relation,
               category: raw.category,
+              likePoint: likePoint || undefined,
               confidence: raw.confidence,
               sourceText: raw.sourceText,
               mentionCount: 1,
@@ -2890,12 +2893,15 @@ export const useGameStore = create<GameStore>()(
               .replace(/\s+/g, '_')
               .replace(/[^\p{L}\p{N}_-]/gu, '')
               .slice(0, 40) || e.normalizedName;
+            const nextLikePointRaw = patch.likePoint !== undefined ? String(patch.likePoint ?? '').trim() : (e.likePoint ?? '');
+            const nextLikePoint = nextLikePointRaw ? nextLikePointRaw.slice(0, 120) : undefined;
             return {
               ...e,
               name: nextName || e.name,
               normalizedName: nextNormalized,
               relation: patch.relation ?? e.relation,
               category: patch.category ?? e.category,
+              likePoint: nextLikePoint,
               updatedAt: new Date().toISOString(),
             };
           }),

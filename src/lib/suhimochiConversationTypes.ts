@@ -70,6 +70,8 @@ export interface AnataZukanEntry {
   normalizedName: string;
   relation: AnataRelation;
   category: AnataCategory;
+  /** 「ここがスキ」（自由記述。会話を深くするメモ） */
+  likePoint?: string;
   sourceText: string;
   confidence: number;
   mentionCount: number;
@@ -81,6 +83,8 @@ export interface AnataZukanExtractedEntry {
   name: string;
   relation: AnataRelation;
   category: AnataCategory;
+  /** 「ここがスキ」（抽出時点では空でもOK） */
+  likePoint?: string;
   sourceText: string;
   confidence: number;
 }

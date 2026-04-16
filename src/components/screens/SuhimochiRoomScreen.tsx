@@ -224,7 +224,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
 
   const scrollRef      = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef       = useRef<HTMLInputElement>(null);
+  const inputRef       = useRef<HTMLTextAreaElement>(null);
   const openingInitRef = useRef(false);
   /** お願いの前置きを二重で履歴に足さない（連打対策） */
   const requestPreambleLockRef = useRef<string | null>(null);
@@ -239,9 +239,14 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const [isReplying, setIsReplying] = useState(false);
   const [replyTargetPost, setReplyTargetPost] = useState<{ id: string; text: string } | null>(null);
   const [isAnataZukanOpen, setIsAnataZukanOpen] = useState(false);
+  const [isManualRegisterOpen, setIsManualRegisterOpen] = useState(false);
+  const [manualRegisterName, setManualRegisterName] = useState('');
+  const [manualRegisterCategory, setManualRegisterCategory] = useState<AnataCategory>('other');
+  const [manualRegisterLikePoint, setManualRegisterLikePoint] = useState('');
   const [editingAnataId, setEditingAnataId] = useState<string | null>(null);
   const [editingAnataName, setEditingAnataName] = useState('');
   const [editingAnataCategory, setEditingAnataCategory] = useState<AnataCategory>('other');
+  const [editingAnataLikePoint, setEditingAnataLikePoint] = useState('');
   const [currentEmotion, setCurrentEmotion] = useState<string>('happy');
   const [intimacyVisible, setIntimacyVisible] = useState(
     suhimochiIntimacy.totalMessages > 0
@@ -818,6 +823,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                   >
                     {[
                       { icon: <ScrollText className="h-4 w-4" />, label: '図鑑を見る', color: 'text-sky-700' },
+                      { icon: <Heart className="h-4 w-4" />, label: '言葉を登録する', color: 'text-rose-700' },
                       { icon: <Paintbrush className="h-4 w-4" />, label: '模様替え', color: 'text-amber-700', isEdit: true },
                     ].map((item) => (
                       <button key={item.label}
@@ -826,6 +832,13 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                           setIsMenuOpen(false);
                           if (item.isEdit) { setIsEditMode(true); return; }
                           if (item.label === '図鑑を見る') { setIsAnataZukanOpen(true); return; }
+                          if (item.label === '言葉を登録する') {
+                            setManualRegisterName('');
+                            setManualRegisterCategory('other');
+                            setManualRegisterLikePoint('');
+                            setIsManualRegisterOpen(true);
+                            return;
+                          }
                           addToast('info', `「${item.label}」は準備中です`);
                         }}
                         className={`flex w-full items-center gap-3 border-b border-amber-100 px-4 py-3 text-sm font-medium last:border-0 hover:bg-amber-50 ${item.color}`}
@@ -839,6 +852,98 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
             </AnimatePresence>
           </div>
         </div>
+
+        {/* 手動登録モーダル（あなた図鑑に登録） */}
+        <AnimatePresence>
+          {isManualRegisterOpen && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                className="w-full max-w-md rounded-3xl border border-amber-200 bg-white p-4 shadow-2xl"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-base font-bold text-amber-900">言葉を登録する</h2>
+                  <button
+                    onClick={() => setIsManualRegisterOpen(false)}
+                    className="rounded-lg px-2 py-1 text-sm text-amber-700 hover:bg-amber-50"
+                  >
+                    閉じる
+                  </button>
+                </div>
+
+                <p className="text-xs text-amber-700/70 mb-3">
+                  登録前に編集できます。すうひもちがあなたのことをもっと理解します。
+                </p>
+
+                <div className="space-y-2">
+                  <input
+                    value={manualRegisterName}
+                    onChange={(e) => setManualRegisterName(e.target.value)}
+                    placeholder="例: ワンピース / 数学 / ラーメン"
+                    className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-amber-900 outline-none"
+                  />
+                  <input
+                    value={manualRegisterLikePoint}
+                    onChange={(e) => setManualRegisterLikePoint(e.target.value)}
+                    placeholder="ここがスキ（任意） 例: セリフが刺さる"
+                    className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-amber-900 outline-none"
+                  />
+                  <select
+                    value={manualRegisterCategory}
+                    onChange={(e) => setManualRegisterCategory(e.target.value as AnataCategory)}
+                    className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-amber-900 outline-none"
+                  >
+                    <option value="work">作品</option>
+                    <option value="character">キャラ</option>
+                    <option value="person">人物</option>
+                    <option value="game">ゲーム</option>
+                    <option value="sport">スポーツ</option>
+                    <option value="music">音楽</option>
+                    <option value="food">食べ物</option>
+                    <option value="place">場所</option>
+                    <option value="animal">動物</option>
+                    <option value="topic">話題</option>
+                    <option value="other">その他</option>
+                  </select>
+                </div>
+
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    onClick={() => setIsManualRegisterOpen(false)}
+                    className="rounded-xl px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    disabled={!isValidAnataZukanEntryName(manualRegisterName.trim())}
+                    onClick={() => {
+                      const name = manualRegisterName.trim();
+                      if (!isValidAnataZukanEntryName(name)) return;
+                      registerAnataZukanWords([{
+                        name,
+                        relation: 'interested',
+                        category: manualRegisterCategory,
+                        likePoint: manualRegisterLikePoint.trim() || undefined,
+                        confidence: 0.95,
+                        sourceText: '手動登録',
+                      }]);
+                      addToast('success', `「${name}」を図鑑に登録したよ`);
+                      setIsManualRegisterOpen(false);
+                    }}
+                    className="rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+                  >
+                    登録する
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* あなた図鑑モーダル */}
         <AnimatePresence>
@@ -888,6 +993,12 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                                   <div className="space-y-2">
                                     <input value={editingAnataName} onChange={(ev) => setEditingAnataName(ev.target.value)}
                                       className="w-full rounded-lg border border-rose-200 bg-white px-2 py-1 text-sm text-rose-900 outline-none" />
+                                    <input
+                                      value={editingAnataLikePoint}
+                                      onChange={(ev) => setEditingAnataLikePoint(ev.target.value)}
+                                      placeholder="ここがスキ（任意）"
+                                      className="w-full rounded-lg border border-rose-200 bg-white px-2 py-1 text-sm text-rose-900 outline-none"
+                                    />
                                     <select value={editingAnataCategory} onChange={(ev) => setEditingAnataCategory(ev.target.value as AnataCategory)}
                                       className="w-full rounded-lg border border-rose-200 bg-white px-2 py-1 text-sm text-rose-900 outline-none">
                                       <option value="work">作品</option>
@@ -904,15 +1015,20 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                                     </select>
                                     <div className="flex justify-end gap-2">
                                       <button onClick={() => setEditingAnataId(null)} className="rounded-lg px-2 py-1 text-xs text-rose-600 hover:bg-rose-50">キャンセル</button>
-                                      <button onClick={() => { updateAnataZukanEntry(e.id, { name: editingAnataName.trim() || e.name, category: editingAnataCategory }); setEditingAnataId(null); }}
+                                      <button onClick={() => { updateAnataZukanEntry(e.id, { name: editingAnataName.trim() || e.name, category: editingAnataCategory, likePoint: editingAnataLikePoint }); setEditingAnataId(null); }}
                                         className="rounded-lg bg-rose-500 px-2 py-1 text-xs text-white">保存</button>
                                     </div>
                                   </div>
                                 ) : (
                                   <div className="flex items-center justify-between gap-2">
-                                    <p className="text-sm font-medium text-rose-900">{e.name}</p>
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium text-rose-900">{e.name}</p>
+                                      {e.likePoint ? (
+                                        <p className="text-[11px] text-rose-700/70 line-clamp-1">ここがスキ: {e.likePoint}</p>
+                                      ) : null}
+                                    </div>
                                     <div className="flex items-center gap-2">
-                                      <button onClick={() => { setEditingAnataId(e.id); setEditingAnataName(e.name); setEditingAnataCategory((e.category as AnataCategory) || 'other'); }}
+                                      <button onClick={() => { setEditingAnataId(e.id); setEditingAnataName(e.name); setEditingAnataCategory((e.category as AnataCategory) || 'other'); setEditingAnataLikePoint(e.likePoint ?? ''); }}
                                         className="text-xs text-rose-600 hover:underline">編集</button>
                                       <button onClick={() => deleteAnataZukanEntry(e.id)} className="text-xs text-rose-500 hover:underline">削除</button>
                                     </div>
@@ -1176,12 +1292,22 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                 <button onClick={() => setReplyTargetPost(null)} className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-100">解除</button>
               </div>
             )}
-            <div className="flex gap-2 items-center p-2">
-              <input ref={inputRef} value={talkInput} onChange={(e) => setTalkInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleSendTalk(); }}
+            <div className="flex gap-2 items-end p-2">
+              <textarea
+                ref={inputRef}
+                value={talkInput}
+                onChange={(e) => setTalkInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendTalk();
+                  }
+                }}
                 placeholder={isReplying ? 'すうひもちが考えてる…' : replyTargetPost ? 'ひとり言への返事を書く' : 'すうひもちに話しかける'}
                 disabled={isReplying}
-                className="flex-1 bg-transparent px-3 py-2 text-sm text-amber-900 placeholder:text-amber-400 outline-none disabled:opacity-50" />
+                rows={3}
+                className="flex-1 bg-transparent px-3 py-2 text-sm text-amber-900 placeholder:text-amber-400 outline-none disabled:opacity-50 resize-none leading-relaxed min-h-[3.5rem] max-h-32 overflow-y-auto"
+              />
               <motion.button onClick={handleSendTalk} disabled={isReplying || !talkInput.trim()}
                 className="shrink-0 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-orange-200 disabled:opacity-40"
                 whileHover={{ scale: isReplying ? 1 : 1.04 }} whileTap={{ scale: isReplying ? 1 : 0.96 }}>

@@ -35,34 +35,59 @@ type RequestBody = {
 // 入力トークン制限（最大3000文字）
 // ============================================================
 
-const MAX_INPUT_CHARS = 2500;
+const MAX_INPUT_CHARS = 900;
 
 /**
- * systemPrompt + userTurn を優先して確保し、
- * 残り枠を履歴に使う。履歴は新しい順に詰める。
+ * systemPrompt + userTurn + conversationHistory の合算が
+ * 必ず MAX_INPUT_CHARS 以内になるように整形する。
+ *
+ * - systemPrompt が長すぎる場合は先頭から切る
+ * - userTurn は末尾に「…」を付けつつ切る（必要な場合）
+ * - history は新しい順に詰め、収まらないメッセージは採用しない
  */
-const trimHistoryToFit = (
-  systemPrompt: string,
-  conversationHistory: GeminiMessage[],
-  userTurn: string,
-): GeminiMessage[] => {
-  const fixedChars = systemPrompt.length + userTurn.length;
-  const budget = MAX_INPUT_CHARS - fixedChars;
+const SEPARATOR_BUDGET_CHARS = 24; // 改行などの区切り分（ざっくり）
 
-  if (budget <= 0) return [];
+const clampText = (text: string, maxLen: number, opts?: { ellipsis?: boolean }): string => {
+  const t = String(text ?? '');
+  const limit = Math.max(0, maxLen);
+  if (t.length <= limit) return t;
+  if (!opts?.ellipsis || limit <= 1) return t.slice(0, limit);
+  return t.slice(0, Math.max(0, limit - 1)) + '…';
+};
 
-  const result: GeminiMessage[] = [];
+const fitPromptParts = (params: {
+  systemPrompt: string;
+  userTurn: string;
+  conversationHistory: GeminiMessage[];
+}): { systemPrompt: string; userTurn: string; history: GeminiMessage[] } => {
+  const max = Math.max(0, MAX_INPUT_CHARS - SEPARATOR_BUDGET_CHARS);
+
+  // 1) system を確保（必要なら切る）
+  const systemPrompt = clampText(params.systemPrompt, max, { ellipsis: false });
+
+  // 2) userTurn を確保（残りに合わせて切る）
+  const remainingForUserAndHistory = Math.max(0, max - systemPrompt.length);
+  const userTurn = clampText(params.userTurn, remainingForUserAndHistory, { ellipsis: true });
+
+  // 3) history を残りに収まるだけ詰める（新しい順）
+  const budgetForHistory = Math.max(0, max - systemPrompt.length - userTurn.length);
+  if (budgetForHistory <= 0) return { systemPrompt, userTurn, history: [] };
+
+  const history: GeminiMessage[] = [];
   let used = 0;
+  const src = params.conversationHistory ?? [];
 
-  for (let i = conversationHistory.length - 1; i >= 0; i--) {
-    const msg = conversationHistory[i];
-    const len = msg.parts[0]?.text?.length ?? 0;
-    if (used + len > budget) break;
-    result.unshift(msg);
+  for (let i = src.length - 1; i >= 0; i--) {
+    const msg = src[i];
+    const raw = msg?.parts?.[0]?.text ?? '';
+    const len = String(raw).length;
+    if (len <= 0) continue;
+    if (used + len > budgetForHistory) break;
+    history.unshift({ role: msg.role, parts: [{ text: String(raw) }] });
     used += len;
   }
 
-  return result;
+  return { systemPrompt, userTurn, history };
 };
 
 // ---- Gemini API 設定 ----
@@ -78,7 +103,7 @@ const GENERATION_CONFIG = {
   temperature: 0.85,
   topP: 0.92,
   topK: 40,
-  maxOutputTokens: 200,
+  maxOutputTokens: 70,
   stopSequences: [], // 特定パターンで止めたい場合はここに追加
 };
 
@@ -98,23 +123,27 @@ export async function POST(req: Request) {
 
   if (body.systemPrompt && body.userTurn) {
     // ★ 新シグネチャ：systemPrompt + userTurn + conversationHistory
-    systemInstruction = body.systemPrompt;
-    const history = body.conversationHistory ?? [];
-    const trimmedHistory = trimHistoryToFit(
-      body.systemPrompt,
-      history,
-      body.userTurn,
-    );
+    const fitted = fitPromptParts({
+      systemPrompt: body.systemPrompt,
+      userTurn: body.userTurn,
+      conversationHistory: body.conversationHistory ?? [],
+    });
+    systemInstruction = fitted.systemPrompt;
     contents = [
-      ...trimmedHistory,
-      { role: 'user', parts: [{ text: body.userTurn }] },
+      ...fitted.history,
+      { role: 'user', parts: [{ text: fitted.userTurn }] },
     ];
   } else if (body.basePrompt && body.dynamicPrompt) {
     // ★ 旧シグネチャ（後方互換）
     // basePrompt をシステム指示、dynamicPrompt をユーザーターンとして扱う
-    systemInstruction = body.basePrompt;
+    const fitted = fitPromptParts({
+      systemPrompt: body.basePrompt,
+      userTurn: body.dynamicPrompt,
+      conversationHistory: [],
+    });
+    systemInstruction = fitted.systemPrompt;
     contents = [
-      { role: 'user', parts: [{ text: body.dynamicPrompt }] },
+      { role: 'user', parts: [{ text: fitted.userTurn }] },
     ];
   } else {
     return NextResponse.json({ error: 'Missing prompt fields' }, { status: 400 });
