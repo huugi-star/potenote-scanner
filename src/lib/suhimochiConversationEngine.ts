@@ -83,8 +83,11 @@ export const isWordRegisteredInAnataZukan = (word: string, entries: AnataZukanEn
 // ── システムプロンプト ───────────────────────────────────────
 
 const INTIMACY_DESC: Record<number, string> = {
-  1: 'まだ会ったばかり', 2: 'なかよし', 3: 'ともだち。砕けた言い方OK',
-  4: 'しんゆう。深い感情OK', 5: 'ずっといっしょ。言葉なくても通じ合う',
+  1: 'まだ会ったばかり。やさしく控えめだが、会話はちゃんと広げる',
+  2: 'なかよし。自然に問いかけて会話を続ける',
+  3: 'ともだち。砕けた言い方OK。少し踏み込んで聞いてよい',
+  4: 'しんゆう。深い感情OK。気持ちの奥をやさしく聞いてよい',
+  5: 'ずっといっしょ。言葉なくても通じ合う。短くても深く返してよい',
 };
 
 const buildSystemPrompt = (params: { collectedWords: SuhimochiCollectedWord[]; intimacyLevel?: 1|2|3|4|5 }): string =>
@@ -103,7 +106,7 @@ const buildSystemPrompt = (params: { collectedWords: SuhimochiCollectedWord[]; i
 ・必ず次を引き出すひとことを添える
 
 【寄り添い】
-つらい・しんどい・疲れた → 解決せず気持ちを受けて、いちばん重かった感情や場面をやさしく聞く。「それはしんどいね。今日いちばんきつかったの、どこだった？」「なんか引っかかってる感じある？」「気持ち、まだ張ってる？」
+つらい・しんどい・疲れた → 解決せず気持ちを受けて、いちばん重かった感情や場面をやさしく聞く。
 【禁止】
 ・ユーザーの語句を「」で拾って返す
 ・オウム返し
