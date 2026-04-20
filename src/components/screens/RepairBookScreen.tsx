@@ -819,7 +819,7 @@ export function RepairBookScreen({ onBack, onStartQuiz }: { onBack: () => void; 
               className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-bold"
               style={{ background: `linear-gradient(135deg,${tier.color}22,${tier.glow}33)`, color: tier.color, border: `1px solid ${tier.color}66`, boxShadow: '0 1px 5px rgba(0,0,0,0.07)' }}
               whileTap={{ scale: 0.95 }}>
-              📄+10
+              📄+5
             </motion.button>
           </div>
         </div>
