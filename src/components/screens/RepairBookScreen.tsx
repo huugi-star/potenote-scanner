@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
-import { ArrowLeft, Sparkles } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import {
   addRepairBookFragments,
   getRepairBookFragments,
@@ -17,7 +17,6 @@ import {
   RANK_TIERS,
   TOTAL_TIERS,
   TOTAL_BOOKS_MAX,
-  FRAGMENTS_PER_BOOK_BY_TIER,
 } from '@/constants/rankSystem';
 
 // ─────────────────────────────────────────
@@ -480,7 +479,6 @@ export function RepairBookScreen({ onBack, onStartQuiz }: { onBack: () => void; 
   const { totalBooks, fragmentsInCurrentBook: inBook, currentFragsPerBook } = useMemo(
     () => calcBooksFromFragments(fragments), [fragments],
   );
-  const pctInBook = (inBook / currentFragsPerBook) * 100;
   const rankInfo  = calcRankInfo(totalBooks);
   const { tier, gradeLabel, booksInTier, booksForTier, booksUntilNextTier, isMaxRank } = rankInfo;
 
@@ -522,8 +520,6 @@ export function RepairBookScreen({ onBack, onStartQuiz }: { onBack: () => void; 
     const r = heroRef.current.getBoundingClientRect();
     return { left: `${r.left + r.width / 2}px`, top: `${r.top + r.height / 2}px` };
   }, []);
-
-  const demoAdd = useCallback(() => { const n = addRepairBookFragments(1); targetRef.current = n; }, []);
 
   // 次ランク名
   const nextTierName = isMaxRank ? null : RANK_TIERS[Math.min(rankInfo.tierIndex + 1, TOTAL_TIERS - 1)].name;
