@@ -19,6 +19,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
+import { addRepairBookFragments, SCORE_PER_KOTOBA_LEAF } from '@/lib/repairBookFragments';
 import type { AcademyUserQuestion } from '@/types';
 import { QuizResultView } from './minnano-mondai/QuizResultView';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
@@ -2042,6 +2043,11 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     if (quizResults.length < activeQuizQuestionCountRef.current) return;
 
     answerBatchSentRef.current = true;
+    const quizTotalScore = quizResults.reduce((s, r) => s + r.basePoint + r.timeBonus, 0);
+    const gainedFragments = Math.floor(quizTotalScore / SCORE_PER_KOTOBA_LEAF);
+    if (gainedFragments > 0) {
+      addRepairBookFragments(gainedFragments);
+    }
     const questionById = new Map(quizQuestions.map((q) => [q.id, q]));
     const answers: AcademyAnswerBatchItem[] = quizResults.map((result) => {
       const q = questionById.get(result.questionId);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -18,10 +18,14 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ScrollText,
 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { useToast } from '@/components/ui/Toast';
 import { MinnanoMondaiScreen } from '@/components/screens/MinnanoMondaiScreen';
+import { RepairBookScreen } from '@/components/screens/RepairBookScreen';
+import { getRepairBookFragments, FRAGMENTS_PER_REPAIRED_BOOK } from '@/lib/repairBookFragments';
+import { calcRankInfo } from '@/constants/rankSystem';
 import { storyIntroPages, STORY_INTRO_READ_KEY } from '@/data/storyIntroPages';
 import { CREATION_CATEGORIES, SUBCATEGORY_SUGGESTIONS } from '@/data/categories';
 import { StoryIntroScreen } from '@/components/story/StoryIntroScreen';
@@ -33,6 +37,7 @@ import type { AcademyUserQuestion, QuizHistory } from '@/types';
 
 type AcademySubview =
   | 'top'
+  | 'repair_book'
   | 'everyone'
   | 'mine'
   | 'create_seed_list'   // ① テーマ選択
@@ -328,10 +333,46 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
   const refreshAcademyQuestions = useGameStore((s) => s.refreshAcademyQuestions);
 
   const [subview, setSubview] = useState<AcademySubview>('top');
+  /** みんなの問題から戻る先（修繕画面から入ったときは修繕へ戻す） */
+  const [quizBackSubview, setQuizBackSubview] = useState<'top' | 'repair_book'>('top');
+
+  /** 修繕画面と同じ紙片→修繕冊数→称号（ことば図書館トップ表示用） */
+  const [repairFragmentSnapshot, setRepairFragmentSnapshot] = useState(0);
+  const refreshRepairRankSnapshot = useCallback(() => {
+    setRepairFragmentSnapshot(getRepairBookFragments());
+  }, []);
 
   useEffect(() => {
     void refreshAcademyQuestions();
   }, [refreshAcademyQuestions, subview]);
+
+  useEffect(() => {
+    refreshRepairRankSnapshot();
+  }, [subview, refreshRepairRankSnapshot]);
+
+  useEffect(() => {
+    refreshRepairRankSnapshot();
+    const onStorage = () => refreshRepairRankSnapshot();
+    const onFocus = () => refreshRepairRankSnapshot();
+    const onVis = () => {
+      if (document.visibilityState === 'visible') refreshRepairRankSnapshot();
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    const id = window.setInterval(refreshRepairRankSnapshot, 800);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+      window.clearInterval(id);
+    };
+  }, [refreshRepairRankSnapshot]);
+
+  const libraryRankTitle = useMemo(() => {
+    const totalBooks = Math.floor(repairFragmentSnapshot / FRAGMENTS_PER_REPAIRED_BOOK);
+    return calcRankInfo(totalBooks).fullTitle;
+  }, [repairFragmentSnapshot]);
 
   // 作問フロー用ステート
   const [selectedThemeId,          setSelectedThemeId]          = useState<string | null>(null);
@@ -539,8 +580,20 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
 
   // ── サブビューの描画 ──────────────────────────────────────
 
+  if (subview === 'repair_book') {
+    return (
+      <RepairBookScreen
+        onBack={() => setSubview('top')}
+        onStartQuiz={() => {
+          setQuizBackSubview('repair_book');
+          setSubview('everyone');
+        }}
+      />
+    );
+  }
+
   if (subview === 'everyone') {
-    return <MinnanoMondaiScreen onBack={() => setSubview('top')} />;
+    return <MinnanoMondaiScreen onBack={() => setSubview(quizBackSubview)} />;
   }
   if (subview === 'mine') {
     const safeMinePage =
@@ -1379,11 +1432,11 @@ if (subview === 'create_detail') {
 
         {/* マジックアカデミーヘッダー */}
         <div className="rounded-2xl p-5 mb-5 border border-indigo-500/30 bg-gradient-to-br from-indigo-900/80 via-purple-900/70 to-slate-900/80">
-          <p className="text-white text-2xl font-bold mb-4">🎓 見習い司書 10級</p>
+          <p className="text-white text-2xl font-bold mb-4">🎓 {libraryRankTitle}</p>
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="rounded-xl bg-black/20 border border-white/10 px-3 py-2 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-cyan-300 shrink-0" />
-              <span className="text-indigo-100 text-sm">聖晶ポテト × {magicStones}</span>
+              <span className="text-indigo-100 text-sm">ポテ聖晶 × {magicStones}</span>
             </div>
             <div className="rounded-xl bg-black/20 border border-white/10 px-3 py-2 flex items-center gap-2">
               <Flame className="w-4 h-4 text-orange-300 shrink-0" />
@@ -1418,8 +1471,44 @@ if (subview === 'create_detail') {
             )}
           </motion.button>
 
+          {/* メイン導線：クイズ＝本を修繕する（世界観） */}
           <motion.button
-            onClick={() => setSubview('everyone')}
+            type="button"
+            onClick={() => setSubview('repair_book')}
+            className="relative w-full overflow-hidden rounded-2xl border border-amber-300/90 bg-gradient-to-br from-amber-50 via-orange-50/95 to-amber-100 p-5 text-left shadow-lg shadow-amber-900/20 ring-1 ring-amber-400/25"
+            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: 1.01 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+          >
+            <div
+              className="pointer-events-none absolute -right-6 -top-8 h-28 w-28 rounded-full bg-amber-400/25 blur-2xl"
+              aria-hidden
+            />
+            <div className="relative flex items-start gap-4">
+              <div
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-600 to-orange-700 text-white shadow-md shadow-amber-900/30"
+                aria-hidden
+              >
+                <ScrollText className="h-7 w-7" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0 flex-1 pt-0.5">
+                <h2 className="text-xl font-black tracking-tight text-amber-950">本を修繕する</h2>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-amber-950/85">
+                  問題を解いてことばの紙片を集め、本として修繕する。蔵書が増え図書館に戻れば、進級・昇格の道も開ける。
+                </p>
+                <p className="mt-3 flex items-center gap-1 text-xs font-bold text-amber-800">
+                  <span>修繕の部屋へ</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                </p>
+              </div>
+            </div>
+          </motion.button>
+
+          <motion.button
+            onClick={() => {
+              setQuizBackSubview('top');
+              setSubview('everyone');
+            }}
             className="w-full py-5 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-blue-500/25"
             whileTap={{ scale: 0.98 }}
           >

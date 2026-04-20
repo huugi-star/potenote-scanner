@@ -43,6 +43,8 @@ import { ShareModal } from '@/components/ui/ShareModal';
 import { DeveloperSupport } from '@/components/ui/DeveloperSupport';
 
 import { vibrateLight } from '@/lib/haptics';
+import { getRepairBookFragments } from '@/lib/repairBookFragments';
+import { calcBooksFromFragments, calcRankInfo } from '@/constants/rankSystem';
 
 // ===== Types =====
 
@@ -207,6 +209,31 @@ const HomeScreen = ({
     accessory: equipment.accessory ? getItemById(equipment.accessory) : undefined,
   }), [equipment.head, equipment.body, equipment.face, equipment.accessory]);
 
+  const [kotobaLeafCount, setKotobaLeafCount] = useState(0);
+
+  useEffect(() => {
+    const sync = () => setKotobaLeafCount(getRepairBookFragments());
+    sync();
+    window.addEventListener('storage', sync);
+    window.addEventListener('focus', sync);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') sync();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    const iv = window.setInterval(sync, 800);
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener('focus', sync);
+      document.removeEventListener('visibilitychange', onVis);
+      window.clearInterval(iv);
+    };
+  }, []);
+
+  const libraryRankInfo = useMemo(() => {
+    const { totalBooks } = calcBooksFromFragments(kotobaLeafCount);
+    return calcRankInfo(totalBooks);
+  }, [kotobaLeafCount]);
+
   return (
     // ★ 背景画像レイヤー追加
     <div className="relative min-h-screen pb-24">
@@ -275,10 +302,38 @@ const HomeScreen = ({
         </div>
 
         {/* ステータスバー */}
-        <div className="mb-8">
+        <div className="mb-4">
           <div className="flex items-center gap-2 px-4 py-2 bg-gray-800/60 rounded-xl border border-gray-700/80 backdrop-blur-sm">
             <Coins className="w-5 h-5 text-yellow-400" />
             <span className="text-white font-bold">{coins}</span>
+          </div>
+        </div>
+
+        {/* 図書館ランク・ことの葉（アバター直上） */}
+        <div className="flex justify-center mb-3 px-1">
+          <div
+            className="inline-flex flex-col items-center gap-0.5 max-w-full px-4 py-2 rounded-2xl border backdrop-blur-sm"
+            style={{
+              background: 'rgba(17,24,39,0.55)',
+              borderColor: 'rgba(251,191,36,0.22)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+            }}
+          >
+            <span className="text-[10px] font-semibold tracking-wider text-amber-200/70">
+              図書館ランク
+            </span>
+            <span
+              className="text-sm sm:text-base font-black text-center leading-tight"
+              style={{
+                color: libraryRankInfo.tier.light,
+                textShadow: `0 0 12px ${libraryRankInfo.tier.glow}55`,
+              }}
+            >
+              {libraryRankInfo.fullTitle}
+            </span>
+            <span className="text-[11px] font-semibold text-emerald-200/95 tabular-nums">
+              ことの葉 {kotobaLeafCount}枚
+            </span>
           </div>
         </div>
 

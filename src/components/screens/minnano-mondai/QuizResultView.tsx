@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, RotateCcw, Flag, Check } from 'lucide-react';
 import type { QuizQuestionResult, ShuffledQuestion } from '../MinnanoMondaiScreen';
 import { useGameStore } from '@/store/useGameStore';
+import { SCORE_PER_KOTOBA_LEAF } from '@/lib/repairBookFragments';
 
 // ============================================================
 // 型
@@ -555,6 +556,7 @@ export const QuizResultView = ({
   const basePoint = results.reduce((s, r) => s + r.basePoint, 0);
   const timeBonus = results.reduce((s, r) => s + r.timeBonus, 0);
   const totalPoint = basePoint + timeBonus;
+  const kotobaLeavesThisPlay = Math.floor(totalPoint / SCORE_PER_KOTOBA_LEAF);
   const accuracy =
     questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
 
@@ -894,7 +896,7 @@ export const QuizResultView = ({
                 </div>
               </div>
 
-              <div className="text-center mt-3">
+              <div className="text-center mt-3 space-y-2">
                 <p
                   className="text-xs"
                   style={{
@@ -919,6 +921,24 @@ export const QuizResultView = ({
                     {dispBonus}pt
                   </span>
                 </p>
+                <p
+                  className="text-[11px] leading-relaxed max-w-md mx-auto px-1"
+                  style={{ color: 'rgba(203,213,225,0.88)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
+                >
+                  合計スコアは<strong style={{ color: 'rgba(253,230,138,0.95)' }}>{SCORE_PER_KOTOBA_LEAF}点ごと</strong>
+                  に「ことの葉」が1枚手に入ります。ことの葉は蔵書の「本を修繕する」で本を修繕し、ランクアップするために使えます。
+                </p>
+                {kotobaLeavesThisPlay > 0 && (
+                  <p
+                    className="text-xs font-bold"
+                    style={{
+                      color: 'rgba(253,224,71,0.92)',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                    }}
+                  >
+                    このプレイ：ことの葉 +{kotobaLeavesThisPlay}枚
+                  </p>
+                )}
               </div>
             </motion.div>
           )}
