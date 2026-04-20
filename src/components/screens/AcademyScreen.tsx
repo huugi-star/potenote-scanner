@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Users,
-  Sparkles,
-  Flame,
   BookOpen,
   Library,
   PenSquare,
@@ -24,8 +22,7 @@ import { useGameStore } from '@/store/useGameStore';
 import { useToast } from '@/components/ui/Toast';
 import { MinnanoMondaiScreen } from '@/components/screens/MinnanoMondaiScreen';
 import { RepairBookScreen } from '@/components/screens/RepairBookScreen';
-import { getRepairBookFragments, FRAGMENTS_PER_REPAIRED_BOOK } from '@/lib/repairBookFragments';
-import { calcRankInfo } from '@/constants/rankSystem';
+import { getRepairBookFragments } from '@/lib/repairBookFragments';
 import { storyIntroPages, STORY_INTRO_READ_KEY } from '@/data/storyIntroPages';
 import { CREATION_CATEGORIES, SUBCATEGORY_SUGGESTIONS } from '@/data/categories';
 import { StoryIntroScreen } from '@/components/story/StoryIntroScreen';
@@ -322,7 +319,6 @@ const CardHeader = ({
 export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
   const router = useRouter();
   const { addToast } = useToast();
-  const consecutiveLoginDays = useGameStore((s) => s.consecutiveLoginDays);
   const quizHistory          = useGameStore((s) => s.quizHistory);
   const academyUserQuestions = useGameStore((s) => s.academyUserQuestions);
   const uid = useGameStore((s) => s.uid);
@@ -336,8 +332,8 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
   /** みんなの問題から戻る先（修繕画面から入ったときは修繕へ戻す） */
   const [quizBackSubview, setQuizBackSubview] = useState<'top' | 'repair_book'>('top');
 
-  /** 修繕画面と同じ紙片→修繕冊数→称号（ことば図書館トップ表示用） */
-  const [repairFragmentSnapshot, setRepairFragmentSnapshot] = useState(0);
+  /** 修繕画面から戻ってきたとき等に同期（トップ表示のためのスナップショット） */
+  const [, setRepairFragmentSnapshot] = useState(0);
   const refreshRepairRankSnapshot = useCallback(() => {
     setRepairFragmentSnapshot(getRepairBookFragments());
   }, []);
@@ -369,11 +365,6 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
     };
   }, [refreshRepairRankSnapshot]);
 
-  const libraryRankTitle = useMemo(() => {
-    const totalBooks = Math.floor(repairFragmentSnapshot / FRAGMENTS_PER_REPAIRED_BOOK);
-    return calcRankInfo(totalBooks).fullTitle;
-  }, [repairFragmentSnapshot]);
-
   // 作問フロー用ステート
   const [selectedThemeId,          setSelectedThemeId]          = useState<string | null>(null);
   const [allExtractedKeywords,      setAllExtractedKeywords]      = useState<KeywordCandidate[]>([]);
@@ -403,7 +394,6 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
   const [storyIntroPageIndex, setStoryIntroPageIndex] = useState(0);
   const [storyIntroRead, setStoryIntroRead] = useState(false);
 
-  const magicStones    = 0;
   const todayAttendees = 24;
 
   const themes = useMemo(() => buildThemesFromHistory(quizHistory), [quizHistory]);
@@ -1430,20 +1420,9 @@ if (subview === 'create_detail') {
       <div className="relative z-10 max-w-md mx-auto pt-6">
         <CardHeader title="🎓 ことば図書館" onBack={onBack} tone="onLight" />
 
-        {/* マジックアカデミーヘッダー */}
-        <div className="rounded-2xl p-5 mb-5 border border-indigo-500/30 bg-gradient-to-br from-indigo-900/80 via-purple-900/70 to-slate-900/80">
-          <p className="text-white text-2xl font-bold mb-4">🎓 {libraryRankTitle}</p>
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="rounded-xl bg-black/20 border border-white/10 px-3 py-2 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-cyan-300 shrink-0" />
-              <span className="text-indigo-100 text-sm">ポテ聖晶 × {magicStones}</span>
-            </div>
-            <div className="rounded-xl bg-black/20 border border-white/10 px-3 py-2 flex items-center gap-2">
-              <Flame className="w-4 h-4 text-orange-300 shrink-0" />
-              <span className="text-indigo-100 text-sm">{consecutiveLoginDays}日連続出席</span>
-            </div>
-          </div>
-          <p className="text-indigo-200/80 text-xs flex items-center gap-1.5">
+        {/* 上部ステータス（要望により：ランク肩書/ポテ聖晶/連続出席は非表示） */}
+        <div className="rounded-2xl p-4 mb-5 border border-white/20 bg-white/70 backdrop-blur-sm">
+          <p className="text-slate-700 text-xs flex items-center justify-center gap-1.5 font-semibold">
             <Users className="w-3.5 h-3.5" />
             今日の出席者 {todayAttendees}人
           </p>

@@ -43,7 +43,7 @@ import { ShareModal } from '@/components/ui/ShareModal';
 import { DeveloperSupport } from '@/components/ui/DeveloperSupport';
 
 import { vibrateLight } from '@/lib/haptics';
-import { getRepairBookFragments } from '@/lib/repairBookFragments';
+import { getRepairBookFragments, getRepairSpentFragments, migrateRepairProgressIfNeeded } from '@/lib/repairBookFragments';
 import { calcBooksFromFragments, calcRankInfo } from '@/constants/rankSystem';
 
 // ===== Types =====
@@ -210,9 +210,14 @@ const HomeScreen = ({
   }), [equipment.head, equipment.body, equipment.face, equipment.accessory]);
 
   const [kotobaLeafCount, setKotobaLeafCount] = useState(0);
+  const [repairSpentCount, setRepairSpentCount] = useState(0);
 
   useEffect(() => {
-    const sync = () => setKotobaLeafCount(getRepairBookFragments());
+    migrateRepairProgressIfNeeded();
+    const sync = () => {
+      setKotobaLeafCount(getRepairBookFragments());
+      setRepairSpentCount(getRepairSpentFragments());
+    };
     sync();
     window.addEventListener('storage', sync);
     window.addEventListener('focus', sync);
@@ -230,9 +235,9 @@ const HomeScreen = ({
   }, []);
 
   const libraryRankInfo = useMemo(() => {
-    const { totalBooks } = calcBooksFromFragments(kotobaLeafCount);
+    const { totalBooks } = calcBooksFromFragments(repairSpentCount);
     return calcRankInfo(totalBooks);
-  }, [kotobaLeafCount]);
+  }, [repairSpentCount]);
 
   return (
     // ★ 背景画像レイヤー追加
@@ -309,32 +314,86 @@ const HomeScreen = ({
           </div>
         </div>
 
-        {/* 図書館ランク・ことの葉（アバター直上） */}
-        <div className="flex justify-center mb-3 px-1">
-          <div
-            className="inline-flex flex-col items-center gap-0.5 max-w-full px-4 py-2 rounded-2xl border backdrop-blur-sm"
+        {/* 図書館ランク・ことの葉（アバター直上 / ゲーム感ステータス） */}
+        <div className="flex justify-center mb-4 px-1">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="w-full max-w-sm rounded-3xl overflow-hidden border backdrop-blur-sm"
             style={{
-              background: 'rgba(17,24,39,0.55)',
-              borderColor: 'rgba(251,191,36,0.22)',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+              background: 'linear-gradient(135deg, rgba(17,24,39,0.78), rgba(30,27,75,0.58), rgba(15,23,42,0.78))',
+              borderColor: `${libraryRankInfo.tier.glow}55`,
+              boxShadow: `0 16px 40px rgba(0,0,0,0.35), 0 0 32px ${libraryRankInfo.tier.glow}22`,
             }}
           >
-            <span className="text-[10px] font-semibold tracking-wider text-amber-200/70">
-              図書館ランク
-            </span>
-            <span
-              className="text-sm sm:text-base font-black text-center leading-tight"
-              style={{
-                color: libraryRankInfo.tier.light,
-                textShadow: `0 0 12px ${libraryRankInfo.tier.glow}55`,
-              }}
-            >
-              {libraryRankInfo.fullTitle}
-            </span>
-            <span className="text-[11px] font-semibold text-emerald-200/95 tabular-nums">
-              ことの葉 {kotobaLeafCount}枚
-            </span>
-          </div>
+            {/* 上部グロー */}
+            <div
+              className="pointer-events-none absolute -top-10 left-1/2 h-24 w-72 -translate-x-1/2 rounded-full blur-2xl"
+              style={{ background: `${libraryRankInfo.tier.glow}33` }}
+              aria-hidden
+            />
+
+            <div className="relative px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-black tracking-[0.18em] text-white/70">
+                      図書館ランク
+                    </span>
+                    <motion.span
+                      className="h-2 w-2 rounded-full"
+                      style={{ background: libraryRankInfo.tier.glow, boxShadow: `0 0 14px ${libraryRankInfo.tier.glow}` }}
+                      animate={{ opacity: [0.55, 1, 0.55] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                      aria-hidden
+                    />
+                  </div>
+                  <div
+                    className="mt-1 text-xl sm:text-2xl font-black leading-tight line-clamp-2"
+                    style={{
+                      color: libraryRankInfo.tier.light,
+                      textShadow: `0 0 18px ${libraryRankInfo.tier.glow}55, 0 2px 10px rgba(0,0,0,0.35)`,
+                    }}
+                  >
+                    {libraryRankInfo.fullTitle}
+                  </div>
+                </div>
+
+                <div className="shrink-0 rounded-2xl px-3 py-2 border"
+                  style={{
+                    background: 'rgba(0,0,0,0.22)',
+                    borderColor: 'rgba(255,255,255,0.14)',
+                  }}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4" style={{ color: libraryRankInfo.tier.glow }} />
+                    <span className="text-[11px] font-bold text-white/75">ことの葉</span>
+                  </div>
+                  <div className="mt-0.5 tabular-nums text-right">
+                    <span className="text-2xl font-black" style={{ color: 'rgba(167,243,208,0.98)', textShadow: '0 1px 8px rgba(16,185,129,0.25)' }}>
+                      {kotobaLeafCount}
+                    </span>
+                    <span className="text-xs font-bold text-emerald-100/80 ml-1">枚</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 下部リボン */}
+              <div
+                className="mt-3 rounded-2xl px-4 py-2 border"
+                style={{
+                  background: `linear-gradient(135deg, ${libraryRankInfo.tier.glow}22, rgba(255,255,255,0.06))`,
+                  borderColor: `${libraryRankInfo.tier.glow}33`,
+                }}
+              >
+                <div className="flex items-center justify-between gap-2 text-[11px] font-semibold">
+                  <span className="text-white/70">修繕してランクアップ</span>
+                  <span className="text-white/75">クイズでことの葉を集めよう</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </div>
 
         {/* ポテトアバター */}

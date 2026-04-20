@@ -4,8 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import {
-  addRepairBookFragments,
   getRepairBookFragments,
+  consumeRepairBookFragments,
+  getRepairSpentFragments,
+  addRepairSpentFragments,
+  migrateRepairProgressIfNeeded,
 } from '@/lib/repairBookFragments';
 import { PotatoAvatar, type PotatoEmotion } from '@/components/ui/PotatoAvatar';
 import { getItemById } from '@/data/items';
@@ -16,7 +19,6 @@ import {
   getTierUpMessage,
   RANK_TIERS,
   TOTAL_TIERS,
-  TOTAL_BOOKS_MAX,
 } from '@/constants/rankSystem';
 
 // ─────────────────────────────────────────
@@ -373,7 +375,10 @@ function RankUpOverlay({ tierIndex, gradeLabel, isNewTier, onClose }: {
 // メイン
 // ─────────────────────────────────────────
 export function RepairBookScreen({ onBack, onStartQuiz }: { onBack: () => void; onStartQuiz: () => void }) {
+  // fragments = 「修繕に使った累計」の表示値（演出のためにゆっくり target に追いつく）
   const [fragments,     setFragments]     = useState(0);
+  // storedFragments = 「所持していることの葉（未使用）」の即値
+  const [storedFragments, setStoredFragments] = useState(0);
   const [flyers,        setFlyers]        = useState<Flyer[]>([]);
   const [flash,         setFlash]         = useState(0);
   const [newBookInTier, setNewBookInTier] = useState<number | null>(null);
@@ -405,14 +410,22 @@ export function RepairBookScreen({ onBack, onStartQuiz }: { onBack: () => void; 
   }, []);
 
   useEffect(() => {
-    const v = getRepairBookFragments();
-    targetRef.current = v;
-    setFragments(v);
-    prevBooksRef.current = calcBooksFromFragments(v).totalBooks;
+    migrateRepairProgressIfNeeded();
+    const wallet = getRepairBookFragments();
+    const spent = getRepairSpentFragments();
+    targetRef.current = spent;
+    setFragments(spent);
+    setStoredFragments(wallet);
+    prevBooksRef.current = calcBooksFromFragments(spent).totalBooks;
   }, []);
 
   useEffect(() => {
-    const refresh = () => { const l = getRepairBookFragments(); if (l !== targetRef.current) targetRef.current = l; };
+    const refresh = () => {
+      const wallet = getRepairBookFragments();
+      const spent = getRepairSpentFragments();
+      if (spent !== targetRef.current) targetRef.current = spent;
+      setStoredFragments(wallet);
+    };
     const onVis = () => { if (document.visibilityState === 'visible') refresh(); };
     window.addEventListener('storage', refresh);
     window.addEventListener('focus', refresh);
@@ -427,6 +440,8 @@ export function RepairBookScreen({ onBack, onStartQuiz }: { onBack: () => void; 
       if (cancelled) return;
       setFragments(cur => {
         const target = targetRef.current;
+        // 減少（消費/移行など）時は即追従（演出の都合でマイナス方向のアニメはしない）
+        if (cur > target) return target;
         if (cur >= target) return cur;
         const next = cur + 1;
 
@@ -520,6 +535,36 @@ export function RepairBookScreen({ onBack, onStartQuiz }: { onBack: () => void; 
     const r = heroRef.current.getBoundingClientRect();
     return { left: `${r.left + r.width / 2}px`, top: `${r.top + r.height / 2}px` };
   }, []);
+
+  const spendKotobaLeaves = useCallback((want: number) => {
+    const wallet = getRepairBookFragments();
+    const delta = Math.max(0, Math.min(wallet, Math.floor(want)));
+    if (delta <= 0) {
+      vibrate(12);
+      setEmotionMsg('confused', 'ことの葉が足りないみたい…', 1600);
+      return;
+    }
+
+    // wallet を減らし、spent を増やして修繕進捗へ
+    const nextWallet = consumeRepairBookFragments(delta);
+    const nextSpent = addRepairSpentFragments(delta);
+    targetRef.current = nextSpent;
+    setStoredFragments(nextWallet);
+
+    // 演出
+    setPulseKey(k => k + 1);
+    setEmotionMsg('happy', `ことの葉を${delta}枚使って、修繕を進めた！`, 2000);
+    if (!flyerInFlight.current) {
+      flyerInFlight.current = true;
+      const id = nextFlyerId.current++;
+      setFlyers(fs => [...fs, makeFlyer(id)]);
+      showToast();
+      window.setTimeout(() => {
+        setFlyers(fs => fs.filter(f => f.id !== id));
+        flyerInFlight.current = false;
+      }, 760);
+    }
+  }, [setEmotionMsg, showToast]);
 
   // 次ランク名
   const nextTierName = isMaxRank ? null : RANK_TIERS[Math.min(rankInfo.tierIndex + 1, TOTAL_TIERS - 1)].name;
@@ -719,10 +764,87 @@ export function RepairBookScreen({ onBack, onStartQuiz }: { onBack: () => void; 
           </div>
         </div>
 
-        {/* ③ すうひもち ← ヒーロー直下に移動 */}
-        <div className="mb-3">
-          <SuhimochiSpeech message={avatarMsg} emotion={emotion} color={tier.color} />
+      {/* ③ すうひもち + 所持ことの葉（ここに残量表示） */}
+      <div className="mb-3 flex flex-col gap-2">
+        <SuhimochiSpeech message={avatarMsg} emotion={emotion} color={tier.color} />
+
+        <div
+          className="rounded-2xl px-4 py-3"
+          style={{
+            background: 'rgba(255,255,255,0.88)',
+            border: `1.5px solid ${tier.glow}55`,
+            boxShadow: `0 2px 12px ${tier.glow}18`,
+          }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[20px] font-black tracking-wider" style={{ color: `${tier.color}aa` }}>
+                ことの葉（所持）
+              </div>
+              <div className="text-[12px] font-semibold mt-0.5" style={{ color: 'rgba(80,50,10,0.48)' }}>
+                クイズを解くことで増えていきます
+              </div>
+            </div>
+            <div className="shrink-0 flex items-baseline gap-1 tabular-nums">
+              <span className="text-3xl font-black" style={{ color: tier.color }}>
+                {storedFragments}
+              </span>
+              <span className="text-sm font-bold" style={{ color: `${tier.color}99` }}>
+                枚
+              </span>
+            </div>
+          </div>
         </div>
+
+        {/* 消費ボタン（ゲームっぽく） */}
+        <div className="grid grid-cols-3 gap-2 px-1">
+          <motion.button
+            type="button"
+            onClick={() => spendKotobaLeaves(1)}
+            disabled={storedFragments <= 0}
+            className="rounded-2xl py-3 font-black text-sm disabled:opacity-40"
+            style={{
+              background: 'rgba(255,255,255,0.88)',
+              border: `1.5px solid ${tier.color}33`,
+              color: tier.color,
+              boxShadow: `0 2px 10px ${tier.color}12`,
+            }}
+            whileTap={storedFragments > 0 ? { scale: 0.95 } : {}}
+          >
+            使う +1
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={() => spendKotobaLeaves(10)}
+            disabled={storedFragments <= 0}
+            className="rounded-2xl py-3 font-black text-sm disabled:opacity-40"
+            style={{
+              background: `linear-gradient(135deg,${tier.light},rgba(255,255,255,0.92))`,
+              border: `1.5px solid ${tier.glow}55`,
+              color: tier.color,
+              boxShadow: `0 2px 12px ${tier.glow}18`,
+            }}
+            whileTap={storedFragments > 0 ? { scale: 0.95 } : {}}
+          >
+            使う +10
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={() => spendKotobaLeaves(Math.max(0, currentFragsPerBook - inBook))}
+            disabled={storedFragments <= 0 || inBook >= currentFragsPerBook}
+            className="rounded-2xl py-3 font-black text-sm disabled:opacity-40"
+            style={{
+              background: `linear-gradient(145deg,${tier.color},${tier.glow})`,
+              border: 'none',
+              color: '#fff',
+              boxShadow: `0 4px 16px ${tier.glow}44`,
+            }}
+            whileTap={storedFragments > 0 ? { scale: 0.95 } : {}}
+          >
+            すべて使う
+          </motion.button>
+        </div>
+      </div>
 
         {/* ④ 昇級の輪ラベル ← アバターの下に移動 */}
         <motion.div className="flex flex-col items-center gap-1 mb-5"
@@ -730,7 +852,7 @@ export function RepairBookScreen({ onBack, onStartQuiz }: { onBack: () => void; 
           <div className="flex items-center gap-2 rounded-full px-4 py-1.5"
             style={{ background: 'rgba(255,255,255,0.88)', border: `1.5px solid ${tier.glow}55`, boxShadow: `0 2px 10px ${tier.glow}22` }}>
             <span style={{ fontSize: 13 }}>📄</span>
-            <span className="text-sm font-black" style={{ color: tier.color }}>昇級の輪</span>
+            <span className="text-sm font-black" style={{ color: tier.color }}>昇級まで</span>
             <span className="text-xs font-bold" style={{ color: 'rgba(80,50,10,0.45)' }}>|</span>
             <motion.span className="text-base font-black tabular-nums" style={{ color: tier.glow }}
               key={inBook} initial={{ scale: 1.3 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400, damping: 18 }}>
@@ -773,52 +895,31 @@ export function RepairBookScreen({ onBack, onStartQuiz }: { onBack: () => void; 
           </div>
           <div className="mx-3 mb-3 mt-1 h-2 rounded-sm"
             style={{ background: 'linear-gradient(180deg,#a07840 0%,#7a5820 100%)', boxShadow: 'inset 0 1px 0 rgba(200,158,78,0.28)' }} />
-        </div>
+        </div> 
 
-        {/* ⑤ 修繕開始ボタン */}
-        <motion.button type="button" onClick={onStartQuiz}
-          className="flex w-full items-center justify-center gap-3 rounded-2xl py-5 text-lg font-black tracking-widest mb-3"
-          style={{ background: `linear-gradient(135deg,${tier.color},${tier.glow})`, color: '#fff', border: 'none', letterSpacing: '0.12em' }}
-          animate={{ boxShadow: [`0 6px 28px ${tier.glow}44`, `0 8px 42px ${tier.glow}77`, `0 6px 28px ${tier.glow}44`] }}
-          transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-          whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.02 }}>
-          📖 修繕開始！
-        </motion.button>
-
-        {/* 累計 */}
-        <div className="text-center mb-2">
-          <span className="text-xs font-medium" style={{ color: 'rgba(80,50,10,0.38)' }}>
-            累計 {fragments} 枚 ・ 修繕済み {totalBooks} 冊
-            {!isMaxRank && ` ・ 言詠士まであと ${TOTAL_BOOKS_MAX - totalBooks} 冊`}
-          </span>
-        </div>
-
-       {/* 戻る */}
-       <div className="mb-4 flex items-center justify-between">
-          <motion.button type="button" onClick={onBack}
-            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold"
-            style={{ background: 'rgba(255,255,255,0.80)', color: tier.color, border: `1px solid ${tier.color}44`, boxShadow: '0 1px 5px rgba(0,0,0,0.07)' }}
-            whileTap={{ scale: 0.95 }}>
-            <ArrowLeft className="h-4 w-4" />戻る
+        {/* ⑥ 修繕開始 */}
+        <div className="mt-2">
+          <motion.button
+            type="button"
+            onClick={onStartQuiz}
+            className="w-full rounded-2xl py-4 text-white font-black text-lg flex items-center justify-center gap-2"
+            style={{
+              background: `linear-gradient(135deg,${tier.color},${tier.glow})`,
+              boxShadow: `0 10px 30px ${tier.glow}55`,
+            }}
+            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: 1.01 }}
+          >
+            📖 ことの葉を集める！
           </motion.button>
-
-          <div className="flex gap-2">
-            <motion.button type="button"
-              onClick={() => { const n = addRepairBookFragments(1); targetRef.current = n; }}
-              className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-bold"
-              style={{ background: 'rgba(255,255,255,0.80)', color: tier.color, border: `1px solid ${tier.color}44`, boxShadow: '0 1px 5px rgba(0,0,0,0.07)' }}
-              whileTap={{ scale: 0.95 }}>
-              📄+1
-            </motion.button>
-            <motion.button type="button"
-              onClick={() => { const n = addRepairBookFragments(10); targetRef.current = n; }}
-              className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-bold"
-              style={{ background: `linear-gradient(135deg,${tier.color}22,${tier.glow}33)`, color: tier.color, border: `1px solid ${tier.color}66`, boxShadow: '0 1px 5px rgba(0,0,0,0.07)' }}
-              whileTap={{ scale: 0.95 }}>
-              📄+5
-            </motion.button>
+          <div
+            className="mt-2 text-center text-[11px] font-semibold"
+            style={{ color: 'rgba(255,255,255,0.7)' }}
+          >
+            累計 {fragments} 枚 ・ 修繕済み {totalBooks} 冊
           </div>
         </div>
+
       </motion.div>
     </div>
   );
