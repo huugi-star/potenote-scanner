@@ -350,7 +350,7 @@ const HomeScreen = ({
         position: 'absolute', inset: 0, zIndex: 0,
         backgroundImage: 'url(/images/backgrounds/home.png)',
         backgroundSize: 'cover',
-        backgroundPosition: 'center -15%',
+        backgroundPosition: 'center 22%',
         backgroundRepeat: 'no-repeat',
       }}/>
       <div style={{
