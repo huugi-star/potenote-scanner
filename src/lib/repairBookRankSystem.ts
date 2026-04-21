@@ -139,6 +139,10 @@ export function calcRankInfo(totalBooks: number) {
     booksForTier,
     booksUntilNextGrade: isMaxRank ? 0 : 1,
     booksUntilNextTier,
+    /** 次のランク（ティア）へ進むまであと何冊（= booksUntilNextTier） */
+    booksToNext: booksUntilNextTier,
+    /** このランク段階で必要な冊数（進捗の分母に使う） */
+    nextThreshold: booksForTier,
     progressPct,
     isMaxRank,
     fullTitle:      `${tier.name} ${gradeLabel}`,

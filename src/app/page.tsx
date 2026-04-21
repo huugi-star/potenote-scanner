@@ -6,7 +6,7 @@
  * GamePhase管理とすべての画面を統合
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Gem, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword, Users, GraduationCap } from 'lucide-react';
@@ -186,10 +186,622 @@ const AdventureMenuScreen = ({
   );
 };
 
-/**
- * ホーム画面
- */
+// ════════════════════════════════════
+// RPGボタン（ホーム用 v5）
+// ════════════════════════════════════
+// ─── RpgButton ───────────────────────────────────────────────────────────────
+const RpgButton = ({
+  onClick,
+  fromColor,
+  toColor,
+  glowColor,
+  shadowColor,
+  icon,
+  label,
+  small = false,
+}: {
+  onClick: () => void;
+  fromColor: string;
+  toColor: string;
+  glowColor: string;
+  shadowColor: string;
+  icon: ReactNode;
+  label: string;
+  small?: boolean;
+}) => {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      style={{
+        width: '100%',
+        position: 'relative',
+        overflow: 'hidden',
+        padding: small ? '11px 8px' : '14px 16px',
+        borderRadius: 14,
+        background: `linear-gradient(180deg,${toColor} 0%,${fromColor} 100%)`,
+        borderTop: '2px solid rgba(255,255,255,0.28)',
+        borderLeft: '1px solid rgba(255,255,255,0.10)',
+        borderRight: '1px solid rgba(0,0,0,0.20)',
+        borderBottom: pressed ? `3px solid ${shadowColor}` : `5px solid ${shadowColor}`,
+        transform: pressed ? 'translateY(2px)' : 'translateY(0)',
+        boxShadow: pressed
+          ? `0 2px 8px ${glowColor}`
+          : `0 6px 18px ${glowColor}, inset 0 1px 0 rgba(255,255,255,0.22)`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: small ? 5 : 8,
+        color: '#fff',
+        fontWeight: 900,
+        fontSize: small ? 14 : 17,
+        letterSpacing: '0.02em',
+        textShadow: '0 1px 4px rgba(0,0,0,0.55)',
+        cursor: 'pointer',
+        WebkitTapHighlightColor: 'transparent',
+        transition: 'border-bottom .07s,transform .07s,box-shadow .07s',
+        outline: 'none',
+        border: 'none', // reset then re-add below via individual props
+      }}
+    >
+      {/* 上縁ハイライト */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: '10%',
+          right: '10%',
+          height: 1,
+          background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent)',
+          pointerEvents: 'none',
+        }}
+      />
+      {/* shimmer */}
+      <motion.div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'linear-gradient(105deg,transparent 40%,rgba(255,255,255,0.15) 50%,transparent 60%)',
+          pointerEvents: 'none',
+        }}
+        animate={{ x: ['-150%', '250%'] }}
+        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut', repeatDelay: 6 }}
+      />
+      <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: small ? 5 : 8 }}>
+        {icon}
+        {label}
+      </span>
+    </button>
+  );
+};
+
+// ─── HomeScreen ───────────────────────────────────────────────────────────────
 const HomeScreen = ({
+  onNavigate,
+  onShowShare,
+  onOpenMyPage,
+}: {
+  onNavigate: (phase: GamePhase) => void;
+  onShowShare: () => void;
+  onOpenMyPage: () => void;
+}) => {
+  const coins     = useGameStore(s => s.coins);
+  const isVIP     = useGameStore(s => s.isVIP);
+  const equipment = useGameStore(s => s.equipment);
+
+  const equippedDetails = useMemo(() => ({
+    head:      equipment.head      ? getItemById(equipment.head)      : undefined,
+    body:      equipment.body      ? getItemById(equipment.body)      : undefined,
+    face:      equipment.face      ? getItemById(equipment.face)      : undefined,
+    accessory: equipment.accessory ? getItemById(equipment.accessory) : undefined,
+  }), [equipment.head,equipment.body,equipment.face,equipment.accessory]);
+
+  const [kotobaLeafCount,  setKotobaLeafCount]  = useState(0);
+  const [repairSpentCount, setRepairSpentCount] = useState(0);
+  const [showSupportModal, setShowSupportModal] = useState(false);
+
+  useEffect(() => {
+    migrateRepairProgressIfNeeded();
+    const sync = () => {
+      setKotobaLeafCount(getRepairBookFragments());
+      setRepairSpentCount(getRepairSpentFragments());
+    };
+    sync();
+    window.addEventListener('storage', sync);
+    window.addEventListener('focus', sync);
+    const onVis = () => { if (document.visibilityState==='visible') sync(); };
+    document.addEventListener('visibilitychange', onVis);
+    const iv = window.setInterval(sync, 800);
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener('focus', sync);
+      document.removeEventListener('visibilitychange', onVis);
+      window.clearInterval(iv);
+    };
+  }, []);
+
+  const libraryRankInfo = useMemo(() => {
+    const { totalBooks } = calcBooksFromFragments(repairSpentCount);
+    return { ...calcRankInfo(totalBooks), totalBooks };
+  }, [repairSpentCount]);
+
+  const booksToNext: number   = (libraryRankInfo as any).booksToNext   ?? 0;
+  const nextThreshold: number = (libraryRankInfo as any).nextThreshold ?? 20;
+  const isMaxRank             = booksToNext === 0 && nextThreshold === 0;
+  const isAlmostRankUp        = !isMaxRank && booksToNext <= 3;
+  const progressRatio         = nextThreshold > 0
+    ? Math.min(1,(nextThreshold - booksToNext)/nextThreshold) : 1;
+  const GLOW = libraryRankInfo.tier.glow;
+
+  return (
+    <div style={{
+      position: 'relative',
+      width: '100%',
+      minHeight: '100dvh',
+      overflowX: 'hidden',
+      overflowY: 'auto',
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 0,
+        backgroundImage: 'url(/images/backgrounds/home.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
+      }}/>
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 1,
+        background: [
+          'linear-gradient(180deg,rgba(8,5,20,0.50) 0%,rgba(8,5,20,0.05) 18%)',
+          'linear-gradient(180deg,rgba(0,0,0,0) 55%,rgba(8,5,20,0.82) 85%,rgba(8,5,20,0.95) 100%)',
+        ].join(','),
+        pointerEvents: 'none',
+      }}/>
+
+      {[
+        {top:'12%',left:'6%', delay:0,   dur:3.4,size:10},
+        {top:'25%',left:'88%',delay:0.9, dur:2.7,size:8 },
+        {top:'7%', left:'76%',delay:1.5, dur:4.0,size:12},
+        {top:'35%',left:'4%', delay:0.4, dur:3.1,size:7 },
+      ].map((p,i)=>(
+        <motion.span key={i} style={{
+          pointerEvents:'none',position:'absolute',zIndex:2,userSelect:'none',
+          top:p.top,left:p.left,fontSize:p.size,
+          color:GLOW,textShadow:`0 0 8px ${GLOW},0 0 20px ${GLOW}66`,
+        }}
+          animate={{y:[0,-12,0],opacity:[0,0.8,0]}}
+          transition={{duration:p.dur,delay:p.delay,repeat:Infinity,ease:'easeInOut'}}
+        >✦</motion.span>
+      ))}
+
+      <div style={{
+        position: 'relative', zIndex: 10,
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '10px 14px 16px',
+        maxWidth: 480,
+        width: '100%',
+        margin: '0 auto',
+        gap: 8,
+        justifyContent: 'flex-start',
+      }}>
+        <div style={{display:'flex',justifyContent:'flex-end',alignItems:'center',gap:6}}>
+          <button onClick={()=>{vibrateLight();onOpenMyPage();}} style={{
+            padding:'6px 13px',borderRadius:18,fontSize:12,fontWeight:700,
+            color:'rgba(255,255,255,0.85)',
+            background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.14)',
+            backdropFilter:'blur(8px)',cursor:'pointer',WebkitTapHighlightColor:'transparent',
+          }}>マイページ</button>
+          <button onClick={()=>{vibrateLight();onShowShare();}} style={{
+            width:30,height:30,borderRadius:'50%',
+            display:'flex',alignItems:'center',justifyContent:'center',
+            background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.14)',
+            color:'rgba(255,255,255,0.75)',cursor:'pointer',backdropFilter:'blur(8px)',
+            WebkitTapHighlightColor:'transparent',
+          }}><Share2 style={{width:13,height:13}}/></button>
+          <AuthButton/>
+        </div>
+
+        {/* ── ゴールドバナー ── */}
+        <motion.div
+          initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}
+          transition={{duration:0.4}}
+          style={{position:'relative'}}
+        >
+          {/* 三重縁 */}
+          <div style={{
+            borderRadius:16,padding:2,
+            background:'linear-gradient(180deg,#8b6008 0%,#5a3d04 100%)',
+            boxShadow:'0 4px 18px rgba(0,0,0,0.65)',
+          }}>
+            <div style={{
+              borderRadius:14,padding:'2px 2px 2px',
+              background:'linear-gradient(180deg,#f5d060 0%,#d4a010 45%,#f5d060 100%)',
+            }}>
+              <div style={{
+                borderRadius:12,padding:'8px 12px',
+                background:'linear-gradient(180deg,#5c3a06 0%,#7a5010 40%,#5c3a06 100%)',
+                boxShadow:'inset 0 2px 5px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,240,140,0.18)',
+                display:'flex',alignItems:'center',justifyContent:'space-between',
+              }}>
+                {/* 左 */}
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <div style={{
+                    width:36,height:36,borderRadius:9,flexShrink:0,
+                    background:'linear-gradient(135deg,#ffe566,#b87800)',
+                    border:'2px solid rgba(255,240,140,0.4)',
+                    boxShadow:'0 2px 8px rgba(0,0,0,0.55),inset 0 1px 0 rgba(255,255,200,0.45)',
+                    display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,
+                  }}>⚔️</div>
+                  {isVIP && (
+                    <div style={{
+                      display:'inline-flex',alignItems:'center',gap:2,
+                      background:'rgba(255,200,0,0.18)',border:'1px solid rgba(255,220,60,0.35)',
+                      borderRadius:8,padding:'1px 6px',fontSize:9,fontWeight:700,color:'#ffe070',
+                    }}><Crown style={{width:9,height:9}}/>VIP</div>
+                  )}
+                  <div style={{
+                    fontSize:19,fontWeight:900,letterSpacing:'0.04em',
+                    color:'#fff8d0',
+                    textShadow:'0 1px 0 rgba(0,0,0,0.8),0 0 14px rgba(255,230,80,0.5)',
+                  }}>{libraryRankInfo.fullTitle}</div>
+                </div>
+                {/* 右：コイン */}
+                <div style={{
+                  display:'flex',alignItems:'center',gap:5,
+                  background:'rgba(0,0,0,0.4)',borderRadius:18,padding:'5px 11px',
+                  border:'1px solid rgba(240,208,80,0.35)',
+                }}>
+                  <div style={{
+                    width:18,height:18,borderRadius:'50%',flexShrink:0,fontSize:10,
+                    background:'linear-gradient(135deg,#ffe566,#b87800)',
+                    border:'1.5px solid rgba(255,240,140,0.5)',
+                    display:'flex',alignItems:'center',justifyContent:'center',
+                  }}>🪙</div>
+                  <span style={{
+                    fontSize:15,fontWeight:900,fontVariantNumeric:'tabular-nums',
+                    color:'#fff8a0',textShadow:'0 1px 4px rgba(0,0,0,0.7)',
+                  }}>{coins.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* 左右◆ */}
+          {['left','right'].map(s=>(
+            <div key={s} style={{
+              position:'absolute',top:'50%',[s]:-1,transform:'translateY(-50%)',
+              fontSize:14,color:'#f0d060',
+              textShadow:'0 0 6px #c89000,0 1px 2px rgba(0,0,0,0.8)',
+              pointerEvents:'none',
+            }}>◆</div>
+          ))}
+        </motion.div>
+
+        {/* ── ランクカード（コンパクト横長版）── */}
+        <motion.div
+          initial={{opacity:0,scale:0.96,y:8}}
+          animate={{opacity:1,scale:1,y:0}}
+          transition={{duration:0.4,delay:0.1}}
+          style={{
+            position:'relative',overflow:'hidden',borderRadius:18,
+            background:'linear-gradient(140deg,rgba(15,10,38,0.92),rgba(25,16,55,0.88),rgba(12,8,30,0.92))',
+            border:`2px solid ${GLOW}77`,
+            boxShadow:`0 0 0 1px ${GLOW}22,0 8px 28px rgba(0,0,0,0.55),0 0 30px ${GLOW}14`,
+          }}
+        >
+          {/* 四隅装飾 */}
+          {[
+            {top:0,left:0,br:'0 0 10px 0'},{top:0,right:0,br:'0 0 0 10px'},
+            {bottom:0,left:0,br:'0 10px 0 0'},{bottom:0,right:0,br:'10px 0 0 0'},
+          ].map((c,i)=>(
+            <div key={i} style={{
+              position:'absolute',width:16,height:16,
+              background:GLOW,opacity:0.4,borderRadius:c.br,pointerEvents:'none',
+              ...(c.top    !==undefined?{top:c.top}:{}),
+              ...(c.bottom !==undefined?{bottom:c.bottom}:{}),
+              ...(c.left   !==undefined?{left:c.left}:{}),
+              ...(c.right  !==undefined?{right:c.right}:{}),
+            }}/>
+          ))}
+
+          <div style={{padding:'12px 14px 10px'}}>
+            {/* 上段 */}
+            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10,marginBottom:10}}>
+              <div>
+                <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
+                  <span style={{fontSize:10,fontWeight:800,letterSpacing:'0.18em',color:'rgba(255,255,255,0.45)'}}>
+                    図書館ランク
+                  </span>
+                  <motion.div style={{
+                    width:7,height:7,borderRadius:'50%',
+                    background:GLOW,boxShadow:`0 0 0 3px ${GLOW}44`,
+                  }}
+                    animate={{boxShadow:[`0 0 0 2px ${GLOW}55`,`0 0 0 6px ${GLOW}00`]}}
+                    transition={{duration:1.6,repeat:Infinity,ease:'easeOut'}}
+                  />
+                </div>
+                <div style={{
+                  fontSize:24,fontWeight:900,letterSpacing:'0.04em',lineHeight:1.05,
+                  color:libraryRankInfo.tier.light,
+                  textShadow:`0 0 20px ${GLOW}88,0 2px 10px rgba(0,0,0,0.8)`,
+                }}>{libraryRankInfo.fullTitle}</div>
+              </div>
+
+              {/* 昇級まで */}
+              <motion.div
+                animate={isAlmostRankUp?{
+                  borderColor:['rgba(239,68,68,0.4)','rgba(239,68,68,0.9)','rgba(239,68,68,0.4)'],
+                  boxShadow:['0 0 0 0 transparent',`0 0 14px 2px rgba(239,68,68,0.4)`,'0 0 0 0 transparent'],
+                }:{}}
+                transition={{duration:1.4,repeat:Infinity}}
+                style={{
+                  flexShrink:0,minWidth:82,textAlign:'center',
+                  background:'rgba(0,0,0,0.42)',borderRadius:14,padding:'8px 10px',
+                  border:`1.5px solid ${isAlmostRankUp?'rgba(239,68,68,0.6)':'rgba(255,255,255,0.16)'}`,
+                }}
+              >
+                <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:3,marginBottom:2}}>
+                  <span style={{fontSize:13}}>🏆</span>
+                  <span style={{fontSize:9,fontWeight:800,letterSpacing:'0.08em',color:'rgba(255,255,255,0.48)'}}>昇級まで</span>
+                </div>
+                {isMaxRank?(
+                  <div style={{fontSize:13,fontWeight:900,color:'#fde68a'}}>MAX!</div>
+                ):(
+                  <div style={{lineHeight:1,display:'flex',alignItems:'baseline',justifyContent:'center',gap:1}}>
+                    <motion.span
+                      key={booksToNext}
+                      initial={{scale:1.4,opacity:0}} animate={{scale:1,opacity:1}}
+                      style={{
+                        fontSize:34,fontWeight:900,fontVariantNumeric:'tabular-nums',letterSpacing:'-0.03em',
+                        color:isAlmostRankUp?'#fca5a5':'#fde68a',
+                        textShadow:isAlmostRankUp?'0 0 18px rgba(239,68,68,0.8)':'0 0 18px rgba(251,191,36,0.6)',
+                      }}
+                    >{booksToNext}</motion.span>
+                    <span style={{fontSize:12,color:'rgba(255,255,255,0.28)',marginBottom:2}}>/{nextThreshold}</span>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+
+            {/* ことの葉 + プログレスバー（横並び） */}
+            <div style={{
+              display:'flex',alignItems:'center',gap:10,
+              background:'rgba(16,185,129,0.10)',borderRadius:12,padding:'8px 12px',marginBottom:8,
+              border:'1.5px solid rgba(16,185,129,0.28)',
+            }}>
+              <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+                <span style={{fontSize:16}}>🍃</span>
+                <span style={{fontSize:12,fontWeight:700,color:'rgba(255,255,255,0.55)'}}>ことの葉</span>
+                <div style={{display:'flex',alignItems:'baseline',gap:2}}>
+                  <span style={{
+                    fontSize:22,fontWeight:900,fontVariantNumeric:'tabular-nums',
+                    color:'#6ee7b7',textShadow:'0 0 12px rgba(52,211,153,0.5)',
+                  }}>{kotobaLeafCount}</span>
+                  <span style={{fontSize:11,fontWeight:700,color:'rgba(110,231,183,0.55)'}}>枚</span>
+                </div>
+              </div>
+
+              {/* プログレスバー */}
+              <div style={{flex:1}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                  <span style={{fontSize:9,fontWeight:700,color:'rgba(255,255,255,0.35)'}}>修繕進捗</span>
+                  <span style={{fontSize:9,fontWeight:700,color:isAlmostRankUp?'#fca5a5':'rgba(255,255,255,0.35)'}}>
+                    {Math.round(progressRatio*100)}%
+                  </span>
+                </div>
+                <div style={{
+                  width:'100%',height:9,borderRadius:99,
+                  background:'rgba(0,0,0,0.45)',border:'1px solid rgba(255,255,255,0.1)',
+                  overflow:'hidden',
+                }}>
+                  <motion.div
+                    initial={{width:0}}
+                    animate={{width:`${progressRatio*100}%`}}
+                    transition={{duration:1.1,delay:0.4,ease:'easeOut'}}
+                    style={{
+                      height:'100%',borderRadius:99,position:'relative',overflow:'hidden',
+                      background:isAlmostRankUp
+                        ?'linear-gradient(90deg,#ef4444,#f97316,#fbbf24)'
+                        :`linear-gradient(90deg,${GLOW},${libraryRankInfo.tier.light})`,
+                      boxShadow:`0 0 8px ${isAlmostRankUp?'rgba(239,68,68,0.7)':GLOW+'88'}`,
+                    }}
+                  >
+                    <motion.div
+                      style={{
+                        position:'absolute',inset:0,
+                        background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.5),transparent)',
+                      }}
+                      animate={{x:['-130%','230%']}}
+                      transition={{duration:2,repeat:Infinity,ease:'easeInOut',repeatDelay:2}}
+                    />
+                  </motion.div>
+                </div>
+              </div>
+            </div>
+
+            {/* リボン */}
+            <div style={{
+              display:'flex',alignItems:'center',justifyContent:'space-between',
+              background:`linear-gradient(135deg,${GLOW}14,rgba(255,255,255,0.02))`,
+              borderRadius:10,padding:'5px 10px',
+              border:`1px solid ${GLOW}25`,
+            }}>
+              <span style={{fontSize:10,fontWeight:600,color:'rgba(255,255,255,0.45)'}}>修繕してランクアップ</span>
+              <span style={{fontSize:9,color:'rgba(255,255,255,0.18)'}}>|</span>
+              <span style={{fontSize:10,fontWeight:600,color:'rgba(255,255,255,0.45)'}}>クイズでことの葉を集めよう</span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ── ポテトアバター（コンパクト）── */}
+        <motion.button
+          onClick={()=>{vibrateLight();onNavigate('dressup');}}
+          whileTap={{scale:0.97}}
+          style={{
+            display:'flex',justifyContent:'center',alignItems:'flex-end',
+            position:'relative',background:'none',border:'none',
+            cursor:'pointer',WebkitTapHighlightColor:'transparent',
+            flex:'0 0 auto',
+            /* アバターの高さを可変に — 小さい画面では縮む */
+            height:'clamp(140px, 22vh, 200px)',
+            overflow:'visible',
+          }}
+        >
+          {/* グロー床 */}
+          <div style={{
+            position:'absolute',bottom:10,left:'50%',transform:'translateX(-50%)',
+            width:160,height:20,borderRadius:'50%',
+            background:`${GLOW}30`,filter:'blur(14px)',pointerEvents:'none',
+          }}/>
+          <PotatoAvatar
+            equipped={equippedDetails} emotion="happy"
+            size={180}   /* ← clampより小さめの固定値でOK、表示領域に合わせる */
+            ssrEffect={false}
+          />
+          {/* 着せ替えボタン */}
+          <div style={{
+            position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',
+            background:'linear-gradient(90deg,#ec4899,#f43f5e)',
+            borderRadius:18,padding:'4px 14px',
+            display:'flex',alignItems:'center',gap:4,
+            fontSize:11,fontWeight:800,color:'#fff',
+            boxShadow:'0 3px 10px rgba(236,72,153,0.5),0 2px 0 rgba(0,0,0,0.3)',
+            whiteSpace:'nowrap',
+          }}>
+            <Shirt style={{width:11,height:11}}/>着せ替え
+          </div>
+        </motion.button>
+
+        {/* ── ボタン群 ── */}
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          <RpgButton
+            onClick={()=>{vibrateLight();onNavigate('suhimochi_room');}}
+            fromColor="#065f46" toColor="#10b981"
+            glowColor="rgba(16,185,129,0.4)" shadowColor="rgba(3,40,26,0.95)"
+            icon={<Languages style={{width:22,height:22}}/>}
+            label="すうひもちと会話する"
+          />
+          <RpgButton
+            onClick={()=>{vibrateLight();onNavigate('academy');}}
+            fromColor="#312e81" toColor="#6366f1"
+            glowColor="rgba(99,102,241,0.4)" shadowColor="rgba(25,22,80,0.95)"
+            icon={<GraduationCap style={{width:22,height:22}}/>}
+            label="ことば図書館"
+          />
+          <RpgButton
+            onClick={()=>{vibrateLight();onNavigate('adventure_menu');}}
+            fromColor="#92400e" toColor="#f59e0b"
+            glowColor="rgba(245,158,11,0.4)" shadowColor="rgba(70,28,4,0.95)"
+            icon={<Sword style={{width:22,height:22}}/>}
+            label="ことばを集める"
+          />
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+            <RpgButton
+              onClick={()=>{vibrateLight();onNavigate('gacha');}}
+              fromColor="#4c1d95" toColor="#8b5cf6"
+              glowColor="rgba(139,92,246,0.4)" shadowColor="rgba(35,12,80,0.95)"
+              icon={<Gem style={{width:17,height:17}}/>}
+              label="ガチャ" small
+            />
+            <RpgButton
+              onClick={()=>{vibrateLight();onNavigate('researcher_dex');}}
+              fromColor="#78350f" toColor="#d97706"
+              glowColor="rgba(217,119,6,0.4)" shadowColor="rgba(55,22,3,0.95)"
+              icon={<Users style={{width:17,height:17}}/>}
+              label="研究員図鑑" small
+            />
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={()=>{vibrateLight();setShowSupportModal(true);}}
+        style={{
+          position:'fixed',bottom:20,right:16,zIndex:50,
+          width:44,height:44,borderRadius:'50%',
+          background:'linear-gradient(135deg,rgba(20,12,40,0.92),rgba(30,18,55,0.92))',
+          border:'1.5px solid rgba(200,160,30,0.4)',
+          boxShadow:'0 4px 16px rgba(0,0,0,0.55),0 0 12px rgba(200,160,30,0.2)',
+          display:'flex',alignItems:'center',justifyContent:'center',
+          fontSize:20,cursor:'pointer',WebkitTapHighlightColor:'transparent',
+          backdropFilter:'blur(8px)',
+        }}
+      >🧪</button>
+
+      <AnimatePresence>
+        {showSupportModal && (
+          <motion.div
+            initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            style={{
+              position:'fixed',inset:0,zIndex:60,
+              background:'rgba(0,0,0,0.72)',
+              display:'flex',alignItems:'flex-end',justifyContent:'center',
+              padding:'0 0 16px',
+            }}
+            onClick={()=>setShowSupportModal(false)}
+          >
+            <motion.div
+              initial={{y:80,opacity:0}} animate={{y:0,opacity:1}} exit={{y:80,opacity:0}}
+              transition={{type:'spring',damping:28}}
+              onClick={e=>e.stopPropagation()}
+              style={{
+                width:'100%',maxWidth:480,
+                background:'linear-gradient(135deg,rgba(16,10,36,0.98),rgba(22,14,48,0.98))',
+                borderRadius:'24px 24px 16px 16px',
+                border:'1px solid rgba(200,160,30,0.25)',
+                padding:'20px 18px 24px',
+                boxShadow:'0 -8px 40px rgba(0,0,0,0.6)',
+                margin:'0 14px',
+              }}
+            >
+              <div style={{width:36,height:4,borderRadius:2,background:'rgba(255,255,255,0.2)',margin:'0 auto 16px'}}/>
+              <div style={{textAlign:'center',marginBottom:12}}>
+                <div style={{fontSize:22,marginBottom:4}}>🧪✨</div>
+                <div style={{fontSize:15,fontWeight:900,color:'#e8d5a0',textShadow:'0 0 12px rgba(200,160,30,0.4)'}}>
+                  すうひもちコレクションを応援する
+                </div>
+                <div style={{fontSize:11,color:'rgba(255,255,255,0.38)',marginTop:2,fontWeight:600}}>
+                  【あなたに寄り添う、言の葉の世界】
+                </div>
+              </div>
+              <div style={{
+                fontSize:12.5,color:'rgba(255,255,255,0.5)',lineHeight:1.75,
+                borderTop:'1px solid rgba(255,255,255,0.08)',
+                borderBottom:'1px solid rgba(255,255,255,0.08)',
+                padding:'10px 0',marginBottom:14,
+              }}>
+                すうひもちコレクションは、失われたことば図書館を少しずつ復興していく学習RPGです。
+                AI利用料や開発費を個人で負担しながら開発・運営しています。
+                「面白い」「続いてほしい」と感じていただけたら、noteからのご支援が大きな力になります。
+              </div>
+              <DeveloperSupport/>
+              <button
+                onClick={()=>setShowSupportModal(false)}
+                style={{
+                  display:'block',width:'100%',marginTop:12,
+                  padding:'10px',borderRadius:12,
+                  background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.12)',
+                  color:'rgba(255,255,255,0.5)',fontSize:13,fontWeight:600,
+                  cursor:'pointer',WebkitTapHighlightColor:'transparent',
+                }}
+              >閉じる</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+/**
+ * ホーム画面（Complete RPG v4）
+ */
+const HomeScreen_v4_old = ({
   onNavigate,
   onShowShare,
   onOpenMyPage,
@@ -236,245 +848,594 @@ const HomeScreen = ({
 
   const libraryRankInfo = useMemo(() => {
     const { totalBooks } = calcBooksFromFragments(repairSpentCount);
-    return calcRankInfo(totalBooks);
+    return { ...calcRankInfo(totalBooks), totalBooks };
   }, [repairSpentCount]);
 
+  const booksToNext = libraryRankInfo.booksToNext;
+  const nextThreshold = libraryRankInfo.nextThreshold;
+  const isMaxRank = libraryRankInfo.isMaxRank;
+  const isAlmostRankUp = !isMaxRank && booksToNext > 0 && booksToNext <= 3;
+  const progressRatio = nextThreshold > 0
+    ? Math.min(1, Math.max(0, (nextThreshold - booksToNext) / nextThreshold))
+    : 1;
+  const GLOW = libraryRankInfo.tier.glow;
+
   return (
-    // ★ 背景画像レイヤー追加
-    <div className="relative min-h-screen pb-24">
+    <div style={{ position: 'relative', minHeight: '100vh', paddingBottom: 0 }}>
 
-      {/* ── 背景画像（public/images/backgrounds/home.png に置くと表示） ── */}
       <div
-        className="pointer-events-none absolute inset-0 z-0"
         style={{
+          pointerEvents: 'none', position: 'absolute', inset: 0, zIndex: 0,
           backgroundImage: 'url(/images/backgrounds/home.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center top',
-          backgroundRepeat: 'no-repeat',
+          backgroundSize: 'cover', backgroundPosition: 'center top',
         }}
       />
-      {/* 背景に重ねるグラデーションオーバーレイ（画像がない場合は従来の背景色として機能） */}
-      <div
-        className="pointer-events-none absolute inset-0 z-0"
-        style={{
-          background: 'linear-gradient(to bottom, rgba(17,24,39,0.15) 0%, rgba(31,41,55,0.70) 50%, rgba(17,24,39,0.90) 100%)',
-        }}
+      <div style={{
+        pointerEvents: 'none', position: 'absolute', inset: 0, zIndex: 0,
+        background: [
+          'linear-gradient(180deg,rgba(6,4,16,0.55) 0%,rgba(6,4,16,0.0) 20%)',
+          'linear-gradient(180deg,rgba(0,0,0,0) 40%,rgba(6,4,16,0.80) 65%,rgba(6,4,16,1.00) 100%)',
+        ].join(','),
+      }}
       />
-      {/* 画像がない場合のフォールバック背景色 */}
-      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900" />
+      <div style={{ position: 'absolute', inset: 0, zIndex: -1, background: '#0d0b1a' }} />
 
-      {/* ── コンテンツ（z-10 で背景の上に） ── */}
-      <div className="relative z-10 p-4 max-w-md mx-auto pt-6">
+      {[
+        { top: '13%', left: '7%', delay: 0, dur: 3.4, size: 11 },
+        { top: '28%', left: '89%', delay: 0.9, dur: 2.7, size: 9 },
+        { top: '8%', left: '77%', delay: 1.5, dur: 4.1, size: 13 },
+        { top: '39%', left: '4%', delay: 0.4, dur: 3.0, size: 7 },
+        { top: '19%', left: '52%', delay: 2.2, dur: 3.7, size: 8 },
+      ].map((p, i) => (
+        <motion.span
+          key={i}
+          style={{
+            pointerEvents: 'none', position: 'absolute', zIndex: 10, userSelect: 'none',
+            top: p.top, left: p.left, fontSize: p.size,
+            color: GLOW,
+            textShadow: `0 0 8px ${GLOW}, 0 0 20px ${GLOW}66`,
+          }}
+          animate={{ y: [0, -14, 0], opacity: [0, 0.85, 0] }}
+          transition={{ duration: p.dur, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          ✦
+        </motion.span>
+      ))}
 
-        {/* ヘッダー */}
-        <div className="flex items-center justify-between mb-6 gap-2">
+      <div style={{ position: 'relative', zIndex: 10, maxWidth: 480, margin: '0 auto', padding: '16px 16px 0' }}>
 
-          {/* ★ タイトル部分を修正 */}
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <div className="min-w-0">
-              {/* whitespace-nowrap を外して折り返し可能に。フォントサイズも可変に */}
-              <h1 className="text-lg font-bold gradient-text leading-tight">
-                すうひもちと
-              </h1>
-              <p className="text-[10px] font-semibold text-gray-300/80 leading-tight">
-                失われたことば図書館
-              </p>
-            </div>
-            {isVIP && (
-              <div className="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-                <Crown className="w-3 h-3 text-yellow-400" />
-                VIP
-              </div>
-            )}
-          </div>
-
-          {/* 右上ボタン群 */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => { vibrateLight(); onOpenMyPage(); }}
-              className="px-3 py-2 rounded-full bg-gray-700/80 hover:bg-gray-600 text-gray-200 transition-colors text-sm font-semibold whitespace-nowrap backdrop-blur-sm"
-            >
-              マイページ
-            </button>
-            <button
-              onClick={() => { vibrateLight(); onShowShare(); }}
-              className="p-2 rounded-full bg-gray-700/80 hover:bg-gray-600 text-gray-300 transition-colors backdrop-blur-sm"
-            >
-              <Share2 className="w-5 h-5" />
-            </button>
-            <AuthButton />
-          </div>
-        </div>
-
-        {/* ステータスバー */}
-        <div className="mb-4">
-          <div className="flex items-center gap-2 px-4 py-2 bg-gray-800/60 rounded-xl border border-gray-700/80 backdrop-blur-sm">
-            <Coins className="w-5 h-5 text-yellow-400" />
-            <span className="text-white font-bold">{coins}</span>
-          </div>
-        </div>
-
-        {/* 図書館ランク・ことの葉（アバター直上 / ゲーム感ステータス） */}
-        <div className="flex justify-center mb-4 px-1">
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35 }}
-            className="w-full max-w-sm rounded-3xl overflow-hidden border backdrop-blur-sm"
+        <div className="flex justify-end items-center gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => { vibrateLight(); onOpenMyPage(); }}
+            className="px-3 py-1.5 text-sm font-bold text-gray-200 transition-all"
             style={{
-              background: 'linear-gradient(135deg, rgba(17,24,39,0.78), rgba(30,27,75,0.58), rgba(15,23,42,0.78))',
-              borderColor: `${libraryRankInfo.tier.glow}55`,
-              boxShadow: `0 16px 40px rgba(0,0,0,0.35), 0 0 32px ${libraryRankInfo.tier.glow}22`,
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 20,
+              backdropFilter: 'blur(8px)',
             }}
           >
-            {/* 上部グロー */}
-            <div
-              className="pointer-events-none absolute -top-10 left-1/2 h-24 w-72 -translate-x-1/2 rounded-full blur-2xl"
-              style={{ background: `${libraryRankInfo.tier.glow}33` }}
-              aria-hidden
-            />
+            マイページ
+          </button>
+          <button
+            type="button"
+            onClick={() => { vibrateLight(); onShowShare(); }}
+            className="p-2 text-gray-300 transition-all"
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '50%',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <Share2 className="w-4 h-4" />
+          </button>
+          <AuthButton />
+        </div>
 
-            <div className="relative px-5 py-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-black tracking-[0.18em] text-white/70">
-                      図書館ランク
-                    </span>
-                    <motion.span
-                      className="h-2 w-2 rounded-full"
-                      style={{ background: libraryRankInfo.tier.glow, boxShadow: `0 0 14px ${libraryRankInfo.tier.glow}` }}
-                      animate={{ opacity: [0.55, 1, 0.55] }}
-                      transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-                      aria-hidden
-                    />
-                  </div>
-                  <div
-                    className="mt-1 text-xl sm:text-2xl font-black leading-tight line-clamp-2"
-                    style={{
-                      color: libraryRankInfo.tier.light,
-                      textShadow: `0 0 18px ${libraryRankInfo.tier.glow}55, 0 2px 10px rgba(0,0,0,0.35)`,
-                    }}
-                  >
-                    {libraryRankInfo.fullTitle}
-                  </div>
-                </div>
-
-                <div className="shrink-0 rounded-2xl px-3 py-2 border"
-                  style={{
-                    background: 'rgba(0,0,0,0.22)',
-                    borderColor: 'rgba(255,255,255,0.14)',
-                  }}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <BookOpen className="w-4 h-4" style={{ color: libraryRankInfo.tier.glow }} />
-                    <span className="text-[11px] font-bold text-white/75">ことの葉</span>
-                  </div>
-                  <div className="mt-0.5 tabular-nums text-right">
-                    <span className="text-2xl font-black" style={{ color: 'rgba(167,243,208,0.98)', textShadow: '0 1px 8px rgba(16,185,129,0.25)' }}>
-                      {kotobaLeafCount}
-                    </span>
-                    <span className="text-xs font-bold text-emerald-100/80 ml-1">枚</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 下部リボン */}
-              <div
-                className="mt-3 rounded-2xl px-4 py-2 border"
-                style={{
-                  background: `linear-gradient(135deg, ${libraryRankInfo.tier.glow}22, rgba(255,255,255,0.06))`,
-                  borderColor: `${libraryRankInfo.tier.glow}33`,
-                }}
+        <motion.div
+          initial={{ opacity: 0, y: -12, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.45, ease: 'easeOut' }}
+          className="relative mb-3"
+        >
+          <div style={{
+            background: 'linear-gradient(180deg,#a07010 0%,#6b4a08 100%)',
+            borderRadius: 18,
+            padding: 2,
+            boxShadow: '0 6px 24px rgba(0,0,0,0.7), 0 2px 0 #c8a02088 inset',
+          }}
+          >
+            <div style={{
+              background: 'linear-gradient(180deg,#f5d060 0%,#c8920a 50%,#f5d060 100%)',
+              borderRadius: 16,
+              padding: '2px 2px 3px',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,200,0.6)',
+            }}
+            >
+              <div style={{
+                background: 'linear-gradient(180deg,#6b4a08 0%,#8a6010 40%,#6b4a08 100%)',
+                borderRadius: 14,
+                padding: '9px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,240,140,0.2)',
+              }}
               >
-                <div className="flex items-center justify-between gap-2 text-[11px] font-semibold">
-                  <span className="text-white/70">修繕してランクアップ</span>
-                  <span className="text-white/75">クイズでことの葉を集めよう</span>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                  <div style={{
+                    width: 40, height: 40,
+                    background: 'linear-gradient(135deg,#ffe566 0%,#c88c00 100%)',
+                    borderRadius: 10,
+                    border: '2px solid #fff8a055',
+                    boxShadow: '0 3px 10px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,200,0.5)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 22, flexShrink: 0,
+                  }}
+                  >
+                    ⚔️
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    {isVIP && (
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                        background: 'rgba(255,200,0,0.18)', borderRadius: 10,
+                        padding: '1px 7px', marginBottom: 2,
+                        border: '1px solid rgba(255,220,60,0.35)',
+                        fontSize: 10, fontWeight: 700, color: '#ffe070',
+                      }}
+                      >
+                        <Crown style={{ width: 10, height: 10 }} />
+                        VIP
+                      </div>
+                    )}
+                    <div style={{
+                      fontSize: 21, fontWeight: 900, letterSpacing: '0.05em',
+                      color: '#fff8d0',
+                      textShadow: '0 1px 0 rgba(0,0,0,0.8), 0 0 14px rgba(255,230,80,0.5)',
+                      lineHeight: 1.1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    >
+                      {libraryRankInfo.fullTitle}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: 'rgba(0,0,0,0.4)',
+                  borderRadius: 20, padding: '6px 13px',
+                  border: '1px solid rgba(255,220,60,0.35)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07)',
+                  flexShrink: 0,
+                }}
+                >
+                  <div style={{
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: 'linear-gradient(135deg,#ffe566,#c88c00)',
+                    border: '1.5px solid #fff8a066',
+                    boxShadow: '0 2px 5px rgba(0,0,0,0.4)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, flexShrink: 0,
+                  }}
+                  >
+                    🪙
+                  </div>
+                  <span style={{
+                    fontSize: 16, fontWeight: 900,
+                    color: '#fff8a0',
+                    textShadow: '0 1px 5px rgba(0,0,0,0.7)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                  >
+                    {coins.toLocaleString()}
+                  </span>
                 </div>
               </div>
             </div>
-          </motion.div>
-        </div>
+          </div>
 
-        {/* ポテトアバター */}
+          {(['left', 'right'] as const).map((side) => (
+            <div
+              key={side}
+              style={{
+                position: 'absolute',
+                top: '50%',
+                ...(side === 'left' ? { left: -2 } : { right: -2 }),
+                transform: 'translateY(-50%)',
+                fontSize: 16,
+                color: '#f5d060',
+                textShadow: '0 0 6px #c89000, 0 1px 2px rgba(0,0,0,0.8)',
+                pointerEvents: 'none',
+              }}
+            >
+              ◆
+            </div>
+          ))}
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.94, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.1, ease: 'easeOut' }}
+          className="relative mb-5 w-full max-w-sm mx-auto"
+          style={{
+            background: 'linear-gradient(135deg,rgba(18,14,40,0.92),rgba(28,20,60,0.88),rgba(14,12,34,0.92))',
+            borderRadius: 22,
+            border: `2px solid ${GLOW}88`,
+            boxShadow: [
+              `0 0 0 1px ${GLOW}22`,
+              '0 8px 32px rgba(0,0,0,0.6)',
+              `0 0 40px ${GLOW}18`,
+            ].join(','),
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{
+            position: 'absolute', top: -20, left: '50%',
+            transform: 'translateX(-50%)',
+            width: 200, height: 40, borderRadius: '50%',
+            background: `${GLOW}30`,
+            filter: 'blur(20px)',
+            pointerEvents: 'none',
+          }}
+          />
+
+          {[
+            { top: 0, left: 0, br: '0 0 10px 0' as const },
+            { top: 0, right: 0, br: '0 0 0 10px' as const },
+            { bottom: 0, left: 0, br: '0 10px 0 0' as const },
+            { bottom: 0, right: 0, br: '10px 0 0 0' as const },
+          ].map((c, i) => (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                ...(c.top !== undefined ? { top: c.top } : {}),
+                ...(c.bottom !== undefined ? { bottom: c.bottom } : {}),
+                ...(c.left !== undefined ? { left: c.left } : {}),
+                ...(c.right !== undefined ? { right: c.right } : {}),
+                width: 18, height: 18,
+                background: GLOW,
+                borderRadius: c.br,
+                opacity: 0.55,
+                pointerEvents: 'none',
+              }}
+            />
+          ))}
+
+          <div style={{ padding: '16px 18px 14px' }}>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.5)' }}>
+                    図書館ランク
+                  </span>
+                  <motion.div
+                    style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: GLOW,
+                      boxShadow: `0 0 0 3px ${GLOW}44`,
+                    }}
+                    animate={{ boxShadow: [`0 0 0 2px ${GLOW}55`, `0 0 0 6px ${GLOW}00`] }}
+                    transition={{ duration: 1.6, repeat: Infinity, ease: 'easeOut' }}
+                  />
+                </div>
+                <div style={{
+                  fontSize: 28, fontWeight: 900, letterSpacing: '0.05em', lineHeight: 1.05,
+                  color: libraryRankInfo.tier.light,
+                  textShadow: `0 0 24px ${GLOW}88, 0 2px 12px rgba(0,0,0,0.7), 0 0 48px ${GLOW}44`,
+                }}
+                >
+                  {libraryRankInfo.fullTitle}
+                </div>
+              </div>
+
+              <motion.div
+                animate={isAlmostRankUp ? {
+                  borderColor: ['rgba(239,68,68,0.4)', 'rgba(239,68,68,0.9)', 'rgba(239,68,68,0.4)'],
+                  boxShadow: ['0 0 0 0 rgba(239,68,68,0)', '0 0 12px 2px rgba(239,68,68,0.35)', '0 0 0 0 rgba(239,68,68,0)'],
+                } : {}}
+                transition={{ duration: 1.4, repeat: Infinity }}
+                style={{
+                  flexShrink: 0, minWidth: 90,
+                  background: 'rgba(0,0,0,0.4)',
+                  borderRadius: 16, padding: '10px 14px',
+                  border: `1.5px solid ${isAlmostRankUp ? 'rgba(239,68,68,0.6)' : 'rgba(255,255,255,0.18)'}`,
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07)',
+                  textAlign: 'center',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: 2 }}>
+                  <span style={{ fontSize: 15 }}>🏆</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.08em' }}>
+                    昇級まで
+                  </span>
+                </div>
+                {isMaxRank ? (
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#fde68a' }}>MAX!</div>
+                ) : (
+                  <div style={{ lineHeight: 1, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 2 }}>
+                    <motion.span
+                      key={booksToNext}
+                      initial={{ scale: 1.3, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      style={{
+                        fontSize: 36, fontWeight: 900, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em',
+                        color: isAlmostRankUp ? '#fca5a5' : '#fde68a',
+                        textShadow: isAlmostRankUp
+                          ? '0 0 16px rgba(239,68,68,0.7)'
+                          : '0 0 16px rgba(251,191,36,0.5), 0 2px 4px rgba(0,0,0,0.5)',
+                      }}
+                    >
+                      {booksToNext}
+                    </motion.span>
+                    <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', marginBottom: 2 }}>
+                      /
+                      {nextThreshold}
+                    </span>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(16,185,129,0.1)',
+              borderRadius: 14, padding: '10px 14px', marginBottom: 12,
+              border: '1.5px solid rgba(16,185,129,0.28)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
+            }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 8,
+                  background: 'rgba(16,185,129,0.2)',
+                  border: '1px solid rgba(16,185,129,0.4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 14, flexShrink: 0,
+                }}
+                >
+                  🍃
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.6)' }}>
+                  ことの葉（所持）
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                <motion.span
+                  key={kotobaLeafCount}
+                  initial={{ scale: 1.2, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  style={{
+                    fontSize: 26, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
+                    color: '#6ee7b7',
+                    textShadow: '0 0 12px rgba(52,211,153,0.5)',
+                  }}
+                >
+                  {kotobaLeafCount}
+                </motion.span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(110,231,183,0.6)' }}>枚</span>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.4)' }}>修繕進捗</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: isAlmostRankUp ? '#fca5a5' : 'rgba(255,255,255,0.4)' }}>
+                  {Math.round(progressRatio * 100)}
+                  %
+                </span>
+              </div>
+              <div style={{
+                width: '100%', height: 10, borderRadius: 99,
+                background: 'rgba(0,0,0,0.45)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                overflow: 'hidden',
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)',
+              }}
+              >
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressRatio * 100}%` }}
+                  transition={{ duration: 1.2, delay: 0.35, ease: 'easeOut' }}
+                  className="relative h-full overflow-hidden rounded-[99px]"
+                  style={{
+                    background: isAlmostRankUp
+                      ? 'linear-gradient(90deg,#ef4444,#f97316,#fbbf24)'
+                      : `linear-gradient(90deg,${GLOW},${libraryRankInfo.tier.light},#ffffff88)`,
+                    boxShadow: `0 0 8px ${isAlmostRankUp ? '#ef444488' : `${GLOW}88`}`,
+                  }}
+                >
+                  <motion.div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      background: 'linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.55) 50%,transparent 100%)',
+                    }}
+                    animate={{ x: ['-120%', '220%'] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1.5 }}
+                  />
+                </motion.div>
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: `linear-gradient(135deg,${GLOW}18,rgba(255,255,255,0.04))`,
+              borderRadius: 12, padding: '7px 12px',
+              border: `1px solid ${GLOW}30`,
+            }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.55)' }}>修繕してランクアップ</span>
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>|</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.55)' }}>クイズでことの葉を集めよう</span>
+            </div>
+          </div>
+        </motion.div>
+
         <motion.button
-          className="flex justify-center mb-4 mx-auto relative"
+          type="button"
+          style={{ display: 'flex', justifyContent: 'center', margin: '0 auto 8px', position: 'relative', background: 'none', border: 'none', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
           onClick={() => { vibrateLight(); onNavigate('dressup'); }}
           whileTap={{ scale: 0.97 }}
         >
-          <PotatoAvatar
-            equipped={equippedDetails}
-            emotion="happy"
-            size={260}
-            ssrEffect={false}
+          <div style={{
+            position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)',
+            width: 180, height: 24, borderRadius: '50%',
+            background: `${GLOW}35`,
+            filter: 'blur(18px)',
+            pointerEvents: 'none',
+          }}
           />
-          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-3 py-1 bg-pink-500/80 text-white text-xs rounded-full flex items-center gap-1">
-            <Shirt className="w-3 h-3" />
+          <PotatoAvatar equipped={equippedDetails} emotion="happy" size={240} ssrEffect={false} />
+          <div style={{
+            position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)',
+            background: 'linear-gradient(90deg,#ec4899,#f43f5e)',
+            borderRadius: 20, padding: '5px 16px',
+            display: 'flex', alignItems: 'center', gap: 5,
+            fontSize: 12, fontWeight: 800, color: '#fff',
+            boxShadow: '0 4px 12px rgba(236,72,153,0.55), 0 2px 0 rgba(0,0,0,0.3)',
+            whiteSpace: 'nowrap',
+          }}
+          >
+            <Shirt style={{ width: 12, height: 12 }} />
             着せ替え
           </div>
         </motion.button>
 
-        {/* メインボタン群 */}
-        <div className="space-y-3">
-          <motion.button
+      </div>
+
+      <div style={{
+        position: 'relative', zIndex: 10,
+        background: 'linear-gradient(180deg,rgba(8,6,20,0) 0%,rgba(8,6,20,0.88) 12%,rgba(8,6,20,0.97) 100%)',
+        padding: '24px 16px 32px',
+        borderTop: '1px solid rgba(200,160,30,0)',
+      }}
+      >
+        <div style={{
+          position: 'absolute', top: 0, left: '20%', right: '20%', height: 1,
+          background: 'linear-gradient(90deg,transparent,rgba(200,160,30,0.35),transparent)',
+          pointerEvents: 'none',
+        }}
+        />
+
+        <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <RpgButton
             onClick={() => { vibrateLight(); onNavigate('suhimochi_room'); }}
-            className="w-full py-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <Languages className="w-7 h-7" />
-            すうひもちと会話する
-          </motion.button>
-
-          <motion.button
+            fromColor="#065f46"
+            toColor="#10b981"
+            glowColor="rgba(16,185,129,0.45)"
+            shadowColor="rgba(4,60,38,0.9)"
+            icon={<Languages style={{ width: 24, height: 24 }} />}
+            label="すうひもちと会話する"
+          />
+          <RpgButton
             onClick={() => { vibrateLight(); onNavigate('academy'); }}
-            className="w-full py-5 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-indigo-500/25"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <GraduationCap className="w-7 h-7" />
-            ことば図書館
-          </motion.button>
-
-          <motion.button
+            fromColor="#312e81"
+            toColor="#6366f1"
+            glowColor="rgba(99,102,241,0.45)"
+            shadowColor="rgba(30,27,90,0.9)"
+            icon={<GraduationCap style={{ width: 24, height: 24 }} />}
+            label="ことば図書館"
+          />
+          <RpgButton
             onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
-            className="w-full py-5 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold text-xl flex items-center justify-center gap-3 shadow-lg shadow-amber-500/25"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <Sword className="w-7 h-7" />
-            ことばを集める
-          </motion.button>
+            fromColor="#92400e"
+            toColor="#f59e0b"
+            glowColor="rgba(245,158,11,0.45)"
+            shadowColor="rgba(80,35,5,0.9)"
+            icon={<Sword style={{ width: 24, height: 24 }} />}
+            label="ことばを集める"
+          />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <RpgButton
+              onClick={() => { vibrateLight(); onNavigate('gacha'); }}
+              fromColor="#4c1d95"
+              toColor="#8b5cf6"
+              glowColor="rgba(139,92,246,0.45)"
+              shadowColor="rgba(40,15,90,0.9)"
+              icon={<Gem style={{ width: 18, height: 18 }} />}
+              label="ガチャ"
+              small
+            />
+            <RpgButton
+              onClick={() => { vibrateLight(); onNavigate('researcher_dex'); }}
+              fromColor="#78350f"
+              toColor="#d97706"
+              glowColor="rgba(217,119,6,0.45)"
+              shadowColor="rgba(60,28,5,0.9)"
+              icon={<Users style={{ width: 18, height: 18 }} />}
+              label="研究員図鑑"
+              small
+            />
+          </div>
         </div>
+      </div>
 
-        {/* サブアクション */}
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <motion.button
-            onClick={() => { vibrateLight(); onNavigate('gacha'); }}
-            className="py-4 rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 text-white font-bold flex items-center justify-center gap-2"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+      <div style={{
+        background: '#080614', padding: '0 16px 48px',
+        position: 'relative', zIndex: 10,
+      }}
+      >
+        <div style={{
+          height: 1, marginBottom: 20,
+          background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent)',
+        }}
+        />
+        <div style={{ maxWidth: 480, margin: '0 auto' }}>
+          <div style={{
+            borderRadius: 20,
+            border: '1px solid rgba(200,160,30,0.2)',
+            background: 'linear-gradient(135deg,rgba(18,12,38,0.98),rgba(24,16,50,0.98))',
+            padding: '20px 18px',
+            boxShadow: 'inset 0 1px 0 rgba(200,160,30,0.12), 0 0 0 1px rgba(255,255,255,0.04)',
+          }}
           >
-            <Gem className="w-5 h-5" />
-            ガチャ
-          </motion.button>
-
-          <motion.button
-            onClick={() => { vibrateLight(); onNavigate('researcher_dex'); }}
-            className="py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <Users className="w-5 h-5" />
-            研究員図鑑
-          </motion.button>
+            <div style={{ textAlign: 'center', marginBottom: 14 }}>
+              <div style={{ fontSize: 24, marginBottom: 5 }}>🧪✨</div>
+              <div style={{
+                fontSize: 15, fontWeight: 900, letterSpacing: '0.03em',
+                color: '#e8d5a0', textShadow: '0 0 14px rgba(200,160,30,0.4)',
+              }}
+              >
+                すうひもちコレクションを応援する
+              </div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', marginTop: 3, fontWeight: 600 }}>
+                【あなたに寄り添う、言の葉の世界】
+              </div>
+            </div>
+            <div style={{
+              fontSize: 12.5, color: 'rgba(255,255,255,0.5)', lineHeight: 1.8,
+              borderTop: '1px solid rgba(255,255,255,0.07)',
+              borderBottom: '1px solid rgba(255,255,255,0.07)',
+              padding: '12px 0', marginBottom: 14,
+            }}
+            >
+              すうひもちコレクションは、失われたことば図書館を少しずつ復興していく学習RPGです。
+              現在AI利用料や開発費を負担しながら、個人で開発・運営しています。
+              「面白い」「続いてほしい」と感じていただけたら、noteからのご支援が開発継続の大きな力になります。
+            </div>
+            <DeveloperSupport />
+          </div>
         </div>
-
-        <DeveloperSupport />
       </div>
     </div>
   );
 };
+
+void HomeScreen_v4_old;
 
 const MyPageScreen = ({
   displayName,
