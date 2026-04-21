@@ -346,11 +346,21 @@ const HomeScreen = ({
       display: 'flex',
       flexDirection: 'column',
     }}>
-      <div style={{
+      <style jsx>{`
+        .homeBg {
+          background-position: center top;
+        }
+        /* スマホだけ：背景を少し下へ（アバター見せ） */
+        @media (max-width: 480px) {
+          .homeBg {
+            background-position: center 70px;
+          }
+        }
+      `}</style>
+      <div className="homeBg" style={{
         position: 'absolute', inset: 0, zIndex: 0,
         backgroundImage: 'url(/images/backgrounds/home.png)',
         backgroundSize: 'cover',
-        backgroundPosition: 'center 22%',
         backgroundRepeat: 'no-repeat',
       }}/>
       <div style={{
