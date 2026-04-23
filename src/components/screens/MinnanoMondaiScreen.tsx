@@ -504,11 +504,25 @@ type MagicCircleState = {
 // ユーティリティ
 // ============================================================
 
+/** [0, max) の一様乱数（暗号乱数を優先し、B 枠等への偏りを抑える） */
+function randomIntBelow(max: number): number {
+  if (max <= 0) return 0;
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const buf = new Uint32Array(1);
+    const limit = 0x100000000 - (0x100000000 % max);
+    do {
+      crypto.getRandomValues(buf);
+    } while (buf[0] >= limit);
+    return buf[0] % max;
+  }
+  return Math.floor(Math.random() * max);
+}
+
 /** Fisher-Yates シャッフル */
 function shuffleArray<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = randomIntBelow(i + 1);
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
@@ -516,9 +530,20 @@ function shuffleArray<T>(arr: T[]): T[] {
 
 /** 選択肢をシャッフルし displayChoices / displayAnswerIndex を付与 */
 function withShuffledChoices(q: AcademyUserQuestion): ShuffledQuestion {
-  const indices = shuffleArray([0, 1, 2, 3].slice(0, q.choices.length));
-  const displayChoices = indices.map((i) => q.choices[i]);
+  const len = q.choices.length;
+  const sourceIndices = [0, 1, 2, 3].slice(0, len);
+  const indices = shuffleArray(sourceIndices);
+  const displayChoices = indices.map((i) => q.choices[i]) as ShuffledQuestion['displayChoices'];
   const displayAnswerIndex = indices.indexOf(q.answerIndex);
+  if (displayAnswerIndex < 0) {
+    const safe = Math.min(Math.max(0, q.answerIndex), Math.max(0, len - 1));
+    return {
+      ...q,
+      displayChoices: q.choices.slice(0, 4) as ShuffledQuestion['displayChoices'],
+      displayAnswerIndex: safe,
+      displayChoiceSourceIndices: [0, 1, 2, 3].slice(0, len),
+    };
+  }
   return { ...q, displayChoices, displayAnswerIndex, displayChoiceSourceIndices: indices };
 }
 
@@ -1326,6 +1351,7 @@ const QuizPlayView = ({
   magicCircles,
   correctCount,
   currentScore,
+  lastAnswerResult,
   onRemoveMagicCircle,
   onAnswer,
   onBackToRoom,
@@ -1340,6 +1366,8 @@ const QuizPlayView = ({
   magicCircles: MagicCircleState[];
   correctCount: number;
   currentScore: number;
+  /** 直前の1問分の採点（正解オーバーレイの点数表示用） */
+  lastAnswerResult: QuizQuestionResult | null;
   onRemoveMagicCircle: (id: number) => void;
   /** displayIndex（表示上のインデックス）を渡す */
   onAnswer: (displayIndex: number, clientX: number, clientY: number) => void;
@@ -1444,7 +1472,7 @@ const QuizPlayView = ({
       <AnimatePresence>
         {answerFeedback && (
           <motion.div
-            className="fixed inset-0 z-[60] flex items-center justify-center pointer-events-none"
+            className="fixed inset-0 z-[60] flex flex-col items-center justify-center pointer-events-none"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1459,6 +1487,36 @@ const QuizPlayView = ({
             >
               {answerFeedback === 'correct' ? '⭕️' : '❌'}
             </motion.div>
+            {answerFeedback === 'correct' && lastAnswerResult?.isCorrect && (
+              <motion.div
+                className="mt-4 flex flex-col items-center gap-1"
+                initial={{ y: 24, opacity: 0, scale: 0.65 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: 12, opacity: 0, scale: 0.9 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 22, delay: 0.05 }}
+              >
+                <div
+                  className="text-4xl font-black tabular-nums tracking-tight"
+                  style={{
+                    color: '#fef08a',
+                    textShadow: '0 0 24px rgba(250,204,21,0.7),0 2px 0 rgba(120,50,0,0.35)',
+                  }}
+                >
+                  +{lastAnswerResult.totalPoint} pt
+                </div>
+                <div
+                  className="rounded-full border px-4 py-1.5 text-sm font-extrabold"
+                  style={{
+                    color: 'rgba(30,20,60,0.92)',
+                    background: 'linear-gradient(135deg, rgba(255,251,235,0.98), rgba(254,240,200,0.95))',
+                    borderColor: 'rgba(202,138,4,0.5)',
+                    boxShadow: '0 10px 24px rgba(202,138,4,0.25)',
+                  }}
+                >
+                  正解 {lastAnswerResult.basePoint} ＋ 秒数ボーナス {lastAnswerResult.timeBonus}
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -2102,6 +2160,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     if (quizPhase === 'playing') {
       const currentScore = quizResults.reduce((s, r) => s + r.totalPoint, 0);
       const correctCount = quizResults.filter((r) => r.isCorrect).length;
+      const lastAnswerResult = quizResults.length > 0 ? quizResults[quizResults.length - 1]! : null;
       return (
         <QuizPlayView
           cat={selectedCat}
@@ -2114,6 +2173,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
           magicCircles={magicCircles}
           currentScore={currentScore}
           correctCount={correctCount}
+          lastAnswerResult={lastAnswerResult}
           onRemoveMagicCircle={(id) => setMagicCircles((prev) => prev.filter((c) => c.id !== id))}
           onAnswer={(displayIdx, cx, cy) => finishCurrentAndMove(displayIdx, cx, cy)}
           onBackToRoom={handleBackToRoom}

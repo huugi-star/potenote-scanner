@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ScrollText,
+  Trophy,
 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { useToast } from '@/components/ui/Toast';
@@ -1481,6 +1482,18 @@ if (subview === 'create_detail') {
                 </p>
               </div>
             </div>
+          </motion.button>
+
+          <motion.button
+            type="button"
+            onClick={() => router.push('/academy/tournament')}
+            className="w-full py-4 rounded-2xl bg-white/90 text-slate-900 font-black text-lg flex items-center justify-center gap-3 shadow-lg shadow-slate-900/10 border border-slate-200"
+            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: 1.01 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+          >
+            <Trophy className="w-6 h-6 text-amber-600" />
+            トーナメント
           </motion.button>
 
           <motion.button

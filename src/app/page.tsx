@@ -356,6 +356,17 @@ const HomeScreen = ({
             background-position: center 70px;
           }
         }
+        .avatarButton {
+          /* アバターが上方向にはみ出しても、直前カードに当たらない余白を確保 */
+          margin-top: 6px;
+          height: clamp(160px, 22vh, 220px);
+        }
+        @media (min-width: 481px) {
+          .avatarButton {
+            margin-top: 10px;
+            height: max(230px, 26vh);
+          }
+        }
       `}</style>
       <div className="homeBg" style={{
         position: 'absolute', inset: 0, zIndex: 0,
@@ -652,13 +663,12 @@ const HomeScreen = ({
         <motion.button
           onClick={()=>{vibrateLight();onNavigate('dressup');}}
           whileTap={{scale:0.97}}
+          className="avatarButton"
           style={{
             display:'flex',justifyContent:'center',alignItems:'flex-end',
             position:'relative',background:'none',border:'none',
             cursor:'pointer',WebkitTapHighlightColor:'transparent',
             flex:'0 0 auto',
-            /* アバターの高さを可変に — 小さい画面では縮む */
-            height:'clamp(140px, 22vh, 200px)',
             overflow:'visible',
           }}
         >
