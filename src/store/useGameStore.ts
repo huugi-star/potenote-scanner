@@ -120,8 +120,8 @@ const isCloudDataClearlyEmpty = (data: {
   lastScanDate?: unknown;
   coins?: number;
   tickets?: number;
-  inventory?: unknown[];
-  equipment?: Record<string, unknown>;
+  inventory?: GameState['inventory'];
+  equipment?: GameState['equipment'];
   journey?: GameState['journey'];
   quizHistory?: QuizHistory[];
   translationHistory?: TranslationHistory[];
