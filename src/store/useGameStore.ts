@@ -69,6 +69,72 @@ const clearLogoutRecoveryState = (): void => {
   }
 };
 
+const hasMeaningfulStateForCloudSync = (
+  state: Pick<
+    GameState,
+    | 'coins'
+    | 'tickets'
+    | 'inventory'
+    | 'equipment'
+    | 'journey'
+    | 'quizHistory'
+    | 'translationHistory'
+    | 'lectureHistory'
+    | 'wordCollectionScans'
+    | 'totalScans'
+    | 'totalQuizzes'
+    | 'totalCorrectAnswers'
+    | 'totalDistance'
+    | 'totalQuizClears'
+  >
+): boolean => {
+  const hasInventory = Array.isArray(state.inventory) && state.inventory.length > 0;
+  const hasEquipment = Object.values(state.equipment ?? {}).some(Boolean);
+  const hasJourneyProgress =
+    Number(state.journey?.totalDistance ?? 0) > 0 ||
+    (Array.isArray(state.journey?.flags) && state.journey.flags.length > 0) ||
+    (Array.isArray(state.journey?.islands) && state.journey.islands.length > 1);
+  const hasAnyHistory =
+    (state.quizHistory?.length ?? 0) > 0 ||
+    (state.translationHistory?.length ?? 0) > 0 ||
+    (state.lectureHistory?.length ?? 0) > 0;
+  const hasWordProgress = (state.wordCollectionScans?.length ?? 0) > 0;
+  const hasCounters =
+    Number(state.coins ?? 0) > 0 ||
+    Number(state.tickets ?? 0) > 0 ||
+    Number(state.totalScans ?? 0) > 0 ||
+    Number(state.totalQuizzes ?? 0) > 0 ||
+    Number(state.totalCorrectAnswers ?? 0) > 0 ||
+    Number(state.totalDistance ?? 0) > 0 ||
+    Number(state.totalQuizClears ?? 0) > 0;
+  return hasInventory || hasEquipment || hasJourneyProgress || hasAnyHistory || hasWordProgress || hasCounters;
+};
+
+const shouldBlockCloudOverwriteAsEmpty = (state: GameState): boolean => {
+  return !hasMeaningfulStateForCloudSync(state);
+};
+
+const isClearlyEmptyRecoveryState = (state: Partial<GameState> | null | undefined): boolean => {
+  if (!state) return true;
+  const emptyCandidate = {
+    coins: Number(state.coins ?? 0),
+    tickets: Number(state.tickets ?? 0),
+    inventory: Array.isArray(state.inventory) ? state.inventory : [],
+    equipment: state.equipment ?? {},
+    journey: state.journey ?? initialState.journey,
+    quizHistory: Array.isArray(state.quizHistory) ? state.quizHistory : [],
+    translationHistory: Array.isArray(state.translationHistory) ? state.translationHistory : [],
+    lectureHistory: Array.isArray(state.lectureHistory) ? state.lectureHistory : [],
+    wordCollectionScans: Array.isArray(state.wordCollectionScans) ? state.wordCollectionScans : [],
+    totalScans: Number(state.totalScans ?? 0),
+    totalQuizzes: Number(state.totalQuizzes ?? 0),
+    totalCorrectAnswers: Number(state.totalCorrectAnswers ?? 0),
+    totalDistance: Number(state.totalDistance ?? 0),
+    totalQuizClears: Number(state.totalQuizClears ?? 0),
+  };
+  return !hasMeaningfulStateForCloudSync(emptyCandidate);
+};
+
 const ACADEMY_QUESTIONS_COLLECTION = 'academy_questions';
 const ACADEMY_OFFICIAL_QUESTIONS_COLLECTION = 'academy_official_questions';
 const ACADEMY_QUESTION_STATS_COLLECTION = 'academy_question_stats';
@@ -602,6 +668,14 @@ interface GameState extends UserState {
 
   // あなた図鑑（独立）
   anataZukanEntries: AnataZukanEntry[];
+
+  // クラウド同期ガード（永続化しない内部フラグ）
+  hydrationCompleted: boolean;
+  cloudLoadInProgress: boolean;
+  cloudLoaded: boolean;
+  cloudLoadFailed: boolean;
+  cloudLoadedUid: string | null;
+  cloudSavePausedUntil: number;
 }
 
 interface GameActions {
@@ -843,6 +917,12 @@ const initialState: GameState = {
   suhimochiTodayState: null,
   suhimochiCurrentRequest: null,
   anataZukanEntries: [],
+  hydrationCompleted: false,
+  cloudLoadInProgress: false,
+  cloudLoaded: false,
+  cloudLoadFailed: false,
+  cloudLoadedUid: null,
+  cloudSavePausedUntil: 0,
 };
 
 // ===== Store Implementation =====
@@ -855,15 +935,41 @@ export const useGameStore = create<GameStore>()(
       // ===== Auth & Cloud Sync =====
       
       setUserId: async (uid) => {
-        // ローカルのUIDを更新
-        set({ uid });
+        const previousUid = get().uid;
+        const now = Date.now();
+
+        // UID切替直後は自動保存を一時停止（ログイン直後の白紙上書きを防ぐ）
+        set({
+          uid,
+          cloudLoadInProgress: !!uid,
+          cloudLoaded: false,
+          cloudLoadFailed: false,
+          cloudLoadedUid: null,
+          cloudSavePausedUntil: uid && previousUid !== uid ? now + 8000 : now + 3000,
+        });
 
         // academy_questions / academy_official_questions / academy_question_stats を通常取得で更新する。
         void refreshAcademyQuestionsFromFirestore();
 
-        if (!uid || !db) return;
+        if (!uid) {
+          return;
+        }
 
-        const recoveryState = readLogoutRecoveryState(uid) as Partial<GameState> | null;
+        if (!db) {
+          set({
+            cloudLoadInProgress: false,
+            cloudLoaded: false,
+            cloudLoadFailed: true,
+            cloudLoadedUid: null,
+          });
+          return;
+        }
+
+        const rawRecoveryState = readLogoutRecoveryState(uid) as Partial<GameState> | null;
+        const recoveryState = isClearlyEmptyRecoveryState(rawRecoveryState) ? null : rawRecoveryState;
+        if (rawRecoveryState && !recoveryState) {
+          console.warn('[setUserId] logout recovery exists but is clearly empty; ignored');
+        }
 
         try {
           const userRef = doc(db, 'users', uid);
@@ -1011,13 +1117,53 @@ export const useGameStore = create<GameStore>()(
                 ),
               ];
 
+              const cloudRestoreLooksEmpty =
+                !hasMeaningfulStateForCloudSync({
+                  coins: cloudData.userState?.coins ?? 0,
+                  tickets: cloudData.userState?.tickets ?? 0,
+                  inventory: cloudData.inventory ?? [],
+                  equipment: cloudData.equipment ?? {},
+                  journey: cloudData.journey ?? initialState.journey,
+                  quizHistory: cloudQuizHistory,
+                  translationHistory: cloudTranslationHistory,
+                  lectureHistory: cloudLectureHistory,
+                  wordCollectionScans: baseState.wordCollectionScans ?? [],
+                  totalScans: cloudData.userState?.totalScans ?? 0,
+                  totalQuizzes: cloudData.userState?.totalQuizzes ?? 0,
+                  totalCorrectAnswers: cloudData.userState?.totalCorrectAnswers ?? 0,
+                  totalDistance: cloudData.userState?.totalDistance ?? 0,
+                  totalQuizClears: cloudData.userState?.totalQuizClears ?? 0,
+                }) &&
+                !hasMeaningfulStateForCloudSync(baseState);
+
+              if (cloudRestoreLooksEmpty) {
+                console.warn('[setUserId] cloud restore looks empty; treating as failed restore');
+                set({
+                  cloudLoadInProgress: false,
+                  cloudLoaded: false,
+                  cloudLoadFailed: true,
+                  cloudLoadedUid: null,
+                });
+                return;
+              }
+
               set({
                 quizHistory: mergedQuizHistory,
                 translationHistory: mergedTranslationHistory,
                 lectureHistory: mergedLectureHistory,
+                cloudLoadInProgress: false,
+                cloudLoaded: true,
+                cloudLoadFailed: false,
+                cloudLoadedUid: uid,
               });
             } catch (historyError) {
               console.error('Cloud history load error:', historyError);
+              set({
+                cloudLoadInProgress: false,
+                cloudLoaded: true,
+                cloudLoadFailed: false,
+                cloudLoadedUid: uid,
+              });
             }
           } else {
             // 初回ログイン: 現在のローカル状態をクラウドへ
@@ -1028,7 +1174,19 @@ export const useGameStore = create<GameStore>()(
                 uid,
               });
             }
-            await get().syncWithCloud();
+            set({
+              cloudLoadInProgress: false,
+              cloudLoaded: true,
+              cloudLoadFailed: false,
+              cloudLoadedUid: uid,
+            });
+
+            const shouldSkipInitialCloudSync = shouldBlockCloudOverwriteAsEmpty(get());
+            if (!shouldSkipInitialCloudSync) {
+              await get().syncWithCloud();
+            } else {
+              console.warn('[setUserId] initial cloud sync skipped because state is empty');
+            }
           }
           clearLogoutRecoveryState();
         } catch (error) {
@@ -1040,12 +1198,43 @@ export const useGameStore = create<GameStore>()(
               uid,
             });
           }
+          set({
+            cloudLoadInProgress: false,
+            cloudLoaded: false,
+            cloudLoadFailed: true,
+            cloudLoadedUid: null,
+          });
         }
       },
 
       syncWithCloud: async () => {
         const state = get();
         if (!db || !state.uid) return;
+
+        if (!state.hydrationCompleted) {
+          console.log('[syncWithCloud] blocked: hydration not completed');
+          return;
+        }
+        if (state.cloudLoadInProgress) {
+          console.log('[syncWithCloud] blocked: cloud loading in progress');
+          return;
+        }
+        if (!state.cloudLoaded || state.cloudLoadedUid !== state.uid) {
+          console.log('[syncWithCloud] blocked: cloud restore not ready for current uid');
+          return;
+        }
+        if (state.cloudLoadFailed) {
+          console.warn('[syncWithCloud] blocked: previous cloud restore failed');
+          return;
+        }
+        if (Date.now() < Number(state.cloudSavePausedUntil ?? 0)) {
+          console.log('[syncWithCloud] blocked: save paused after uid switch');
+          return;
+        }
+        if (shouldBlockCloudOverwriteAsEmpty(state)) {
+          console.warn('[syncWithCloud] blocked dangerous empty overwrite payload');
+          return;
+        }
 
         // ローカル開発時はクラウドへの書き込みをスキップ（DEV_INVENTORY等で本番データを汚染しない）
         if (isLocalDevelopment()) {
@@ -2978,17 +3167,22 @@ export const useGameStore = create<GameStore>()(
       // ===== Utility =====
       
       reset: () => {
-        set(initialState);
+        const hydrated = get().hydrationCompleted;
+        set({
+          ...initialState,
+          hydrationCompleted: hydrated,
+        });
       },
 
       // ログアウト時にゲストのスキャン回数を保持したままリセット
       resetPreserveGuestUsage: () => {
-        const { dailyScanCount, lastScanDate, bonusScanBalance } = get();
+        const { dailyScanCount, lastScanDate, bonusScanBalance, hydrationCompleted } = get();
         set({
           ...initialState,
           dailyScanCount,
           lastScanDate,
           bonusScanBalance,
+          hydrationCompleted,
         });
       },
     }),
@@ -3103,6 +3297,7 @@ export const useGameStore = create<GameStore>()(
           }
         }
         // アカデミー固定問題のマージは persist の merge オプションで実施
+        useGameStore.setState({ hydrationCompleted: true });
       },
       partialize: (state) => ({
         coins: state.coins,
