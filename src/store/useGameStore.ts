@@ -135,6 +135,9 @@ const isCloudDataClearlyEmpty = (data: {
 } | null | undefined): boolean => {
   if (!data) return true;
 
+  if (typeof data.coins === 'number' && data.coins > 0) return false;
+  if (Array.isArray(data.inventory) && data.inventory.length > 0) return false;
+  if (data.equipment && typeof data.equipment === 'object' && Object.values(data.equipment ?? {}).some(Boolean)) return false;
   if (typeof data.bonusScanBalance === 'number' && data.bonusScanBalance > 0) return false;
   if (typeof data.dailyScanCount === 'number' && data.dailyScanCount > 0) return false;
   if (data.lastScanDate) return false;
@@ -1022,6 +1025,18 @@ export const useGameStore = create<GameStore>()(
 
           if (snap.exists()) {
             const cloudData = snap.data() as any;
+            console.log('[cloud restore] raw data=', cloudData);
+
+            const cloudUserState = (cloudData?.userState && typeof cloudData.userState === 'object')
+              ? cloudData.userState
+              : null;
+
+            const rawCoins = cloudData?.coins ?? cloudUserState?.coins ?? cloudData?.userState?.coins;
+            const rawInventory = cloudData?.inventory ?? cloudUserState?.inventory;
+            const rawEquipment = cloudData?.equipment ?? cloudUserState?.equipment;
+
+            const coins = typeof rawCoins === 'number' ? rawCoins : baseState.coins;
+
             const rawCloudEquipment = cloudData.equipment ?? cloudData.userState?.equipment ?? null;
             const rawCloudInventory = cloudData.inventory ?? cloudData.userState?.inventory ?? null;
 
@@ -1038,6 +1053,64 @@ export const useGameStore = create<GameStore>()(
             const cloudInventory =
               Array.isArray(rawCloudInventory) ? (rawCloudInventory as GameState['inventory']) : undefined;
 
+            const inventory = Array.isArray(rawInventory)
+              ? (rawInventory as GameState['inventory'])
+              : (cloudInventory ?? baseState.inventory);
+
+            const cloudEquipmentFromRaw =
+              rawEquipment && typeof rawEquipment === 'object'
+                ? {
+                    head: typeof rawEquipment.head === 'string' ? rawEquipment.head : undefined,
+                    body: typeof rawEquipment.body === 'string' ? rawEquipment.body : undefined,
+                    face: typeof rawEquipment.face === 'string' ? rawEquipment.face : undefined,
+                    accessory: typeof rawEquipment.accessory === 'string' ? rawEquipment.accessory : undefined,
+                  }
+                : undefined;
+
+            const equipment = cloudEquipmentFromRaw ?? cloudEquipment ?? baseState.equipment;
+
+            const rawBonusScanBalance =
+              cloudData?.bonusScanBalance ??
+              cloudUserState?.bonusScanBalance ??
+              cloudData?.adminOps?.lastScanGrant?.afterBonusScanBalance ??
+              cloudData?.adminOps?.lastScanGrant?.after?.bonusScanBalance ??
+              cloudUserState?.adminOps?.lastScanGrant?.afterBonusScanBalance ??
+              cloudUserState?.adminOps?.lastScanGrant?.after?.bonusScanBalance ??
+              cloudData?.userState?.bonusScanBalance;
+            const bonusScanBalance =
+              typeof rawBonusScanBalance === 'number' ? rawBonusScanBalance : baseState.bonusScanBalance;
+
+            const rawDailyScanCount =
+              cloudData?.dailyScanCount ??
+              cloudUserState?.dailyScanCount ??
+              cloudData?.adminOps?.lastScanGrant?.beforeDailyScanCount ??
+              cloudData?.adminOps?.lastScanGrant?.before?.dailyScanCount ??
+              cloudUserState?.adminOps?.lastScanGrant?.beforeDailyScanCount ??
+              cloudUserState?.adminOps?.lastScanGrant?.before?.dailyScanCount ??
+              cloudData?.userState?.dailyScanCount;
+            const dailyScanCount =
+              typeof rawDailyScanCount === 'number' ? rawDailyScanCount : baseState.dailyScanCount;
+
+            const rawLastScanDate =
+              cloudData?.lastScanDate ??
+              cloudUserState?.lastScanDate ??
+              cloudData?.adminOps?.lastScanGrant?.beforeLastScanDate ??
+              cloudData?.adminOps?.lastScanGrant?.before?.lastScanDate ??
+              cloudUserState?.adminOps?.lastScanGrant?.beforeLastScanDate ??
+              cloudUserState?.adminOps?.lastScanGrant?.before?.lastScanDate ??
+              cloudData?.userState?.lastScanDate;
+            const lastScanDate =
+              typeof rawLastScanDate === 'string' ? rawLastScanDate : baseState.lastScanDate;
+
+            console.log('[cloud restore] applied=', {
+              coins,
+              inventoryLength: inventory?.length,
+              equipment,
+              bonusScanBalance,
+              dailyScanCount,
+              lastScanDate,
+            });
+
             // ログインボーナスチェック前に lastLoginDate を保存（上書きを防ぐため）
             const currentLastLoginDate = state.lastLoginDate;
             const today = getTodayString();
@@ -1053,15 +1126,15 @@ export const useGameStore = create<GameStore>()(
               // ユーザー状態系（努力の結晶のみ）
               uid,
               displayName: cloudData.userState?.displayName ?? baseState.displayName,
-              coins: cloudData.userState?.coins ?? baseState.coins,
+              coins,
               tickets: cloudData.userState?.tickets ?? baseState.tickets,
               stamina: cloudData.userState?.stamina ?? baseState.stamina,
               // VIP機能は廃止（クラウド値も取り込まない）
               isVIP: false,
               vipExpiresAt: undefined,
-              dailyScanCount: cloudData.userState?.dailyScanCount ?? baseState.dailyScanCount,
-              lastScanDate: cloudData.userState?.lastScanDate ?? baseState.lastScanDate,
-              bonusScanBalance: cloudData.userState?.bonusScanBalance ?? baseState.bonusScanBalance,
+              dailyScanCount,
+              lastScanDate,
+              bonusScanBalance,
               dailyFreeQuestGenerationCount:
                 cloudData.userState?.dailyFreeQuestGenerationCount ?? baseState.dailyFreeQuestGenerationCount,
               lastFreeQuestGenerationDate:
@@ -1083,8 +1156,8 @@ export const useGameStore = create<GameStore>()(
                 cloudData.userState?.totalQuizClears ?? baseState.totalQuizClears,
 
               // インベントリ系
-              inventory: cloudInventory ?? baseState.inventory,
-              equipment: cloudEquipment ?? baseState.equipment,
+              inventory,
+              equipment,
 
               // マップ／旅路
               journey: cloudData.journey ?? baseState.journey,
@@ -1176,13 +1249,13 @@ export const useGameStore = create<GameStore>()(
               ];
 
               const cloudDataForEmptyCheck = {
-                bonusScanBalance: cloudData.userState?.bonusScanBalance,
-                dailyScanCount: cloudData.userState?.dailyScanCount,
-                lastScanDate: cloudData.userState?.lastScanDate,
-                coins: cloudData.userState?.coins ?? 0,
+                bonusScanBalance,
+                dailyScanCount,
+                lastScanDate,
+                coins,
                 tickets: cloudData.userState?.tickets ?? 0,
-                inventory: cloudInventory ?? [],
-                equipment: cloudEquipment ?? {},
+                inventory,
+                equipment,
                 journey: cloudData.journey ?? initialState.journey,
                 quizHistory: cloudQuizHistory,
                 translationHistory: cloudTranslationHistory,
