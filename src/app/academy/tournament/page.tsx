@@ -1,89 +1,45 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { PotatoAvatar, type PotatoEmotion } from '@/components/ui/PotatoAvatar';
-import { ALL_ITEMS, getItemById, type Item } from '@/data/items';
-import type { AcademyUserQuestion } from '@/types';
+import { getItemById } from '@/data/items';
 import { useGameStore } from '@/store/useGameStore';
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-type GamePhase =
-  | 'lobby'
-  | 'quiz'
-  | 'result'
-  | 'semifinal_category'
-  | 'final_category'
-  | 'tournament_final_result';
-type CpuStatus = 'thinking' | 'answered' | 'correct' | 'wrong';
-
-type Round = 'round1' | 'semi' | 'final';
-
-type TournamentReach =
-  | 'none'
-  | 'round1_eliminated'
-  | 'semi_eliminated'
-  | 'runner_up'
-  | 'champion';
-
-type TournamentQuestion = {
-  id: string;
-  genre: string;
-  question: string;
-  choices: [string, string, string, string];
-  answerIndex: number;
-  correctRate: number | null;
-  authorLabel: string;
-};
-
-type EquippedSet = {
-  head?: Item;
-  body?: Item;
-  face?: Item;
-  accessory?: Item;
-};
-
-type CpuPlayer = {
-  id: string;
-  name: string;
-  accuracy: number;
-  score: number;
-  status: CpuStatus;
-  equipped: EquippedSet;
-  correctCount: number;
-  answerTimesMs: number[];
-  /** ユーザー回答前にCPUが答えた場合、ここに結果を一時保持して発表タイミングで加算する */
-  pending?: { isCorrect: boolean; points: number; elapsedMs: number } | null;
-};
-
-type RankingEntry = {
-  id: string;
-  name: string;
-  score: number;
-  isPlayer: boolean;
-  equipped?: EquippedSet;
-  correctCount: number;
-  avgAnswerMs: number;
-  qualified: boolean;
-};
-
-// ─── Constants ───────────────────────────────────────────────────────────────
-const TOTAL_QUESTIONS = 10;
-const PREFERRED_QUESTIONS = 5;
-const TIME_LIMIT_MS = 10_000;
-const BASE_SCORE = 10;
-const CPU_NAME_CANDIDATES = ['コトノ', 'リブラ', 'ユラ', 'ノート', 'シグ', 'ミモ', 'レフ', 'トワ', 'セナ', 'アルク'];
-const MAGIC_CIRCLE_DURATION_MS = 450;
-const FEEDBACK_ADVANCE_MS = 1000;
-
-// 1問あたり最大100点（残り10秒でも 10 + 90 = 100）
-function calcPoints(isCorrect: boolean, remainingSec: number): RoundPoints {
-  if (!isCorrect) return { total: 0, base: 0, bonus: 0 };
-  const base = BASE_SCORE;
-  const bonus = Math.max(0, remainingSec - 1) * 10; // max 90
-  const total = Math.min(100, base + bonus);
-  return { total, base, bonus: Math.min(90, bonus) };
-}
+import { addRepairBookFragments, migrateRepairProgressIfNeeded } from '@/lib/repairBookFragments';
+import type {
+  CpuPlayer,
+  CpuStatus,
+  EquippedSet,
+  GamePhase,
+  MagicCircleState,
+  RankingEntry,
+  Round,
+  RoundPoints,
+  TournamentQuestion,
+  TournamentReach,
+  TournamentRewardSummary,
+} from './tournamentTypes';
+import {
+  CONFETTI_COLORS,
+  FEEDBACK_ADVANCE_MS,
+  MAGIC_CIRCLE_DURATION_MS,
+  RANK_EMOJI,
+  STATUS_COLOR,
+  STATUS_LABEL,
+  TIME_LIMIT_MS,
+  TOTAL_QUESTIONS,
+  getRankText,
+} from './tournamentConstants';
+import {
+  buildQuestions,
+  buildQuestionsForGenre,
+  extractGenre,
+  getPreferredGenres,
+  pickRandomDistinct,
+  unique,
+} from './tournamentQuestions';
+import { buildTournamentRewardSummary, calcPoints } from './tournamentScoring';
+import { createCpuPlayers, randomIntBelow } from './tournamentCpu';
 
 // ─── Background (same vibe as MinnanoMondai play) ────────────────────────────
 const academyBackdropImageUrl = '/images/backgrounds/academy.png';
@@ -109,178 +65,7 @@ const LightAcademyBackground = () => (
   </div>
 );
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function randomIntBelow(max: number): number {
-  if (max <= 0) return 0;
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-    const buf = new Uint32Array(1);
-    const limit = 0x100000000 - (0x100000000 % max);
-    do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
-    return buf[0] % max;
-  }
-  return Math.floor(Math.random() * max);
-}
-function shuffle<T>(items: T[]): T[] {
-  const a = [...items];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = randomIntBelow(i + 1);
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-function pickOne<T>(items: T[]): T | undefined {
-  return items.length ? items[Math.floor(Math.random() * items.length)] : undefined;
-}
-function extractGenre(q: AcademyUserQuestion): string {
-  return q.bigCategory || q.subCategory || q.subjectText || q.detailText || q.keywords[0] || 'その他';
-}
-function toTournamentQuestion(q: AcademyUserQuestion): TournamentQuestion | null {
-  if (!Array.isArray(q.choices) || q.choices.length < 4) return null;
-  if (q.answerIndex < 0 || q.answerIndex >= q.choices.length) return null;
-  const base = q.choices.slice(0, 4);
-  const ansIdx = base.indexOf(q.choices[q.answerIndex]);
-  if (ansIdx < 0) return null;
-  const perm = shuffle([0, 1, 2, 3]);
-  const shuffled: [string, string, string, string] = [base[perm[0]!], base[perm[1]!], base[perm[2]!], base[perm[3]!]];
-  const displayAnswerIndex = perm.indexOf(ansIdx);
-  const play = Math.max(0, Number(q.playCount ?? 0));
-  const cor  = Math.max(0, Number(q.correctCount ?? 0));
-  const correctRate = play > 0 ? Math.max(0, Math.min(100, Math.floor((cor / play) * 100))) : null;
-  const rawAuthor = String(q.authorName ?? '').trim();
-  return {
-    id: q.id, genre: extractGenre(q), question: q.question,
-    choices: displayAnswerIndex >= 0 ? shuffled : [base[0], base[1], base[2], base[3]],
-    answerIndex: displayAnswerIndex >= 0 ? displayAnswerIndex : ansIdx,
-    correctRate, authorLabel: !rawAuthor || rawAuthor === '匿名ユーザー' ? '匿名' : rawAuthor,
-  };
-}
-function getPreferredGenres(questions: AcademyUserQuestion[]): string[] {
-  const map = new Map<string, number>();
-  for (const q of questions) {
-    const play = Math.max(0, Number(q.playCount ?? 0));
-    if (play <= 0) continue;
-    const g = extractGenre(q);
-    map.set(g, (map.get(g) ?? 0) + play);
-  }
-  if (map.size === 0) {
-    const cnt = new Map<string, number>();
-    for (const q of questions) { const g = extractGenre(q); cnt.set(g, (cnt.get(g) ?? 0) + 1); }
-    return [...cnt.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([g]) => g);
-  }
-  return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([g]) => g);
-}
-function buildQuestions(src: AcademyUserQuestion[], preferred: string[]): TournamentQuestion[] {
-  const all = Array.from(new Map(src.map(toTournamentQuestion).filter((q): q is TournamentQuestion => !!q).map(q => [q.id, q])).values());
-  const pref = shuffle(all.filter(q => preferred.includes(q.genre))).slice(0, PREFERRED_QUESTIONS);
-  const prefIds = new Set(pref.map(q => q.id));
-  const rand = shuffle(all.filter(q => !prefIds.has(q.id))).slice(0, TOTAL_QUESTIONS - pref.length);
-  const sel = [...pref, ...rand];
-  if (sel.length < TOTAL_QUESTIONS) {
-    const selIds = new Set(sel.map(q => q.id));
-    sel.push(...shuffle(all.filter(q => !selIds.has(q.id))).slice(0, TOTAL_QUESTIONS - sel.length));
-  }
-  return shuffle(sel).slice(0, TOTAL_QUESTIONS);
-}
-
-function unique<T>(items: T[]): T[] {
-  return Array.from(new Set(items));
-}
-
-function pickRandomDistinct<T>(items: T[], count: number): T[] {
-  return shuffle(items).slice(0, Math.max(0, Math.min(count, items.length)));
-}
-
-function buildQuestionsForGenre(
-  src: AcademyUserQuestion[],
-  genre: string,
-  genreCount: number,
-  randomCount: number
-): TournamentQuestion[] {
-  const all = Array.from(
-    new Map(
-      src
-        .map(toTournamentQuestion)
-        .filter((q): q is TournamentQuestion => !!q)
-        .map((q) => [q.id, q])
-    ).values()
-  );
-  const genrePool = all.filter((q) => q.genre === genre);
-  const pickedGenre = shuffle(genrePool).slice(0, genreCount);
-  const pickedIds = new Set(pickedGenre.map((q) => q.id));
-  const randomPool = all.filter((q) => !pickedIds.has(q.id));
-  const pickedRandom = shuffle(randomPool).slice(0, randomCount);
-  return shuffle([...pickedGenre, ...pickedRandom]).slice(0, genreCount + randomCount);
-}
-function randomCpuEquipment(): EquippedSet {
-  const items = ALL_ITEMS.filter(i => i.type === 'equipment' && !!i.category && !i.gachaExcluded);
-  return {
-    head:      pickOne(items.filter(i => i.category === 'head')),
-    body:      pickOne(items.filter(i => i.category === 'body')),
-    face:      pickOne(items.filter(i => i.category === 'face')),
-    accessory: pickOne(items.filter(i => i.category === 'accessory')),
-  };
-}
-function createCpuPlayers(): CpuPlayer[] {
-  return shuffle(CPU_NAME_CANDIDATES).slice(0, 4).map((name, i) => ({
-    id: `cpu-${i + 1}`, name,
-    // 強すぎ対策：正答率を控えめに（将来は難易度で調整）
-    accuracy: Number((0.5 + Math.random() * 0.25).toFixed(2)), // 0.50〜0.75
-    score: 0, status: 'thinking' as CpuStatus,
-    equipped: randomCpuEquipment(),
-    correctCount: 0,
-    answerTimesMs: [],
-    pending: null,
-  }));
-}
-
-// ─── 順位テキスト（進出/敗退の進行表示）────────────────────────────────────
-function getRankText(
-  rank: number,
-  round: Round,
-  qualificationSlots: number
-): {
-  headline: string;
-  sub: string;
-  color: string;
-  advance: boolean;
-} {
-  const advance = rank >= 0 && rank < qualificationSlots;
-
-  if (round === 'round1') {
-    if (rank === 0) return { headline: '1位通過！', sub: '準決勝進出おめでとう！', color: '#fde68a', advance: true };
-    if (rank === 1) return { headline: '2位通過！', sub: '準決勝進出！', color: '#e2e8f0', advance: true };
-    if (rank === 2) return { headline: '3位通過！', sub: '準決勝進出！', color: '#fb923c', advance: true };
-    if (rank === 3) return { headline: '4位 敗退…', sub: '惜しくも一回戦敗退', color: '#94a3b8', advance: false };
-    return { headline: '5位 敗退…', sub: 'また挑戦してみよう！', color: '#94a3b8', advance: false };
-  }
-
-  // 準決勝（上位2通過→決勝）
-  if (round === 'semi') {
-    if (rank === 0) return { headline: '1位通過！', sub: '決勝進出おめでとう！', color: '#fde68a', advance: true };
-    if (rank === 1) return { headline: '2位通過！', sub: '決勝進出！', color: '#e2e8f0', advance: true };
-    return { headline: '敗退…', sub: '惜しくも準決勝敗退', color: '#94a3b8', advance: false };
-  }
-
-  // 決勝は tournament_final_result に行くので、ここは保険
-  return {
-    headline: advance ? '通過！' : '敗退…',
-    sub: '',
-    color: advance ? '#fde68a' : '#94a3b8',
-    advance,
-  };
-}
-
-// ② RANK_EMOJI（数字バッジ）
-const RANK_EMOJI = ['🥇', '🥈', '🥉', '4', '5'];
-
-// ─── Status ──────────────────────────────────────────────────────────────────
-const STATUS_LABEL: Record<CpuStatus, string> = { thinking: '考え中…', answered: '回答済み', correct: '正解！', wrong: '不正解' };
-const STATUS_COLOR: Record<CpuStatus, string> = { thinking: '#94a3b8', answered: 'rgba(250,204,21,0.85)', correct: '#34d399', wrong: '#f87171' };
-
 // ─── Magic Circle ────────────────────────────────────────────────────────────
-type MagicCircleState = { id: number; x: number; y: number; isCorrect: boolean };
-type RoundPoints = { total: number; base: number; bonus: number };
-
 const MagicCircleBurst = ({ id, x, y, isCorrect, onComplete }: { id: number; x: number; y: number; isCorrect: boolean; onComplete: (id: number) => void }) => {
   const color = isCorrect ? '#22c55e' : '#ef4444';
   const size = 320;
@@ -315,7 +100,6 @@ const MagicCircleBurst = ({ id, x, y, isCorrect, onComplete }: { id: number; x: 
 };
 
 // ─── Confetti ─────────────────────────────────────────────────────────────────
-const CONFETTI_COLORS = ['#fbbf24','#34d399','#60a5fa','#f472b6','#a78bfa','#fb923c'];
 function Confetti() {
   const pieces = useMemo(() => Array.from({ length: 50 }, (_, i) => ({
     id: i, x: Math.random() * 100, delay: Math.random() * 1.0,
@@ -427,6 +211,21 @@ export default function TournamentPage() {
     return preferredGenres.length > 0 ? preferredGenres.slice(0, 3) : [];
   }, [preferredGenres]);
 
+  const addCoins = useGameStore(s => s.addCoins);
+  const [tournamentRewardSummary, setTournamentRewardSummary] = useState<TournamentRewardSummary | null>(null);
+  const tournamentRunIdRef = useRef(0);
+  const rewardGrantKeyRef = useRef<string | null>(null);
+
+  const tryGrantTournamentRewards = useCallback((key: string, reach: Exclude<TournamentReach, 'none'>, allCorrectInRound: boolean) => {
+    if (rewardGrantKeyRef.current === key) return;
+    rewardGrantKeyRef.current = key;
+    const summary = buildTournamentRewardSummary(reach, allCorrectInRound);
+    addCoins(summary.coins);
+    addRepairBookFragments(summary.leaves);
+    setTournamentRewardSummary(summary);
+  }, [addCoins]);
+
+  useEffect(() => { migrateRepairProgressIfNeeded(); }, []);
   useEffect(() => { void refreshAcademyQuestions(); }, [refreshAcademyQuestions]);
   useEffect(() => { playerAnsweredRef.current = playerAnswered; }, [playerAnswered]);
   useEffect(() => { timeLeftMsRef.current = timeLeftMs; }, [timeLeftMs]);
@@ -583,11 +382,8 @@ export default function TournamentPage() {
         setEliminated(sorted.filter((e) => !e.qualified));
         const pq = sorted.find((e) => e.isPlayer)?.qualified ?? false;
         setPlayerQualified(pq);
-        setPhase('result');
 
-        // 到達結果（final result 画面用）
-        if (round === 'round1' && !pq) setTournamentReach('round1_eliminated');
-        if (round === 'semi' && !pq) setTournamentReach('semi_eliminated');
+        const perfectRound = questions.length > 0 && playerCorrectCount === questions.length;
 
         if (round === 'final') {
           const winner = sorted[0];
@@ -595,16 +391,27 @@ export default function TournamentPage() {
           const playerRankIdx = sorted.findIndex((e) => e.isPlayer);
           if (playerRankIdx === 0) setTournamentReach('champion');
           else setTournamentReach('runner_up');
+          const finalReach: Exclude<TournamentReach, 'none'> = playerRankIdx === 0 ? 'champion' : 'runner_up';
+          tryGrantTournamentRewards(`${tournamentRunIdRef.current}-final`, finalReach, perfectRound);
           setPhase('tournament_final_result');
           setShowConfetti(true);
           return;
         }
 
+        if (round === 'round1' && !pq) {
+          setTournamentReach('round1_eliminated');
+          tryGrantTournamentRewards(`${tournamentRunIdRef.current}-r1-elim`, 'round1_eliminated', perfectRound);
+        } else if (round === 'semi' && !pq) {
+          setTournamentReach('semi_eliminated');
+          tryGrantTournamentRewards(`${tournamentRunIdRef.current}-semi-elim`, 'semi_eliminated', perfectRound);
+        }
+
+        setPhase('result');
         if (pq) setShowConfetti(true);
       }
     }, FEEDBACK_ADVANCE_MS);
     return () => { if (nextQRef.current) { clearTimeout(nextQRef.current); nextQRef.current = null; } };
-  }, [phase, playerAnswered, cpus, qIndex, questions.length, playerScore, playerCorrectCount, playerAnswerTimesMs, equippedDetails, qualificationSlots, round]);
+  }, [phase, playerAnswered, cpus, qIndex, questions.length, playerScore, playerCorrectCount, playerAnswerTimesMs, equippedDetails, qualificationSlots, round, tryGrantTournamentRewards]);
 
   // ── Go to lobby (new CPUs)
   const goToLobby = () => {
@@ -629,6 +436,8 @@ export default function TournamentPage() {
     setTournamentReach('none');
     setFinalWinnerName(null);
     setCpus([]);
+    setTournamentRewardSummary(null);
+    rewardGrantKeyRef.current = null;
   };
 
   const goToSemifinalCategory = () => {
@@ -638,7 +447,18 @@ export default function TournamentPage() {
     const nextCpus = cpuQualifiers
       .map((e) => cpus.find((c) => c.id === e.id))
       .filter((c): c is CpuPlayer => !!c)
-      .map((c) => ({ ...c, status: 'thinking' as CpuStatus, pending: null }));
+      .map((c) => ({
+        ...c,
+        score: 0,
+        correctCount: 0,
+        answerTimesMs: [],
+        status: 'thinking' as CpuStatus,
+        pending: null,
+      }));
+
+    setPlayerScore(0);
+    setPlayerCorrectCount(0);
+    setPlayerAnswerTimesMs([]);
 
     const allGenres = unique(academyUserQuestions.map(extractGenre).filter((g) => !!g));
     const picked = pickRandomDistinct(allGenres, 3);
@@ -660,6 +480,19 @@ export default function TournamentPage() {
     setSemiSelectedCategory(genre);
     setQuestions(picked);
     setQIndex(0);
+    setPlayerScore(0);
+    setPlayerCorrectCount(0);
+    setPlayerAnswerTimesMs([]);
+    setCpus((prev) =>
+      prev.map((c) => ({
+        ...c,
+        score: 0,
+        correctCount: 0,
+        answerTimesMs: [],
+        status: 'thinking' as CpuStatus,
+        pending: null,
+      }))
+    );
     setPhase('quiz');
   };
 
@@ -673,7 +506,18 @@ export default function TournamentPage() {
       return;
     }
 
-    setCpus([{ ...finalistCpu, status: 'thinking' as CpuStatus, pending: null }]);
+    setPlayerScore(0);
+    setPlayerCorrectCount(0);
+    setPlayerAnswerTimesMs([]);
+
+    setCpus([{
+      ...finalistCpu,
+      score: 0,
+      correctCount: 0,
+      answerTimesMs: [],
+      status: 'thinking' as CpuStatus,
+      pending: null,
+    }]);
     setRound('final');
 
     // 決勝の得意ジャンル候補（現状は推定データ）
@@ -694,6 +538,19 @@ export default function TournamentPage() {
     setFinalSelectedGenre(genre);
     setQuestions(picked);
     setQIndex(0);
+    setPlayerScore(0);
+    setPlayerCorrectCount(0);
+    setPlayerAnswerTimesMs([]);
+    setCpus((prev) =>
+      prev.map((c) => ({
+        ...c,
+        score: 0,
+        correctCount: 0,
+        answerTimesMs: [],
+        status: 'thinking' as CpuStatus,
+        pending: null,
+      }))
+    );
     setPhase('quiz');
   };
 
@@ -703,6 +560,9 @@ export default function TournamentPage() {
       window.alert('みんなの問題が不足しています。4択の問題を10問以上用意してください。');
       return;
     }
+    tournamentRunIdRef.current += 1;
+    setTournamentRewardSummary(null);
+    rewardGrantKeyRef.current = null;
     setQuestions(selected);
     setQIndex(0);
     setPlayerScore(0);
@@ -1179,6 +1039,63 @@ export default function TournamentPage() {
               </div>
             </div>
 
+            {tournamentRewardSummary && !rankInfo.advance && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.45 }}
+                style={{
+                  borderRadius: 16,
+                  padding: '16px 18px',
+                  marginBottom: 14,
+                  background: 'linear-gradient(135deg, rgba(30,20,50,0.95), rgba(20,12,40,0.98))',
+                  border: '1.5px solid rgba(99,102,241,0.3)',
+                  boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    letterSpacing: '0.14em',
+                    color: 'rgba(200,190,255,0.5)',
+                    marginBottom: 10,
+                  }}
+                >
+                  トーナメント報酬
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gap: 8,
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: 'rgba(230,225,255,0.95)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  <div>トーナメント結果: {tournamentRewardSummary.reachLabel}</div>
+                  <div>
+                    獲得ことの葉: <span style={{ color: '#86efac' }}>+{tournamentRewardSummary.leaves}</span>
+                  </div>
+                  <div>
+                    獲得コイン: <span style={{ color: '#fde68a' }}>+{tournamentRewardSummary.coins}</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(200,190,255,0.45)', marginLeft: 6 }}>
+                      （ポテコイン）
+                    </span>
+                  </div>
+                  {tournamentRewardSummary.bonusNames.length > 0 && (
+                    <div style={{ marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(99,102,241,0.2)' }}>
+                      <div style={{ fontSize: 11, color: 'rgba(200,190,255,0.65)' }}>ボーナス:</div>
+                      {tournamentRewardSummary.bonusNames.map((n) => (
+                        <div key={n} style={{ fontSize: 13, marginTop: 4, color: 'rgba(254,240,200,0.95)' }}>・{n}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
             {/* ── ランキング表（通過 / 敗退バッジ付き）──────────────────────── */}
             <div
               style={{
@@ -1448,6 +1365,82 @@ export default function TournamentPage() {
           {isChampion ? '🏆 あなたの優勝！' : `${finalWinnerName ?? 'CPU'} の優勝！`}
         </motion.div>
       </motion.div>
+
+      {tournamentRewardSummary && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22 }}
+          style={{
+            borderRadius: 16,
+            padding: '18px 20px',
+            marginBottom: 16,
+            background: isChampion
+              ? 'linear-gradient(135deg, rgba(55,40,8,0.97), rgba(32,22,5,0.99))'
+              : 'linear-gradient(135deg, rgba(25,20,50,0.96), rgba(16,10,36,0.98))',
+            border: isChampion ? '1.5px solid rgba(250,200,30,0.5)' : '1.5px solid rgba(99,102,241,0.32)',
+            boxShadow: isChampion
+              ? '0 0 36px rgba(250,200,20,0.22), 0 10px 32px rgba(0,0,0,0.5)'
+              : '0 8px 28px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.16em',
+              color: isChampion ? 'rgba(250,220,150,0.6)' : 'rgba(200,190,255,0.5)',
+              marginBottom: 10,
+            }}
+          >
+            トーナメント報酬
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gap: 10,
+              fontSize: 15,
+              fontWeight: 800,
+              color: 'rgba(245,240,255,0.98)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            <div>
+              トーナメント結果:{' '}
+              <span
+                style={{
+                  color: isChampion ? '#fde68a' : '#e0d7ff',
+                  textShadow: isChampion ? '0 0 20px rgba(250,200,20,0.5)' : 'none',
+                }}
+              >
+                {tournamentRewardSummary.reachLabel}
+              </span>
+            </div>
+            <div>
+              獲得ことの葉: <span style={{ color: '#86efac' }}>+{tournamentRewardSummary.leaves}</span>
+            </div>
+            <div>
+              獲得コイン: <span style={{ color: '#fde68a' }}>+{tournamentRewardSummary.coins}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(200,190,255,0.45)', marginLeft: 6 }}>
+                （ポテコイン）
+              </span>
+            </div>
+            {tournamentRewardSummary.bonusNames.length > 0 && (
+              <div style={{ marginTop: 4, paddingTop: 10, borderTop: `1px solid ${isChampion ? 'rgba(250,200,30,0.2)' : 'rgba(99,102,241,0.2)'}` }}>
+                <div style={{ fontSize: 11, color: 'rgba(200,190,255,0.7)' }}>ボーナス:</div>
+                {tournamentRewardSummary.bonusNames.map((n) => (
+                  <div
+                    key={n}
+                    style={{ fontSize: 14, marginTop: 4, color: isChampion ? 'rgba(255,250,200,0.95)' : 'rgba(220,210,255,0.92)' }}
+                  >
+                    ・{n}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
 
       {/* ─── バーチャート ─── */}
       <div style={{

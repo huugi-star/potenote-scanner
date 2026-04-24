@@ -704,7 +704,7 @@ const HomeScreen = ({
             fromColor="#065f46" toColor="#10b981"
             glowColor="rgba(16,185,129,0.4)" shadowColor="rgba(3,40,26,0.95)"
             icon={<Languages style={{width:22,height:22}}/>}
-            label="すうひもちと会話する"
+            label="すうひもちのお部屋"
           />
           <RpgButton
             onClick={()=>{vibrateLight();onNavigate('academy');}}
