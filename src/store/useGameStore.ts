@@ -1022,6 +1022,21 @@ export const useGameStore = create<GameStore>()(
 
           if (snap.exists()) {
             const cloudData = snap.data() as any;
+            const rawCloudEquipment = cloudData.equipment ?? cloudData.userState?.equipment ?? null;
+            const rawCloudInventory = cloudData.inventory ?? cloudData.userState?.inventory ?? null;
+
+            const cloudEquipment =
+              rawCloudEquipment && typeof rawCloudEquipment === 'object'
+                ? {
+                    head: typeof rawCloudEquipment.head === 'string' ? rawCloudEquipment.head : undefined,
+                    body: typeof rawCloudEquipment.body === 'string' ? rawCloudEquipment.body : undefined,
+                    face: typeof rawCloudEquipment.face === 'string' ? rawCloudEquipment.face : undefined,
+                    accessory: typeof rawCloudEquipment.accessory === 'string' ? rawCloudEquipment.accessory : undefined,
+                  }
+                : undefined;
+
+            const cloudInventory =
+              Array.isArray(rawCloudInventory) ? (rawCloudInventory as GameState['inventory']) : undefined;
 
             // ログインボーナスチェック前に lastLoginDate を保存（上書きを防ぐため）
             const currentLastLoginDate = state.lastLoginDate;
@@ -1068,8 +1083,8 @@ export const useGameStore = create<GameStore>()(
                 cloudData.userState?.totalQuizClears ?? baseState.totalQuizClears,
 
               // インベントリ系
-              inventory: cloudData.inventory ?? baseState.inventory,
-              equipment: cloudData.equipment ?? baseState.equipment,
+              inventory: cloudInventory ?? baseState.inventory,
+              equipment: cloudEquipment ?? baseState.equipment,
 
               // マップ／旅路
               journey: cloudData.journey ?? baseState.journey,
@@ -1166,8 +1181,8 @@ export const useGameStore = create<GameStore>()(
                 lastScanDate: cloudData.userState?.lastScanDate,
                 coins: cloudData.userState?.coins ?? 0,
                 tickets: cloudData.userState?.tickets ?? 0,
-                inventory: cloudData.inventory ?? [],
-                equipment: cloudData.equipment ?? {},
+                inventory: cloudInventory ?? [],
+                equipment: cloudEquipment ?? {},
                 journey: cloudData.journey ?? initialState.journey,
                 quizHistory: cloudQuizHistory,
                 translationHistory: cloudTranslationHistory,
