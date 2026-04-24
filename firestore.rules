@@ -95,6 +95,23 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // ユーザーデータ（ログインユーザーのみ自分のデータへアクセス）
+    match /users/{uid} {
+      allow read, create, update: if signedIn() && request.auth.uid == uid;
+      allow delete: if false;
+
+      // 履歴サブコレクション（最新30件などの読み取りに使用）
+      match /quiz_history/{docId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+      match /translation_history/{docId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+      match /lecture_history/{docId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
     // アカデミー問題の通報（作成は /api/academy-report のみ。将来は isAdmin() read を足しやすい）
     match /academy_reports/{reportId} {
       allow read, write: if false;
