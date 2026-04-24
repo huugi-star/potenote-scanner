@@ -114,6 +114,49 @@ const shouldBlockCloudOverwriteAsEmpty = (state: GameState): boolean => {
   return !hasMeaningfulStateForCloudSync(state);
 };
 
+const isCloudDataClearlyEmpty = (data: {
+  bonusScanBalance?: unknown;
+  dailyScanCount?: unknown;
+  lastScanDate?: unknown;
+  coins?: number;
+  tickets?: number;
+  inventory?: unknown[];
+  equipment?: Record<string, unknown>;
+  journey?: GameState['journey'];
+  quizHistory?: QuizHistory[];
+  translationHistory?: TranslationHistory[];
+  lectureHistory?: LectureHistory[];
+  wordCollectionScans?: WordCollectionScan[];
+  totalScans?: number;
+  totalQuizzes?: number;
+  totalCorrectAnswers?: number;
+  totalDistance?: number;
+  totalQuizClears?: number;
+} | null | undefined): boolean => {
+  if (!data) return true;
+
+  if (typeof data.bonusScanBalance === 'number' && data.bonusScanBalance > 0) return false;
+  if (typeof data.dailyScanCount === 'number' && data.dailyScanCount > 0) return false;
+  if (data.lastScanDate) return false;
+
+  return !hasMeaningfulStateForCloudSync({
+    coins: data.coins ?? 0,
+    tickets: data.tickets ?? 0,
+    inventory: data.inventory ?? [],
+    equipment: data.equipment ?? {},
+    journey: data.journey ?? initialState.journey,
+    quizHistory: data.quizHistory ?? [],
+    translationHistory: data.translationHistory ?? [],
+    lectureHistory: data.lectureHistory ?? [],
+    wordCollectionScans: data.wordCollectionScans ?? [],
+    totalScans: data.totalScans ?? 0,
+    totalQuizzes: data.totalQuizzes ?? 0,
+    totalCorrectAnswers: data.totalCorrectAnswers ?? 0,
+    totalDistance: data.totalDistance ?? 0,
+    totalQuizClears: data.totalQuizClears ?? 0,
+  });
+};
+
 const isClearlyEmptyRecoveryState = (state: Partial<GameState> | null | undefined): boolean => {
   if (!state) return true;
   const emptyCandidate = {
@@ -1117,24 +1160,31 @@ export const useGameStore = create<GameStore>()(
                 ),
               ];
 
+              const cloudDataForEmptyCheck = {
+                bonusScanBalance: cloudData.userState?.bonusScanBalance,
+                dailyScanCount: cloudData.userState?.dailyScanCount,
+                lastScanDate: cloudData.userState?.lastScanDate,
+                coins: cloudData.userState?.coins ?? 0,
+                tickets: cloudData.userState?.tickets ?? 0,
+                inventory: cloudData.inventory ?? [],
+                equipment: cloudData.equipment ?? {},
+                journey: cloudData.journey ?? initialState.journey,
+                quizHistory: cloudQuizHistory,
+                translationHistory: cloudTranslationHistory,
+                lectureHistory: cloudLectureHistory,
+                wordCollectionScans: baseState.wordCollectionScans ?? [],
+                totalScans: cloudData.userState?.totalScans ?? 0,
+                totalQuizzes: cloudData.userState?.totalQuizzes ?? 0,
+                totalCorrectAnswers: cloudData.userState?.totalCorrectAnswers ?? 0,
+                totalDistance: cloudData.userState?.totalDistance ?? 0,
+                totalQuizClears: cloudData.userState?.totalQuizClears ?? 0,
+              };
               const cloudRestoreLooksEmpty =
-                !hasMeaningfulStateForCloudSync({
-                  coins: cloudData.userState?.coins ?? 0,
-                  tickets: cloudData.userState?.tickets ?? 0,
-                  inventory: cloudData.inventory ?? [],
-                  equipment: cloudData.equipment ?? {},
-                  journey: cloudData.journey ?? initialState.journey,
-                  quizHistory: cloudQuizHistory,
-                  translationHistory: cloudTranslationHistory,
-                  lectureHistory: cloudLectureHistory,
-                  wordCollectionScans: baseState.wordCollectionScans ?? [],
-                  totalScans: cloudData.userState?.totalScans ?? 0,
-                  totalQuizzes: cloudData.userState?.totalQuizzes ?? 0,
-                  totalCorrectAnswers: cloudData.userState?.totalCorrectAnswers ?? 0,
-                  totalDistance: cloudData.userState?.totalDistance ?? 0,
-                  totalQuizClears: cloudData.userState?.totalQuizClears ?? 0,
-                }) &&
+                isCloudDataClearlyEmpty(cloudDataForEmptyCheck) &&
                 !hasMeaningfulStateForCloudSync(baseState);
+
+              console.log('[cloud load] data=', cloudDataForEmptyCheck);
+              console.log('[cloud load] empty判定=', isCloudDataClearlyEmpty(cloudDataForEmptyCheck));
 
               if (cloudRestoreLooksEmpty) {
                 console.warn('[setUserId] cloud restore looks empty; treating as failed restore');
