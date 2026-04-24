@@ -38,6 +38,22 @@ export const AuthButton = () => {
   const handleConfirmLogout = async () => {
     setLoading(true);
     try {
+      const currentState = useGameStore.getState();
+      if (typeof window !== 'undefined' && currentState.uid) {
+        try {
+          localStorage.setItem(
+            'potenote-scanner-logout-recovery-v1',
+            JSON.stringify({
+              uid: currentState.uid,
+              savedAt: new Date().toISOString(),
+              state: JSON.parse(JSON.stringify(currentState)),
+            })
+          );
+        } catch (error) {
+          console.warn('[logoutRecovery] failed to save local backup:', error);
+        }
+      }
+
       if (auth) {
         try {
           await signOut(auth);

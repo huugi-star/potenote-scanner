@@ -35,6 +35,40 @@ const isLocalDevelopment = (): boolean => {
          (typeof window !== 'undefined' && window.location.hostname === 'localhost');
 };
 
+const LOGOUT_RECOVERY_STORAGE_KEY = 'potenote-scanner-logout-recovery-v1';
+
+const canUseLocalStorage = (): boolean => {
+  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+};
+
+const readLogoutRecoveryState = (uid: string): Record<string, unknown> | null => {
+  if (!canUseLocalStorage()) return null;
+  try {
+    const raw = localStorage.getItem(LOGOUT_RECOVERY_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      uid?: string;
+      state?: Record<string, unknown>;
+    };
+    if (!parsed || parsed.uid !== uid || !parsed.state || typeof parsed.state !== 'object') {
+      return null;
+    }
+    return parsed.state;
+  } catch (error) {
+    console.warn('[logoutRecovery] failed to read local backup:', error);
+    return null;
+  }
+};
+
+const clearLogoutRecoveryState = (): void => {
+  if (!canUseLocalStorage()) return;
+  try {
+    localStorage.removeItem(LOGOUT_RECOVERY_STORAGE_KEY);
+  } catch (error) {
+    console.warn('[logoutRecovery] failed to clear local backup:', error);
+  }
+};
+
 const ACADEMY_QUESTIONS_COLLECTION = 'academy_questions';
 const ACADEMY_OFFICIAL_QUESTIONS_COLLECTION = 'academy_official_questions';
 const ACADEMY_QUESTION_STATS_COLLECTION = 'academy_question_stats';
@@ -829,10 +863,13 @@ export const useGameStore = create<GameStore>()(
 
         if (!uid || !db) return;
 
+        const recoveryState = readLogoutRecoveryState(uid) as Partial<GameState> | null;
+
         try {
           const userRef = doc(db, 'users', uid);
           const snap = await getDoc(userRef);
           const state = get();
+          const baseState = recoveryState ? { ...state, ...recoveryState, uid } : state;
 
           if (snap.exists()) {
             const cloudData = snap.data() as any;
@@ -851,50 +888,59 @@ export const useGameStore = create<GameStore>()(
             set({
               // ユーザー状態系（努力の結晶のみ）
               uid,
-              displayName: cloudData.userState?.displayName ?? state.displayName,
-              coins: cloudData.userState?.coins ?? state.coins,
-              tickets: cloudData.userState?.tickets ?? state.tickets,
-              stamina: cloudData.userState?.stamina ?? state.stamina,
+              displayName: cloudData.userState?.displayName ?? baseState.displayName,
+              coins: cloudData.userState?.coins ?? baseState.coins,
+              tickets: cloudData.userState?.tickets ?? baseState.tickets,
+              stamina: cloudData.userState?.stamina ?? baseState.stamina,
               // VIP機能は廃止（クラウド値も取り込まない）
               isVIP: false,
               vipExpiresAt: undefined,
-              dailyScanCount: cloudData.userState?.dailyScanCount ?? state.dailyScanCount,
-              lastScanDate: cloudData.userState?.lastScanDate ?? state.lastScanDate,
-              bonusScanBalance: cloudData.userState?.bonusScanBalance ?? state.bonusScanBalance,
+              dailyScanCount: cloudData.userState?.dailyScanCount ?? baseState.dailyScanCount,
+              lastScanDate: cloudData.userState?.lastScanDate ?? baseState.lastScanDate,
+              bonusScanBalance: cloudData.userState?.bonusScanBalance ?? baseState.bonusScanBalance,
               dailyFreeQuestGenerationCount:
-                cloudData.userState?.dailyFreeQuestGenerationCount ?? state.dailyFreeQuestGenerationCount,
+                cloudData.userState?.dailyFreeQuestGenerationCount ?? baseState.dailyFreeQuestGenerationCount,
               lastFreeQuestGenerationDate:
-                cloudData.userState?.lastFreeQuestGenerationDate ?? state.lastFreeQuestGenerationDate,
+                cloudData.userState?.lastFreeQuestGenerationDate ?? baseState.lastFreeQuestGenerationDate,
               dailyTranslationCount:
-                cloudData.userState?.dailyTranslationCount ?? state.dailyTranslationCount,
+                cloudData.userState?.dailyTranslationCount ?? baseState.dailyTranslationCount,
               lastTranslationDate:
-                cloudData.userState?.lastTranslationDate ?? state.lastTranslationDate,
+                cloudData.userState?.lastTranslationDate ?? baseState.lastTranslationDate,
               // ログインボーナスが既に付与されている場合は、lastLoginDate を上書きしない
-              lastLoginDate: (currentLastLoginDate === today) ? currentLastLoginDate : (cloudData.userState?.lastLoginDate ?? state.lastLoginDate),
+              lastLoginDate: (currentLastLoginDate === today) ? currentLastLoginDate : (cloudData.userState?.lastLoginDate ?? baseState.lastLoginDate),
               consecutiveLoginDays:
-                cloudData.userState?.consecutiveLoginDays ?? state.consecutiveLoginDays,
-              totalScans: cloudData.userState?.totalScans ?? state.totalScans,
-              totalQuizzes: cloudData.userState?.totalQuizzes ?? state.totalQuizzes,
+                cloudData.userState?.consecutiveLoginDays ?? baseState.consecutiveLoginDays,
+              totalScans: cloudData.userState?.totalScans ?? baseState.totalScans,
+              totalQuizzes: cloudData.userState?.totalQuizzes ?? baseState.totalQuizzes,
               totalCorrectAnswers:
-                cloudData.userState?.totalCorrectAnswers ?? state.totalCorrectAnswers,
-              totalDistance: cloudData.userState?.totalDistance ?? state.totalDistance,
+                cloudData.userState?.totalCorrectAnswers ?? baseState.totalCorrectAnswers,
+              totalDistance: cloudData.userState?.totalDistance ?? baseState.totalDistance,
               totalQuizClears:
-                cloudData.userState?.totalQuizClears ?? state.totalQuizClears,
+                cloudData.userState?.totalQuizClears ?? baseState.totalQuizClears,
 
               // インベントリ系
-              inventory: cloudData.inventory ?? state.inventory,
-              equipment: cloudData.equipment ?? state.equipment,
+              inventory: cloudData.inventory ?? baseState.inventory,
+              equipment: cloudData.equipment ?? baseState.equipment,
 
               // マップ／旅路
-              journey: cloudData.journey ?? state.journey,
+              journey: cloudData.journey ?? baseState.journey,
 
               // 生成されたクイズは保持（クラウドには保存しないが、ローカルでは保持）
-              generatedQuiz: state.generatedQuiz,
-              scanImageUrl: state.scanImageUrl,
+              generatedQuiz: baseState.generatedQuiz,
+              scanImageUrl: baseState.scanImageUrl,
 
-              // Preserve local-only word-collection data to avoid overwriting progress
-              wordCollectionScans: state.wordCollectionScans,
-              wordDexOrder: state.wordDexOrder,
+              // クラウド未同期時でもローカル退避データを復元できるように維持
+              wordCollectionScans: baseState.wordCollectionScans,
+              wordDexOrder: baseState.wordDexOrder,
+              wordDexDictionaries: baseState.wordDexDictionaries,
+              wordDexWords: baseState.wordDexWords,
+              quizHistory: baseState.quizHistory,
+              translationHistory: baseState.translationHistory,
+              lectureHistory: baseState.lectureHistory,
+              scanType: baseState.scanType,
+              translationMode: baseState.translationMode,
+              englishLearningMode: baseState.englishLearningMode,
+              lastScanQuizId: baseState.lastScanQuizId,
 
               // 履歴はこの後サブコレクションから読み込む
             });
@@ -975,10 +1021,25 @@ export const useGameStore = create<GameStore>()(
             }
           } else {
             // 初回ログイン: 現在のローカル状態をクラウドへ
+            if (recoveryState) {
+              set({
+                ...initialState,
+                ...(recoveryState as Partial<GameState>),
+                uid,
+              });
+            }
             await get().syncWithCloud();
           }
+          clearLogoutRecoveryState();
         } catch (error) {
           console.error('Cloud Load Error:', error);
+          if (recoveryState) {
+            set({
+              ...get(),
+              ...(recoveryState as Partial<GameState>),
+              uid,
+            });
+          }
         }
       },
 
