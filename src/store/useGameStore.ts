@@ -5,7 +5,7 @@
  */
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult, QuizQuestionAttempt, WordDexDictionary, WordDexRelation, WordDexWord, AcademyUserQuestion } from '@/types';
 import type {
   AnataZukanEntry,
@@ -39,6 +39,72 @@ const LOGOUT_RECOVERY_STORAGE_KEY = 'potenote-scanner-logout-recovery-v1';
 
 const canUseLocalStorage = (): boolean => {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+};
+
+/**
+ * 本番環境で「更新すると戻る」系の原因になりやすいのが localStorage 例外です。
+ * - Safari/一部WebView/拡張機能/プライバシー設定で setItem が例外を投げる
+ * - Next のプリレンダ/SSR 経由で window が無い
+ *
+ * Zustand persist は storage 実装が例外を投げると永続化が成立せず、
+ * リロードで初期値に戻って見えるため、必ず安全な storage を噛ませます。
+ */
+const createSafeStateStorage = (): StateStorage => {
+  // localStorage が使えない場合のメモリ退避（同一タブ内のみ）
+  const memory = new Map<string, string>();
+
+  const getBacking = (): Storage | null => {
+    if (!canUseLocalStorage()) return null;
+    try {
+      // localStorage 参照自体が例外になる環境がある
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  };
+
+  return {
+    getItem: (name) => {
+      const backing = getBacking();
+      if (!backing) return memory.get(name) ?? null;
+      try {
+        return backing.getItem(name);
+      } catch {
+        return memory.get(name) ?? null;
+      }
+    },
+    setItem: (name, value) => {
+      const backing = getBacking();
+      memory.set(name, value);
+      if (!backing) return;
+      try {
+        backing.setItem(name, value);
+      } catch {
+        // 永続化に失敗してもアプリ自体は動かす（次回起動で戻る可能性は残る）
+      }
+    },
+    removeItem: (name) => {
+      const backing = getBacking();
+      memory.delete(name);
+      if (!backing) return;
+      try {
+        backing.removeItem(name);
+      } catch {
+        // ignore
+      }
+    },
+  };
+};
+
+const SAFE_PERSIST_STORAGE = createSafeStateStorage();
+
+const toMillis = (v: unknown): number => {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') {
+    const t = Date.parse(v);
+    return Number.isFinite(t) ? t : 0;
+  }
+  return 0;
 };
 
 const readLogoutRecoveryState = (uid: string): Record<string, unknown> | null => {
@@ -722,6 +788,14 @@ interface GameState extends UserState {
   cloudLoadFailed: boolean;
   cloudLoadedUid: string | null;
   cloudSavePausedUntil: number;
+
+  /**
+   * ローカルの「努力の結晶」状態（coins/inventory/equipment/journey 等）を最後に変更した時刻(ms)。
+   * Cloud restore と比較して、古いクラウドでローカルを巻き戻さないために使う。
+   */
+  localStateUpdatedAtMs: number;
+  /** Firestore の users/{uid}.updatedAt を最後に観測した時刻(ms)。 */
+  cloudStateUpdatedAtMs: number;
 }
 
 interface GameActions {
@@ -969,6 +1043,8 @@ const initialState: GameState = {
   cloudLoadFailed: false,
   cloudLoadedUid: null,
   cloudSavePausedUntil: 0,
+  localStateUpdatedAtMs: 0,
+  cloudStateUpdatedAtMs: 0,
 };
 
 // ===== Store Implementation =====
@@ -1001,6 +1077,16 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
+        // persist の rehydrate 完了前に cloud load が走ると、
+        // 「ローカルの最新状態」vs「クラウドの古い状態」の比較ができず巻き戻りが起きやすい。
+        // hydrationCompleted を短時間待ってからクラウド復元を開始する。
+        if (!get().hydrationCompleted) {
+          const start = Date.now();
+          while (!get().hydrationCompleted && Date.now() - start < 2500) {
+            await new Promise<void>((r) => setTimeout(r, 25));
+          }
+        }
+
         if (!db) {
           set({
             cloudLoadInProgress: false,
@@ -1030,6 +1116,14 @@ export const useGameStore = create<GameStore>()(
             const cloudUserState = (cloudData?.userState && typeof cloudData.userState === 'object')
               ? cloudData.userState
               : null;
+
+            const cloudUpdatedAtMs = Math.max(
+              toMillis(cloudData?.updatedAtMs),
+              toMillis(cloudData?.updatedAt),
+              toMillis(cloudUserState?.updatedAtMs),
+              toMillis(cloudUserState?.updatedAt),
+            );
+            const localUpdatedAtMs = Number(baseState.localStateUpdatedAtMs ?? 0) || 0;
 
             const rawCoins = cloudData?.coins ?? cloudUserState?.coins ?? cloudData?.userState?.coins;
             const rawInventory = cloudData?.inventory ?? cloudUserState?.inventory;
@@ -1068,6 +1162,13 @@ export const useGameStore = create<GameStore>()(
                 : undefined;
 
             const equipment = cloudEquipmentFromRaw ?? cloudEquipment ?? baseState.equipment;
+
+            // 「クラウドが古いのにローカルを上書き」してしまうと更新で巻き戻る。
+            // ここで新旧を比較し、ローカルの方が新しい場合は努力状態を保持する。
+            const shouldKeepLocalEffortState =
+              cloudUpdatedAtMs > 0 &&
+              localUpdatedAtMs > 0 &&
+              localUpdatedAtMs > cloudUpdatedAtMs;
 
             const rawBonusScanBalance =
               cloudData?.bonusScanBalance ??
@@ -1126,9 +1227,9 @@ export const useGameStore = create<GameStore>()(
               // ユーザー状態系（努力の結晶のみ）
               uid,
               displayName: cloudData.userState?.displayName ?? baseState.displayName,
-              coins,
-              tickets: cloudData.userState?.tickets ?? baseState.tickets,
-              stamina: cloudData.userState?.stamina ?? baseState.stamina,
+              coins: shouldKeepLocalEffortState ? baseState.coins : coins,
+              tickets: shouldKeepLocalEffortState ? baseState.tickets : (cloudData.userState?.tickets ?? baseState.tickets),
+              stamina: shouldKeepLocalEffortState ? baseState.stamina : (cloudData.userState?.stamina ?? baseState.stamina),
               // VIP機能は廃止（クラウド値も取り込まない）
               isVIP: false,
               vipExpiresAt: undefined,
@@ -1156,11 +1257,11 @@ export const useGameStore = create<GameStore>()(
                 cloudData.userState?.totalQuizClears ?? baseState.totalQuizClears,
 
               // インベントリ系
-              inventory,
-              equipment,
+              inventory: shouldKeepLocalEffortState ? baseState.inventory : inventory,
+              equipment: shouldKeepLocalEffortState ? baseState.equipment : equipment,
 
               // マップ／旅路
-              journey: cloudData.journey ?? baseState.journey,
+              journey: shouldKeepLocalEffortState ? baseState.journey : (cloudData.journey ?? baseState.journey),
 
               // 生成されたクイズは保持（クラウドには保存しないが、ローカルでは保持）
               generatedQuiz: baseState.generatedQuiz,
@@ -1180,6 +1281,10 @@ export const useGameStore = create<GameStore>()(
               lastScanQuizId: baseState.lastScanQuizId,
 
               // 履歴はこの後サブコレクションから読み込む
+              cloudStateUpdatedAtMs: cloudUpdatedAtMs,
+              localStateUpdatedAtMs: shouldKeepLocalEffortState
+                ? baseState.localStateUpdatedAtMs
+                : Math.max(Number(baseState.localStateUpdatedAtMs ?? 0) || 0, cloudUpdatedAtMs),
             });
 
             // DEBUG: verify snapshot presence after merge
@@ -1383,6 +1488,7 @@ export const useGameStore = create<GameStore>()(
         try {
           const userRef = doc(db, 'users', state.uid);
           const now = new Date().toISOString();
+          const nowMs = Date.now();
 
           await setDoc(
             userRef,
@@ -1397,6 +1503,8 @@ export const useGameStore = create<GameStore>()(
                 vipExpiresAt: state.vipExpiresAt
                   ? state.vipExpiresAt.toISOString?.() ?? state.vipExpiresAt
                   : null,
+                updatedAt: now,
+                updatedAtMs: nowMs,
                 dailyScanCount: state.dailyScanCount,
                 lastScanDate: state.lastScanDate,
                 bonusScanBalance: state.bonusScanBalance,
@@ -1418,9 +1526,11 @@ export const useGameStore = create<GameStore>()(
               equipment: state.equipment,
               journey: state.journey,
               updatedAt: now,
+              updatedAtMs: nowMs,
             },
             { merge: true }
           );
+          set({ cloudStateUpdatedAtMs: nowMs });
           console.log('Data synced to cloud');
         } catch (error) {
           console.error('Cloud Sync Error:', error);
@@ -2797,6 +2907,7 @@ export const useGameStore = create<GameStore>()(
           tickets: useTicket ? state.tickets - 1 : state.tickets,
           inventory: newInventory,
           gachaPity: updatedPity,
+          localStateUpdatedAtMs: Date.now(),
         });
 
         // ガチャ結果（コイン消費・所持品追加）をクラウドへ即時同期
@@ -2819,7 +2930,7 @@ export const useGameStore = create<GameStore>()(
         }
         
         const results: GachaResult[] = [];
-        set({ coins: state.coins - GACHA.COST.TEN_PULL });
+        set({ coins: state.coins - GACHA.COST.TEN_PULL, localStateUpdatedAtMs: Date.now() });
         
         suppressGachaCloudSync = true;
         try {
@@ -2846,7 +2957,7 @@ export const useGameStore = create<GameStore>()(
       // ===== Resource Management =====
       
       addCoins: (amount) => {
-        set(state => ({ coins: state.coins + amount }));
+        set(state => ({ coins: state.coins + amount, localStateUpdatedAtMs: Date.now() }));
         void get().syncWithCloud();
       },
       
@@ -2855,12 +2966,12 @@ export const useGameStore = create<GameStore>()(
         if (state.coins < amount) {
           return false;
         }
-        set({ coins: state.coins - amount });
+        set({ coins: state.coins - amount, localStateUpdatedAtMs: Date.now() });
         return true;
       },
       
       addTickets: (amount) => {
-        set(state => ({ tickets: state.tickets + amount }));
+        set(state => ({ tickets: state.tickets + amount, localStateUpdatedAtMs: Date.now() }));
       },
       
       useTicket: () => {
@@ -2868,7 +2979,7 @@ export const useGameStore = create<GameStore>()(
         if (state.tickets < 1) {
           return false;
         }
-        set({ tickets: state.tickets - 1 });
+        set({ tickets: state.tickets - 1, localStateUpdatedAtMs: Date.now() });
         return true;
       },
       
@@ -2905,6 +3016,7 @@ export const useGameStore = create<GameStore>()(
                 ? { ...inv, quantity: newQuantity }
                 : inv
             ),
+            localStateUpdatedAtMs: Date.now(),
           });
         } else {
           set({
@@ -2912,6 +3024,7 @@ export const useGameStore = create<GameStore>()(
               ...state.inventory,
               { itemId, quantity, obtainedAt: new Date() },
             ],
+            localStateUpdatedAtMs: Date.now(),
           });
         }
       },
@@ -2929,6 +3042,7 @@ export const useGameStore = create<GameStore>()(
         if (newQuantity <= 0) {
           set({
             inventory: state.inventory.filter(inv => inv.itemId !== itemId),
+            localStateUpdatedAtMs: Date.now(),
           });
         } else {
           set({
@@ -2937,6 +3051,7 @@ export const useGameStore = create<GameStore>()(
                 ? { ...inv, quantity: newQuantity }
                 : inv
             ),
+            localStateUpdatedAtMs: Date.now(),
           });
         }
         
@@ -2961,6 +3076,7 @@ export const useGameStore = create<GameStore>()(
             ...state.equipment,
             [item.category]: itemId,
           },
+          localStateUpdatedAtMs: Date.now(),
         });
 
         // 装備変更をクラウドへ同期（リロード時に外れるのを防ぐ）
@@ -2975,6 +3091,7 @@ export const useGameStore = create<GameStore>()(
             ...state.equipment,
             [category]: undefined,
           },
+          localStateUpdatedAtMs: Date.now(),
         }));
 
         // 装備解除もクラウドへ同期
@@ -3326,7 +3443,7 @@ export const useGameStore = create<GameStore>()(
     }),
     {
       name: 'potenote-scanner-v2',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => SAFE_PERSIST_STORAGE),
       merge: (persistedState, currentState) => {
         const persisted = { ...((persistedState as Partial<GameState> | undefined) ?? {}) };
         // academyUserQuestions は常に「公式 + ユーザー投稿」のFirestoreから再構成する。
@@ -3486,6 +3603,8 @@ export const useGameStore = create<GameStore>()(
         suhimochiKeywords: state.suhimochiKeywords,
         suhimochiTimeline: state.suhimochiTimeline,
         anataZukanEntries: state.anataZukanEntries,
+        localStateUpdatedAtMs: state.localStateUpdatedAtMs,
+        cloudStateUpdatedAtMs: state.cloudStateUpdatedAtMs,
       }),
     }
   )
