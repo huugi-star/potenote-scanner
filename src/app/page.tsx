@@ -155,7 +155,7 @@ const AdventureMenuScreen = ({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            スキャンして冒険
+            スキャンして学ぶ
           </motion.button>
 
           <motion.button
@@ -718,7 +718,7 @@ const HomeScreen = ({
             fromColor="#92400e" toColor="#f59e0b"
             glowColor="rgba(245,158,11,0.4)" shadowColor="rgba(70,28,4,0.95)"
             icon={<Sword style={{width:22,height:22}}/>}
-            label="ことばを集める"
+            label="スキャンする"
           />
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
             <RpgButton
@@ -1376,7 +1376,7 @@ const HomeScreen_v4_old = ({
             glowColor="rgba(245,158,11,0.45)"
             shadowColor="rgba(80,35,5,0.9)"
             icon={<Sword style={{ width: 24, height: 24 }} />}
-            label="ことばを集める"
+            label="スキャンする"
           />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

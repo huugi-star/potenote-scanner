@@ -83,7 +83,14 @@ const SCIENCE_SUBJECTS_BY_TAB: Record<'総合' | '高校受験' | '大学受験'
 };
 
 const CERT_ITEMS_BY_TAB: Record<
-  '法律・不動産' | 'IT・情報' | '設備・技術' | '医療・福祉' | 'ビジネス・金融' | '食品・環境',
+  | '法律・不動産'
+  | 'IT・情報'
+  | '設備・技術'
+  | '医療・福祉'
+  | 'ビジネス・金融'
+  | '食品・環境'
+  | '公務員試験'
+  | '就活',
   string[]
 > = {
   '法律・不動産': ['宅建', '行政書士', '司法書士', 'マンション管理士', '社労士'],
@@ -92,6 +99,25 @@ const CERT_ITEMS_BY_TAB: Record<
   '医療・福祉': ['医療事務', '介護福祉士', 'ケアマネージャー', '登録販売者'],
   'ビジネス・金融': ['FP3級', 'FP2級', '証券外務員', '秘書検定', '中小企業診断士'],
   '食品・環境': ['食品衛生責任者', '調理師', '環境計量士'],
+  /** 公務員試験タブは2階層UI（大分類→分野）。フラット科目一覧は使わない */
+  公務員試験: [],
+  就活: [
+    'ES',
+    'エントリーシート',
+    '面接',
+    'SPI',
+    '筆記試験',
+    '企業研究',
+    'インターン',
+    '内定',
+    'OB訪問',
+    'ケース面接',
+    'グループディスカッション',
+    'ガクチカ',
+    '行動面接',
+    '就活',
+    '就職活動',
+  ],
 };
 
 const LANGUAGE_SUBJECTS_BY_TAB: Record<'英語', string[]> = {
@@ -121,6 +147,349 @@ const isScience = (q: AcademyUserQuestion): boolean => {
 };
 
 const isCert = (q: AcademyUserQuestion): boolean => normalize(q.bigCategory) === '資格';
+
+/** 資格タブ用：小カテ・題材に含まれる語で公務員系・就活系に分類 */
+const certQuestionText = (q: AcademyUserQuestion): string =>
+  `${normalize(q.subCategory)} ${normalize(q.subjectText)} ${Array.isArray(q.keywords) ? q.keywords.join(' ') : ''}`;
+
+// ── 公務員試験タブ：試験制度に沿った2階層（大分類 → 分野）────────────────
+
+const PUBLIC_SERVICE_MAJOR_ORDER = ['国家公務員', '地方公務員', '公安系', '教員採用試験', '専門職'] as const;
+type PublicServiceMajor = (typeof PUBLIC_SERVICE_MAJOR_ORDER)[number];
+
+const PUBLIC_SERVICE_FIELDS: Record<PublicServiceMajor, readonly string[]> = {
+  国家公務員: [
+    '総合職',
+    '一般職',
+    '国税専門官',
+    '財務専門官',
+    '労働基準監督官',
+    '外務専門職',
+    '法務省専門職（矯正・保護）',
+  ],
+  地方公務員: [
+    '上級（大卒程度）',
+    '中級（短大・専門）',
+    '初級（高卒程度）',
+    '一般行政',
+    '技術職（土木・建築・電気など）',
+  ],
+  公安系: ['警察官', '消防士', '自衛官', '海上保安官', '刑務官'],
+  教員採用試験: ['教養試験', '専門試験'],
+  専門職: ['裁判所職員', '国立大学法人職員', '独立行政法人'],
+};
+
+const DEFAULT_PUBLIC_SERVICE_MAJOR: PublicServiceMajor = '国家公務員';
+const defaultPublicServiceField = (major: PublicServiceMajor): string =>
+  PUBLIC_SERVICE_FIELDS[major][0] ?? '';
+
+// ── 教員採用試験（専門試験の下にもう1段）──────────────────────────────
+
+const TEACHER_SPECIALTY_ORDER = ['小学校', '中学、高校', '特別支援教育', '養護教諭', '栄養教諭'] as const;
+type TeacherSpecialty = (typeof TEACHER_SPECIALTY_ORDER)[number];
+
+const TEACHER_JHS_SUBJECTS = [
+  '国語',
+  '数学',
+  '英語',
+  '理科',
+  '社会',
+  '音楽',
+  '美術',
+  '保健体育',
+  '技術',
+  '家庭',
+] as const;
+type TeacherJhsSubject = (typeof TEACHER_JHS_SUBJECTS)[number];
+
+/** 大分類に属する幅広い表記（タブ突入・大分類チップ件数用） */
+const PUBLIC_SERVICE_MAJOR_HINTS: Record<PublicServiceMajor, string[]> = {
+  国家公務員: [
+    '国家公務員',
+    '国家公務',
+    '国家試験',
+    '総合職',
+    '国家総合職',
+    '一般職',
+    '国家一般職',
+    '国税専門',
+    '国税専門官',
+    '財務専門',
+    '財務専門官',
+    '労働基準監督',
+    '労働基準監督官',
+    '外務専門',
+    '外務専門職',
+    '法務省専門',
+    '法務省',
+    '矯正',
+    '保護観察',
+  ],
+  地方公務員: [
+    '地方公務員',
+    '地方公務',
+    '上級試験',
+    '中級試験',
+    '初級試験',
+    '大卒程度',
+    '高卒程度',
+    '特別区',
+    '都庁',
+    '道庁',
+    '府庁',
+    '県庁',
+    '市役所',
+    '区役所',
+    '一般行政',
+    '事務職',
+    '地方上級',
+    '地方技術',
+  ],
+  公安系: [
+    '警察官',
+    '警察庁',
+    '警視庁',
+    '消防士',
+    '消防庁',
+    '消防官',
+    '自衛官',
+    '自衛隊',
+    '海上保安',
+    '海上保安官',
+    '保安官',
+    '刑務官',
+    '矯正',
+  ],
+  教員採用試験: [
+    '教員採用',
+    '教員採用試験',
+    '教採',
+    '教職',
+    '教諭採用',
+    '教員募集',
+    '教員試験',
+    '教養試験',
+    '一般教養',
+    '専門試験',
+    '専門教科',
+  ],
+  専門職: ['裁判所職員', '裁判所', '法曹', '国立大学法人', '独立行政法人', '国公立大学'],
+};
+
+/** 分野ごとの表記揺れ・旧名（会計専門官→財務専門官、労働審判官→労働基準監督官 等） */
+const PUBLIC_SERVICE_FIELD_KEYWORDS: Record<string, string[]> = {
+  国家公務員: [
+    '総合職',
+    '国家総合職',
+    '国家公務員総合',
+    '一般職',
+    '国家一般職',
+    '一般事務職',
+    '国税専門官',
+    '国税専門',
+    '財務専門官',
+    '財務専門',
+    '会計専門官', // 旧表記
+    '労働基準監督官',
+    '労働基準監督',
+    '労働審判官', // 旧誤表記にヒット
+    '外務専門職',
+    '外務専門',
+    '法務省専門職',
+    '矯正',
+    '保護官',
+  ],
+  地方公務員: [
+    '上級',
+    '大卒程度',
+    '大卒者',
+    '中級',
+    '短大',
+    '専門学校',
+    '初級',
+    '高卒',
+    '高卒程度',
+    '一般行政',
+    '事務職',
+    '技術職',
+    '土木',
+    '建築',
+    '電気',
+  ],
+  公安系: [
+    '警察官',
+    '警察',
+    '消防士',
+    '消防庁',
+    '自衛官',
+    '自衛隊',
+    '海上保安',
+    '刑務官',
+  ],
+  教員採用試験: [
+    '教員採用',
+    '教員採用試験',
+    '教採',
+    '教職',
+    '教諭採用',
+    '教員募集',
+    '教員試験',
+    '教養試験',
+    '一般教養',
+    '専門試験',
+    '専門教科',
+  ],
+  専門職: ['裁判所職員', '裁判官補', '裁判所 事務', '国立大学法人職員', '国立大学法人', '独立行政法人'],
+  // 下位分野：キーは「大分類|分野」
+  '国家公務員|総合職': ['総合職', '国家公務員総合', '国家総合職', '総合職試験', 'I種'],
+  '国家公務員|一般職': ['一般職', '国家一般職', '事務職', '一般事務職', '非総合職'],
+  '国家公務員|国税専門官': ['国税専門官', '国税専門', '国税'],
+  '国家公務員|財務専門官': ['財務専門官', '財務専門', '会計専門官'],
+  '国家公務員|労働基準監督官': ['労働基準監督官', '労働基準監督', '労働審判官'],
+  '国家公務員|外務専門職': ['外務専門職', '外務専門', '外務', '国際情勢', '国際法'],
+  '国家公務員|法務省専門職（矯正・保護）': [
+    '法務省',
+    '矯正',
+    '保護官',
+    '保護観察',
+    '矯正心理',
+    '法務技官',
+  ],
+  '地方公務員|上級（大卒程度）': ['上級', '大卒程度', '大卒者', '地方上級'],
+  '地方公務員|中級（短大・専門）': ['中級', '短大', '専門学校', '専門卒'],
+  '地方公務員|初級（高卒程度）': ['初級', '高卒', '高卒程度', '高卒者'],
+  '地方公務員|一般行政': ['一般行政', '一般事務', '事務職', '都庁', '県庁', '市役所', '区役所'],
+  '地方公務員|技術職（土木・建築・電気など）': [
+    '技術職',
+    '土木',
+    '建築',
+    '電気',
+    '建設',
+    '設備',
+    '農林',
+  ],
+  '公安系|警察官': ['警察官', '警察庁', '警視庁', '埼玉県警', '警察官採用'],
+  '公安系|消防士': ['消防士', '消防庁', '消防官', '救急', '地方消防'],
+  '公安系|自衛官': ['自衛官', '自衛隊', '防衛', '幹部候補生'],
+  '公安系|海上保安官': ['海上保安', '海上保安官', '海上保安庁', '海保'],
+  '公安系|刑務官': ['刑務官', '矯正', '矯正職'],
+  '教員採用試験|教養試験': ['教養試験', '一般教養', '教職教養', '教育原理', '教育心理', '教育法規'],
+  '教員採用試験|専門試験': ['専門試験', '専門教科', '教科専門', '専門科目'],
+  // 教員採用試験（専門試験）: 校種・職種
+  '教員採用試験|専門試験|小学校': ['小学校', '小学校教員', '小学校教諭', '小学校免許'],
+  '教員採用試験|専門試験|中学、高校': ['中学', '中学校', '高校', '高等学校', '中高', '中学校教諭', '高校教諭'],
+  '教員採用試験|専門試験|特別支援教育': ['特別支援', '特別支援教育', '特支', '支援学校'],
+  '教員採用試験|専門試験|養護教諭': ['養護教諭', '保健室', '養護'],
+  '教員採用試験|専門試験|栄養教諭': ['栄養教諭', '栄養', '食育'],
+  // 教員採用試験（専門試験）: 中学・高校の教科
+  '教員採用試験|専門試験|中学、高校|国語': ['国語', '現代文', '古文', '漢文'],
+  '教員採用試験|専門試験|中学、高校|数学': ['数学', '数学I', '数学Ⅱ', '数学Ⅲ', '数A', '数B', '数C'],
+  '教員採用試験|専門試験|中学、高校|英語': ['英語', '英文法', '英作文', '英会話'],
+  '教員採用試験|専門試験|中学、高校|理科': ['理科', '物理', '化学', '生物', '地学'],
+  '教員採用試験|専門試験|中学、高校|社会': ['社会', '日本史', '世界史', '地理', '公民', '政治経済', '倫理'],
+  '教員採用試験|専門試験|中学、高校|音楽': ['音楽', '楽典', '和声', 'ソルフェージュ'],
+  '教員採用試験|専門試験|中学、高校|美術': ['美術', '造形', 'デザイン', '絵画'],
+  '教員採用試験|専門試験|中学、高校|保健体育': ['保健体育', '体育', 'スポーツ科学', '保健'],
+  '教員採用試験|専門試験|中学、高校|技術': ['技術', '技術科', '情報', 'ものづくり'],
+  '教員採用試験|専門試験|中学、高校|家庭': ['家庭', '家庭科', '被服', '調理', '保育'],
+  '専門職|裁判所職員': ['裁判所職員', '裁判所', '裁判事務', '法曹', '裁判官補'],
+  '専門職|国立大学法人職員': ['国立大学法人職員', '国立大学法人', '国公立', '国公立大'],
+  '専門職|独立行政法人': ['独立行政法人', '国際協力', 'JICA', '独立行政', '執行機関'],
+};
+
+const publicServiceFieldKey = (major: string, field: string): string => `${major}|${field}`;
+const teacherSpecialtyKey = (major: string, field: string, specialty: string): string =>
+  `${major}|${field}|${specialty}`;
+const teacherSubjectKey = (major: string, field: string, specialty: string, subject: string): string =>
+  `${major}|${field}|${specialty}|${subject}`;
+
+const textMatchesField = (t: string, major: PublicServiceMajor, field: string): boolean => {
+  const k = publicServiceFieldKey(major, field);
+  const words = PUBLIC_SERVICE_FIELD_KEYWORDS[k];
+  if (words && words.length > 0) return includesAny(t, words);
+  return false;
+};
+
+const textMatchesTeacherSpecialty = (t: string, specialty: string): boolean => {
+  const words = PUBLIC_SERVICE_FIELD_KEYWORDS[teacherSpecialtyKey('教員採用試験', '専門試験', specialty)];
+  if (words && words.length > 0) return includesAny(t, words);
+  return t.includes(specialty);
+};
+
+const textMatchesTeacherSubject = (t: string, subject: string): boolean => {
+  const words = PUBLIC_SERVICE_FIELD_KEYWORDS[
+    teacherSubjectKey('教員採用試験', '専門試験', '中学、高校', subject)
+  ];
+  if (words && words.length > 0) return includesAny(t, words);
+  return t.includes(subject);
+};
+
+const textMatchesAnyFieldUnderMajor = (t: string, major: PublicServiceMajor): boolean => {
+  for (const f of PUBLIC_SERVICE_FIELDS[major]) {
+    if (textMatchesField(t, major, f)) return true;
+  }
+  if (includesAny(t, PUBLIC_SERVICE_FIELD_KEYWORDS[major] ?? [])) return true;
+  return false;
+};
+
+const textMatchesPublicServiceMajor = (t: string, major: PublicServiceMajor): boolean => {
+  if (includesAny(t, PUBLIC_SERVICE_MAJOR_HINTS[major])) return true;
+  return textMatchesAnyFieldUnderMajor(t, major);
+};
+
+const matchPublicServiceSelection = (
+  q: AcademyUserQuestion,
+  majorSel: string,
+  fieldSel: string
+): boolean => {
+  const t = certQuestionText(q);
+  const major = majorSel as PublicServiceMajor;
+  if (!textMatchesPublicServiceMajor(t, major)) return false;
+  return textMatchesField(t, major, fieldSel) || (fieldSel.length > 0 && t.includes(fieldSel));
+};
+
+const isCertPublicServiceExam = (q: AcademyUserQuestion): boolean => {
+  if (!isCert(q)) return false;
+  const t = certQuestionText(q);
+  for (const m of PUBLIC_SERVICE_MAJOR_ORDER) {
+    if (textMatchesPublicServiceMajor(t, m)) return true;
+  }
+  return includesAny(t, [
+    '公務員',
+    '公務',
+    '公務員試験',
+  ]);
+};
+
+const isCertJobHunting = (q: AcademyUserQuestion): boolean => {
+  if (!isCert(q)) return false;
+  const t = certQuestionText(q);
+  return includesAny(t, [
+    '就活',
+    '就職活動',
+    '就職',
+    'エントリーシート',
+    'ES',
+    '面接',
+    '二次面接',
+    '最終面接',
+    'SPI',
+    '筆記試験',
+    '体験入社',
+    '企業研究',
+    'インターン',
+    '内定',
+    'OB訪問',
+    'OB',
+    'ケース面接',
+    'グループディスカッション',
+    'GD',
+    'ガクチカ',
+    '自己PR',
+    '逆質問',
+    '行動面接',
+  ]);
+};
 
 const langText = (q: AcademyUserQuestion): string =>
   `${normalize(q.subCategory)} ${normalize(q.subjectText)} ${Array.isArray(q.keywords) ? q.keywords.join(' ') : ''}`;
@@ -167,6 +536,9 @@ const getDetailedSubjects = (catId: string, tabLabel: string): string[] => {
   }
   if (catId === 'science') {
     return SCIENCE_SUBJECTS_BY_TAB[tabLabel as keyof typeof SCIENCE_SUBJECTS_BY_TAB] ?? [];
+  }
+  if (catId === 'cert' && tabLabel === '公務員試験') {
+    return [];
   }
   if (catId === 'cert') {
     return CERT_ITEMS_BY_TAB[tabLabel as keyof typeof CERT_ITEMS_BY_TAB] ?? [];
@@ -336,14 +708,16 @@ const LECTURE_CATEGORIES: LectureCategory[] = [
   },
   {
     id: 'cert',
-    label: '資格',
-    ruby: 'しかく',
+    label: '資格試験',
+    ruby: 'しかく、しけん',
     icon: '🏅',
     kanji: '資格',
+    kanjiSub: '試験',
     color: 'from-orange-500 via-red-500 to-rose-500',
     glow: '#f97316',
     border: 'border-orange-400/60',
-    description: '法律・不動産 / IT・情報 / 設備・技術 / 医療・福祉 / ビジネス・金融 / 食品・環境',
+    description:
+      '法律・不動産 / IT・情報 / 設備・技術 / 医療・福祉 / ビジネス・金融 / 食品・環境 / 公務員試験 / 就活',
     ribbonColor: '#dc2626',
     lightBg: 'linear-gradient(135deg, rgba(255,247,237,0.98) 0%, rgba(255,228,230,0.96) 100%)',
     lightBorder: 'rgba(249,115,22,0.28)',
@@ -354,6 +728,8 @@ const LECTURE_CATEGORIES: LectureCategory[] = [
       { label: '医療・福祉', matches: (q) => isCert(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, CERT_ITEMS_BY_TAB['医療・福祉']) },
       { label: 'ビジネス・金融', matches: (q) => isCert(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, CERT_ITEMS_BY_TAB['ビジネス・金融']) },
       { label: '食品・環境', matches: (q) => isCert(q) && includesAny(`${normalize(q.subCategory)} ${normalize(q.subjectText)}`, CERT_ITEMS_BY_TAB['食品・環境']) },
+      { label: '公務員試験', matches: (q) => isCertPublicServiceExam(q) },
+      { label: '就活', matches: (q) => isCertJobHunting(q) },
     ],
   },
   {
@@ -1028,6 +1404,19 @@ const ExamRoomInside = ({
   hsSubjectCounts,
   onChangeHsLiberalSubject,
   onChangeHsLiberalField,
+  usePublicServiceTwoTier,
+  publicServiceMajor,
+  publicServiceField,
+  publicServiceMajorCounts,
+  publicServiceFieldCounts,
+  onChangePublicServiceMajor,
+  onChangePublicServiceField,
+  teacherSpecialty,
+  teacherJhsSubject,
+  teacherSpecialtyCounts,
+  teacherJhsSubjectCounts,
+  onChangeTeacherSpecialty,
+  onChangeTeacherJhsSubject,
   onBack,
   onChangeTab,
   onChangeDetailSubject,
@@ -1046,6 +1435,19 @@ const ExamRoomInside = ({
   hsSubjectCounts: Record<string, number>;
   onChangeHsLiberalSubject: (v: string) => void;
   onChangeHsLiberalField: (v: string) => void;
+  usePublicServiceTwoTier: boolean;
+  publicServiceMajor: string;
+  publicServiceField: string;
+  publicServiceMajorCounts: Record<string, number>;
+  publicServiceFieldCounts: Record<string, number>;
+  onChangePublicServiceMajor: (v: string) => void;
+  onChangePublicServiceField: (v: string) => void;
+  teacherSpecialty: string;
+  teacherJhsSubject: string;
+  teacherSpecialtyCounts: Record<string, number>;
+  teacherJhsSubjectCounts: Record<string, number>;
+  onChangeTeacherSpecialty: (v: TeacherSpecialty) => void;
+  onChangeTeacherJhsSubject: (v: TeacherJhsSubject) => void;
   onBack: () => void;
   onChangeTab: (label: string) => void;
   onChangeDetailSubject: (subject: string) => void;
@@ -1185,6 +1587,138 @@ const ExamRoomInside = ({
                     </div>
                   </div>
                 )}
+              </div>
+            ) : usePublicServiceTwoTier ? (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <p className="text-[11px] font-bold mb-2" style={{ color: 'rgba(67,54,98,0.82)' }}>
+                    大分類を選択
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {PUBLIC_SERVICE_MAJOR_ORDER.map((major) => {
+                      const selected = publicServiceMajor === major;
+                      const count = publicServiceMajorCounts[major] ?? 0;
+                      return (
+                        <motion.button
+                          key={major}
+                          onClick={() => onChangePublicServiceMajor(major)}
+                          className="px-3 py-1.5 rounded-full text-xs font-bold border"
+                          style={{
+                            color: selected ? '#fff' : 'rgba(67,54,98,0.9)',
+                            background: selected
+                              ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`
+                              : 'rgba(255,255,255,0.92)',
+                            borderColor: selected ? 'rgba(255,255,255,0.35)' : 'rgba(160,150,210,0.24)',
+                            boxShadow: selected ? `0 8px 18px ${cat.glow}28` : 'none',
+                          }}
+                          whileTap={{ scale: 0.97 }}
+                        >
+                          {major}（{count}）
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {PUBLIC_SERVICE_FIELDS[publicServiceMajor as PublicServiceMajor] &&
+                  PUBLIC_SERVICE_FIELDS[publicServiceMajor as PublicServiceMajor].length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-bold mb-2" style={{ color: 'rgba(67,54,98,0.82)' }}>
+                        分野（サブカテゴリ）を選択
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {PUBLIC_SERVICE_FIELDS[publicServiceMajor as PublicServiceMajor].map((field) => {
+                            const selected = publicServiceField === field;
+                            const count = publicServiceFieldCounts[field] ?? 0;
+                            return (
+                              <motion.button
+                                key={`${publicServiceMajor}-${field}`}
+                                onClick={() => onChangePublicServiceField(field)}
+                                className="px-3 py-1.5 rounded-full text-xs font-bold border max-w-full text-left leading-snug"
+                                style={{
+                                  color: selected ? '#fff' : 'rgba(67,54,98,0.9)',
+                                  background: selected
+                                    ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`
+                                    : 'rgba(255,255,255,0.92)',
+                                  borderColor: selected
+                                    ? 'rgba(255,255,255,0.35)'
+                                    : 'rgba(160,150,210,0.24)',
+                                  boxShadow: selected ? `0 8px 18px ${cat.glow}28` : 'none',
+                                }}
+                                whileTap={{ scale: 0.97 }}
+                              >
+                                {field}（{count}）
+                              </motion.button>
+                            );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                {publicServiceMajor === '教員採用試験' && publicServiceField === '専門試験' && (
+                  <div>
+                    <p className="text-[11px] font-bold mb-2" style={{ color: 'rgba(67,54,98,0.82)' }}>
+                      校種・職種を選択
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {TEACHER_SPECIALTY_ORDER.map((sp) => {
+                        const selected = teacherSpecialty === sp;
+                        const count = teacherSpecialtyCounts[sp] ?? 0;
+                        return (
+                          <motion.button
+                            key={sp}
+                            onClick={() => onChangeTeacherSpecialty(sp)}
+                            className="px-3 py-1.5 rounded-full text-xs font-bold border"
+                            style={{
+                              color: selected ? '#fff' : 'rgba(67,54,98,0.9)',
+                              background: selected
+                                ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`
+                                : 'rgba(255,255,255,0.92)',
+                              borderColor: selected ? 'rgba(255,255,255,0.35)' : 'rgba(160,150,210,0.24)',
+                              boxShadow: selected ? `0 8px 18px ${cat.glow}28` : 'none',
+                            }}
+                            whileTap={{ scale: 0.97 }}
+                          >
+                            {sp}（{count}）
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {publicServiceMajor === '教員採用試験' &&
+                  publicServiceField === '専門試験' &&
+                  teacherSpecialty === '中学、高校' && (
+                    <div>
+                      <p className="text-[11px] font-bold mb-2" style={{ color: 'rgba(67,54,98,0.82)' }}>
+                        教科を選択
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {TEACHER_JHS_SUBJECTS.map((subj) => {
+                          const selected = teacherJhsSubject === subj;
+                          const count = teacherJhsSubjectCounts[subj] ?? 0;
+                          return (
+                            <motion.button
+                              key={subj}
+                              onClick={() => onChangeTeacherJhsSubject(subj)}
+                              className="px-3 py-1.5 rounded-full text-xs font-bold border"
+                              style={{
+                                color: selected ? '#fff' : 'rgba(67,54,98,0.9)',
+                                background: selected
+                                  ? `linear-gradient(135deg, ${cat.ribbonColor}, ${cat.glow})`
+                                  : 'rgba(255,255,255,0.92)',
+                                borderColor: selected ? 'rgba(255,255,255,0.35)' : 'rgba(160,150,210,0.24)',
+                                boxShadow: selected ? `0 8px 18px ${cat.glow}28` : 'none',
+                              }}
+                              whileTap={{ scale: 0.97 }}
+                            >
+                              {subj}（{count}）
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
               </div>
             ) : (
               detailedSubjects.length > 0 && (
@@ -1870,6 +2404,14 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   const [hsLiberalSubject, setHsLiberalSubject] = useState<string>('すべて');
   /** 文系・高校受験：分野（英単語 等） */
   const [hsLiberalField, setHsLiberalField] = useState<string>('すべて');
+  /** 資格・公務員試験タブ：大分類 → 分野（「すべて」なし・常に1件ずつ選択） */
+  const [publicServiceMajor, setPublicServiceMajor] = useState<string>(DEFAULT_PUBLIC_SERVICE_MAJOR);
+  const [publicServiceField, setPublicServiceField] = useState<string>(() =>
+    defaultPublicServiceField(DEFAULT_PUBLIC_SERVICE_MAJOR)
+  );
+  /** 教員採用試験（専門試験）: 校種・職種 →（中高なら教科） */
+  const [teacherSpecialty, setTeacherSpecialty] = useState<string>(TEACHER_SPECIALTY_ORDER[0]);
+  const [teacherJhsSubject, setTeacherJhsSubject] = useState<string>(TEACHER_JHS_SUBJECTS[0]);
   const [quizQuestions, setQuizQuestions] = useState<ShuffledQuestion[]>([]);
   const [quizPhase, setQuizPhase] = useState<'idle' | 'playing' | 'result'>('idle');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -1913,11 +2455,14 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   const useHsLiberalTwoTier =
     !!selectedCat && selectedCat.id === 'liberal' && selectedTabLabel === '高校受験';
 
+  const usePublicServiceTwoTier =
+    !!selectedCat && selectedCat.id === 'cert' && selectedTabLabel === '公務員試験';
+
   const detailedSubjects = useMemo(() => {
     if (!selectedCat) return [];
-    if (useHsLiberalTwoTier) return [];
+    if (useHsLiberalTwoTier || usePublicServiceTwoTier) return [];
     return getDetailedSubjects(selectedCat.id, selectedTabLabel);
-  }, [selectedCat, selectedTabLabel, useHsLiberalTwoTier]);
+  }, [selectedCat, selectedTabLabel, useHsLiberalTwoTier, usePublicServiceTwoTier]);
 
   const detailSubjectCounts = useMemo(() => {
     const next: Record<string, number> = {};
@@ -1937,7 +2482,82 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     return next;
   }, [useHsLiberalTwoTier, selectedTabQuestions]);
 
+  const publicServiceMajorCounts = useMemo(() => {
+    if (!usePublicServiceTwoTier) return {};
+    const next: Record<string, number> = {};
+    for (const m of PUBLIC_SERVICE_MAJOR_ORDER) {
+      next[m] = selectedTabQuestions.filter((q) =>
+        textMatchesPublicServiceMajor(certQuestionText(q), m)
+      ).length;
+    }
+    return next;
+  }, [usePublicServiceTwoTier, selectedTabQuestions]);
+
+  const publicServiceFieldCounts = useMemo(() => {
+    if (!usePublicServiceTwoTier) return {};
+    const m = publicServiceMajor as PublicServiceMajor;
+    const fields = PUBLIC_SERVICE_FIELDS[m];
+    if (!fields?.length) return {};
+    const next: Record<string, number> = {};
+    for (const f of fields) {
+      next[f] = selectedTabQuestions.filter((q) => matchPublicServiceSelection(q, publicServiceMajor, f)).length;
+    }
+    return next;
+  }, [usePublicServiceTwoTier, publicServiceMajor, selectedTabQuestions]);
+
+  const teacherSpecialtyCounts = useMemo(() => {
+    if (!usePublicServiceTwoTier || publicServiceMajor !== '教員採用試験' || publicServiceField !== '専門試験') return {};
+    const next: Record<string, number> = {};
+    for (const sp of TEACHER_SPECIALTY_ORDER) {
+      next[sp] = selectedTabQuestions.filter((q) => {
+        const t = certQuestionText(q);
+        return (
+          textMatchesPublicServiceMajor(t, '教員採用試験') &&
+          textMatchesField(t, '教員採用試験', '専門試験') &&
+          textMatchesTeacherSpecialty(t, sp)
+        );
+      }).length;
+    }
+    return next;
+  }, [usePublicServiceTwoTier, publicServiceMajor, publicServiceField, selectedTabQuestions]);
+
+  const teacherJhsSubjectCounts = useMemo(() => {
+    if (!usePublicServiceTwoTier || publicServiceMajor !== '教員採用試験' || publicServiceField !== '専門試験') return {};
+    if (teacherSpecialty !== '中学、高校') return {};
+    const next: Record<string, number> = {};
+    for (const subj of TEACHER_JHS_SUBJECTS) {
+      next[subj] = selectedTabQuestions.filter((q) => {
+        const t = certQuestionText(q);
+        return (
+          textMatchesPublicServiceMajor(t, '教員採用試験') &&
+          textMatchesField(t, '教員採用試験', '専門試験') &&
+          textMatchesTeacherSpecialty(t, '中学、高校') &&
+          textMatchesTeacherSubject(t, subj)
+        );
+      }).length;
+    }
+    return next;
+  }, [usePublicServiceTwoTier, publicServiceMajor, publicServiceField, teacherSpecialty, selectedTabQuestions]);
+
   const selectedLectureQuestions = useMemo(() => {
+    if (usePublicServiceTwoTier) {
+      if (publicServiceMajor === '教員採用試験') {
+        return selectedTabQuestions.filter((q) => {
+          const t = certQuestionText(q);
+          if (!textMatchesPublicServiceMajor(t, '教員採用試験')) return false;
+          if (!textMatchesField(t, '教員採用試験', publicServiceField)) return false;
+          if (publicServiceField === '教養試験') return true;
+          if (!textMatchesTeacherSpecialty(t, teacherSpecialty)) return false;
+          if (teacherSpecialty === '中学、高校') {
+            return textMatchesTeacherSubject(t, teacherJhsSubject);
+          }
+          return true;
+        });
+      }
+      return selectedTabQuestions.filter((q) =>
+        matchPublicServiceSelection(q, publicServiceMajor, publicServiceField)
+      );
+    }
     if (useHsLiberalTwoTier) {
       return selectedTabQuestions.filter((q) =>
         matchHsLiberalSelection(q, hsLiberalSubject, hsLiberalField)
@@ -1945,8 +2565,11 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     }
     return selectedTabQuestions.filter((q) => matchDetailedSubject(q, selectedDetailSubject));
   }, [
+    usePublicServiceTwoTier,
     useHsLiberalTwoTier,
     selectedTabQuestions,
+    publicServiceMajor,
+    publicServiceField,
     hsLiberalSubject,
     hsLiberalField,
     selectedDetailSubject,
@@ -2203,6 +2826,10 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
           setSelectedDetailSubject('すべて');
           setHsLiberalSubject('すべて');
           setHsLiberalField('すべて');
+          setPublicServiceMajor(DEFAULT_PUBLIC_SERVICE_MAJOR);
+          setPublicServiceField(defaultPublicServiceField(DEFAULT_PUBLIC_SERVICE_MAJOR));
+          setTeacherSpecialty(TEACHER_SPECIALTY_ORDER[0]);
+          setTeacherJhsSubject(TEACHER_JHS_SUBJECTS[0]);
         }}
         detailedSubjects={detailedSubjects}
         detailSubjectCounts={detailSubjectCounts}
@@ -2216,11 +2843,47 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
           setHsLiberalField('すべて');
         }}
         onChangeHsLiberalField={setHsLiberalField}
+        usePublicServiceTwoTier={usePublicServiceTwoTier}
+        publicServiceMajor={publicServiceMajor}
+        publicServiceField={publicServiceField}
+        publicServiceMajorCounts={publicServiceMajorCounts}
+        publicServiceFieldCounts={publicServiceFieldCounts}
+        onChangePublicServiceMajor={(v) => {
+          setPublicServiceMajor(v);
+          setPublicServiceField(defaultPublicServiceField(v as PublicServiceMajor));
+          // 教員採用試験のときだけ下位階層を初期化
+          if (v === '教員採用試験') {
+            setTeacherSpecialty(TEACHER_SPECIALTY_ORDER[0]);
+            setTeacherJhsSubject(TEACHER_JHS_SUBJECTS[0]);
+          }
+        }}
+        onChangePublicServiceField={(v) => {
+          setPublicServiceField(v);
+          if (publicServiceMajor === '教員採用試験') {
+            setTeacherSpecialty(TEACHER_SPECIALTY_ORDER[0]);
+            setTeacherJhsSubject(TEACHER_JHS_SUBJECTS[0]);
+          }
+        }}
+        teacherSpecialty={teacherSpecialty}
+        teacherJhsSubject={teacherJhsSubject}
+        teacherSpecialtyCounts={teacherSpecialtyCounts}
+        teacherJhsSubjectCounts={teacherJhsSubjectCounts}
+        onChangeTeacherSpecialty={(v) => {
+          setTeacherSpecialty(v);
+          if (v === '中学、高校') {
+            setTeacherJhsSubject(TEACHER_JHS_SUBJECTS[0]);
+          }
+        }}
+        onChangeTeacherJhsSubject={setTeacherJhsSubject}
         onChangeTab={(label) => {
           setSelectedTabLabel(label);
           setSelectedDetailSubject('すべて');
           setHsLiberalSubject('すべて');
           setHsLiberalField('すべて');
+          setPublicServiceMajor(DEFAULT_PUBLIC_SERVICE_MAJOR);
+          setPublicServiceField(defaultPublicServiceField(DEFAULT_PUBLIC_SERVICE_MAJOR));
+          setTeacherSpecialty(TEACHER_SPECIALTY_ORDER[0]);
+          setTeacherJhsSubject(TEACHER_JHS_SUBJECTS[0]);
         }}
         onChangeDetailSubject={setSelectedDetailSubject}
         lectureQuizMode={lectureQuizMode}

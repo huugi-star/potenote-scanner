@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -40,6 +40,7 @@ type AcademySubview =
   | 'mine'
   | 'create_seed_list'   // ① テーマ選択
   | 'create_keyword'     // ② キーワード選択
+  | 'create_keyword_manual' // ②-別: キーワード手入力（オリジナル）
   | 'create_category'    // ③ カテゴリ選択
   | 'create_detail'      // ④ 詳細入力（★新規追加）
   | 'create_editor'      // ⑤ 編集
@@ -47,6 +48,7 @@ type AcademySubview =
 
 interface AcademyTheme {
   id: string;
+  title?: string;
   summary: string;
   keywords: string[];
 }
@@ -108,7 +110,7 @@ const academyScreenRootBg: CSSProperties = {
 
 const academyBackgroundImageUrl = '/images/backgrounds/library.png';
 
-const AcademyScreenBackdrop = () => (
+const AcademyScreenBackdrop = ({ contrast = 'normal' }: { contrast?: 'normal' | 'high' }) => (
   <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
     <div
       className="absolute -inset-4 bg-cover bg-center"
@@ -125,6 +127,16 @@ const AcademyScreenBackdrop = () => (
           'linear-gradient(to bottom, rgba(255,255,255,0.38) 0%, rgba(248,245,252,0.38) 40%, rgba(242,238,250,0.38) 100%)',
       }}
     />
+    {/* 作問フローは文字量が多いのでコントラストを強める */}
+    {contrast === 'high' && (
+      <div
+        className="absolute inset-0 z-[2]"
+        style={{
+          background:
+            'linear-gradient(to bottom, rgba(3,7,18,0.22) 0%, rgba(3,7,18,0.10) 35%, rgba(3,7,18,0.22) 100%)',
+        }}
+      />
+    )}
   </div>
 );
 
@@ -193,6 +205,7 @@ const buildThemesFromHistory = (historyList: QuizHistory[]): AcademyTheme[] => {
     })
     .map((h) => ({
       id: h.id,
+      title: String(h.quiz?.title ?? '').trim() || undefined,
       summary: String(h.quiz.summary ?? '').trim(),
       keywords: (Array.isArray(h.quiz.keywords) ? h.quiz.keywords : []).filter(Boolean),
     }));
@@ -270,6 +283,93 @@ const generateDraftFromKeywords = (params: {
     answerIndex,
     explanation: `カテゴリ「${bigCategory} / ${subCategory}」のキーワード（${selectedKeywords.join(' / ')}）をもとに作成しました。公開前に内容を確認・編集してください。`,
   };
+};
+
+// ============================================================
+// 科目・作品名の履歴（著名候補 + 作問で入力したカスタム）
+// ============================================================
+
+const SUBJECT_SUGGESTION_STORAGE_KEY = 'academy-subject-suggestion-history-v1';
+const MAX_CUSTOM_SUBJECT_HISTORY = 40;
+const SUBJECT_CHIPS_DISPLAY_LIMIT = 10;
+
+type SubjectHistoryEntry = { text: string; usedAt: number };
+
+const normalizeSubjectKey = (text: string): string =>
+  String(text ?? '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
+const makeSubjectScopeKey = (
+  big: string | null,
+  track: string | null,
+  sub: string | null
+): string | null => {
+  if (!big || !sub) return null;
+  return `${big}||${track ?? ''}||${sub}`;
+};
+
+const readRawSubjectStore = (): Record<string, SubjectHistoryEntry[]> => {
+  try {
+    if (typeof window === 'undefined') return {};
+    const raw = localStorage.getItem(SUBJECT_SUGGESTION_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed as Record<string, SubjectHistoryEntry[]>;
+  } catch {
+    return {};
+  }
+};
+
+const readSubjectHistory = (key: string | null): SubjectHistoryEntry[] => {
+  if (!key) return [];
+  const list = readRawSubjectStore()[key];
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter(
+      (e) =>
+        e && typeof (e as SubjectHistoryEntry).text === 'string' && typeof (e as SubjectHistoryEntry).usedAt === 'number'
+    )
+    .map((e) => ({ text: e.text.trim(), usedAt: e.usedAt }))
+    .filter((e) => e.text.length > 0)
+    .sort((a, b) => b.usedAt - a.usedAt);
+};
+
+const writeSubjectHistory = (key: string | null, entries: SubjectHistoryEntry[]) => {
+  if (!key) return;
+  try {
+    if (typeof window === 'undefined') return;
+    const all = readRawSubjectStore();
+    all[key] = entries;
+    localStorage.setItem(SUBJECT_SUGGESTION_STORAGE_KEY, JSON.stringify(all));
+  } catch {
+    /* ignore */
+  }
+};
+
+/** 問題生成で科目・作品を新規入力した場合、カテゴリ別に都度追記（有名枠と重複しなければ先頭＝直近） */
+const recordCustomSubjectAfterGenerate = (
+  key: string | null,
+  inputText: string,
+  famousList: string[]
+) => {
+  if (!key) return;
+  const trimmed = String(inputText ?? '').trim();
+  if (!trimmed) return;
+  const nk = normalizeSubjectKey(trimmed);
+  if (!nk) return;
+  const famousNorm = new Set(famousList.map((f) => normalizeSubjectKey(f)));
+  if (famousNorm.has(nk)) return;
+  const prev = readSubjectHistory(key);
+  const withoutDup = prev.filter((e) => normalizeSubjectKey(e.text) !== nk);
+  const next: SubjectHistoryEntry[] = [
+    { text: trimmed, usedAt: Date.now() },
+    ...withoutDup,
+  ].slice(0, MAX_CUSTOM_SUBJECT_HISTORY);
+  writeSubjectHistory(key, next);
 };
 
 // ============================================================
@@ -385,6 +485,21 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
   const [isDetailOpen, setIsDetailOpen] = useState(false); // ← ここに追加
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<DraftMcq | null>(null);
+  const [manualKeywordsText, setManualKeywordsText] = useState('');
+  const [keywordInputText, setKeywordInputText] = useState('');
+  /** キーワード2個打ち消し: 上限メッセージを連打で重ねない */
+  const keywordLimitToastAtFullRef = useRef(false);
+
+  /** 科目・作品: 作問で入力した履歴（表示は著名候補の後ろ・直近順） */
+  const [customSubjectHistory, setCustomSubjectHistory] = useState<SubjectHistoryEntry[]>([]);
+  const [subjectChipsExpanded, setSubjectChipsExpanded] = useState(false);
+
+  // 編集画面: 解説は「解説を再生成」ボタンのみ（最大3回 / 入力中の自動上書きなし）
+  const [explanationAutoLoading, setExplanationAutoLoading] = useState(false);
+  const [explanationAutoStoppedByUser, setExplanationAutoStoppedByUser] = useState(false);
+  const [explanationAutoCount, setExplanationAutoCount] = useState(0);
+  const explanationAutoCountRef = useRef(0);
+  const explanationAutoInFlightRef = useRef(false);
   /** 作問フロー「テーマ選択」のページ（1始まり）。キーワード画面から戻ったときも維持 */
   const [themeSeedListPage, setThemeSeedListPage] = useState(1);
   /** 「自分の問題」一覧のページ（1始まり） */
@@ -425,6 +540,23 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
     if (mineListTotalPages === 0) return;
     setMineQuestionsPage((p) => Math.min(Math.max(1, p), mineListTotalPages));
   }, [mineListTotalPages]);
+
+  useEffect(() => {
+    if (subview !== 'create_detail') return;
+    const key = makeSubjectScopeKey(selectedBigCategory, selectedExamTrack, selectedSubCategory);
+    if (!key) {
+      setCustomSubjectHistory([]);
+      return;
+    }
+    setCustomSubjectHistory(readSubjectHistory(key));
+    setSubjectChipsExpanded(false);
+  }, [subview, selectedBigCategory, selectedExamTrack, selectedSubCategory]);
+
+  useEffect(() => {
+    if (selectedKeywordsForDraft.length < 2) {
+      keywordLimitToastAtFullRef.current = false;
+    }
+  }, [selectedKeywordsForDraft.length]);
 
   useEffect(() => {
     try {
@@ -484,6 +616,13 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
     setShowPublishModal(false);
     setPublishChecks({ noRepost: false, reviewed: false });
     setThemeSeedListPage(1);
+    setManualKeywordsText('');
+    setKeywordInputText('');
+    setExplanationAutoLoading(false);
+    setExplanationAutoStoppedByUser(false);
+    setExplanationAutoCount(0);
+    explanationAutoCountRef.current = 0;
+    explanationAutoInFlightRef.current = false;
   };
 
   /**
@@ -499,6 +638,80 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
     setShowPublishModal(false);
     setPublishChecks({ noRepost: false, reviewed: false });
     setIsPublishing(false);
+    setManualKeywordsText('');
+    setKeywordInputText('');
+    setExplanationAutoLoading(false);
+    setExplanationAutoStoppedByUser(false);
+    setExplanationAutoCount(0);
+    explanationAutoCountRef.current = 0;
+    explanationAutoInFlightRef.current = false;
+  };
+
+  const handleRegenerateExplanation = useCallback(async () => {
+    if (subview !== 'create_editor') return;
+    if (explanationAutoInFlightRef.current) return;
+    if (explanationAutoCountRef.current >= 3) {
+      addToast('info', '解説の再生成は最大3回です');
+      return;
+    }
+    if (!draft) return;
+    if (!draft.question.trim() || draft.choices.length !== 4 || draft.choices.some((c) => !String(c).trim())) {
+      addToast('info', '問題文と4つの選択肢を入力してから再生成してください');
+      return;
+    }
+
+    explanationAutoInFlightRef.current = true;
+    setExplanationAutoLoading(true);
+    setExplanationAutoStoppedByUser(false);
+    try {
+      const res = await fetch('/api/academy-regenerate-explanation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: draft.question,
+          choices: draft.choices,
+          answerIndex: draft.answerIndex,
+        }),
+      });
+      if (!res.ok) {
+        addToast('error', '解説の再生成に失敗しました');
+        return;
+      }
+      const data = (await res.json()) as { explanation?: string };
+      const next = String(data.explanation ?? '').trim();
+      if (!next) {
+        addToast('error', '解説を取得できませんでした');
+        return;
+      }
+      explanationAutoCountRef.current += 1;
+      setExplanationAutoCount(explanationAutoCountRef.current);
+      setDraft((prevDraft) => (prevDraft ? { ...prevDraft, explanation: next } : prevDraft));
+      addToast('success', '解説を更新しました');
+    } catch {
+      addToast('error', '解説の再生成に失敗しました');
+    } finally {
+      explanationAutoInFlightRef.current = false;
+      setExplanationAutoLoading(false);
+    }
+  }, [addToast, subview, draft]);
+
+  const parseManualKeywords = (raw: string): string[] => {
+    const tokens = String(raw ?? '')
+      .normalize('NFKC')
+      .split(/[,\n\t ]+/g)
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .map((v) => v.replace(/^#+/, '')) // '#英語' などを許容
+      .filter(Boolean);
+    return Array.from(new Set(tokens)).slice(0, 2);
+  };
+
+  const normalizeKeyword = (value: string): string => {
+    return String(value ?? '')
+      .normalize('NFKC')
+      .trim()
+      .replace(/^#+/, '')
+      .slice(0, 24);
   };
 
   const handleSelectTheme = (theme: AcademyTheme) => {
@@ -509,22 +722,57 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
     setSubview('create_keyword');
   };
 
+  const handleSelectOriginal = () => {
+    setSelectedThemeId('original');
+    setAllExtractedKeywords([]);
+    setSelectedKeywordsForDraft([]);
+    setManualKeywordsText('');
+    setSubview('create_keyword_manual');
+  };
+
   const toggleKeyword = (keyword: string) => {
     setSelectedKeywordsForDraft((prev) => {
       if (prev.includes(keyword)) {
         return prev.filter((k) => k !== keyword);
       }
       if (prev.length >= 2) {
-        addToast('info', 'キーワードは2個までです');
+        if (!keywordLimitToastAtFullRef.current) {
+          keywordLimitToastAtFullRef.current = true;
+          addToast('info', 'キーワードは2個までです');
+        }
         return prev;
       }
       return [...prev, keyword];
     });
   };
 
+  const addManualKeywordToSelection = (raw: string) => {
+    const kw = normalizeKeyword(raw);
+    if (!kw) return;
+    if (isLikelyPhrase(kw)) {
+      addToast('info', '長いフレーズはキーワードに向きません（短い語句を入力してください）');
+      return;
+    }
+    setSelectedKeywordsForDraft((prev) => {
+      if (prev.includes(kw)) return prev;
+      if (prev.length >= 2) {
+        if (!keywordLimitToastAtFullRef.current) {
+          keywordLimitToastAtFullRef.current = true;
+          addToast('info', 'キーワードは2個までです');
+        }
+        return prev;
+      }
+      return [...prev, kw];
+    });
+    setKeywordInputText('');
+  };
+
   const handleGenerate = async () => {
     if (!selectedBigCategory || !selectedSubCategory || selectedKeywordsForDraft.length === 0) return;
     setIsGenerating(true);
+
+    const subjectScopeKey = makeSubjectScopeKey(selectedBigCategory, selectedExamTrack, selectedSubCategory);
+    const famousSubjectChips = SUBCATEGORY_SUGGESTIONS[selectedSubCategory ?? ''] ?? [];
 
     try {
       const res = await fetch('/api/academy-generate', {
@@ -544,6 +792,7 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
       };
 
       if (res.ok && data.draft) {
+        recordCustomSubjectAfterGenerate(subjectScopeKey, subjectText, famousSubjectChips);
         setDraft(data.draft);
         setIsGenerating(false);
         setSubview('create_editor');
@@ -562,6 +811,7 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
       detailText: [subjectText.trim(), detailText.trim()].filter(Boolean).join('\n'),
       poolKeywords: allExtractedKeywords.map((k) => k.label),
     });
+    recordCustomSubjectAfterGenerate(subjectScopeKey, subjectText, famousSubjectChips);
     setDraft(next);
     setIsGenerating(false);
     setSubview('create_editor');
@@ -820,7 +1070,7 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
 
     return (
       <div className="relative min-h-screen p-4 pb-24" style={academyScreenRootBg}>
-        <AcademyScreenBackdrop />
+        <AcademyScreenBackdrop contrast="high" />
         <div className="relative z-10 max-w-md mx-auto pt-6">
           <CardHeader title="問題を作る：テーマ選択" onBack={() => { resetCreationState(); setSubview('top'); }} />
 
@@ -830,6 +1080,19 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
               {CREATION_POLICY.quickNotice}
             </p>
           </div>
+
+          <motion.button
+            key="original"
+            type="button"
+            onClick={handleSelectOriginal}
+            className="w-full text-left rounded-2xl border border-emerald-500/35 bg-emerald-900/20 p-4 mb-3"
+            whileTap={{ scale: 0.98 }}
+          >
+            <p className="text-white font-extrabold mb-1">オリジナル</p>
+            <p className="text-emerald-200/80 text-xs leading-relaxed">
+              キーワードを1〜2個手入力して、ゼロから作問します
+            </p>
+          </motion.button>
 
           {themes.length === 0 ? (
             <div className="rounded-2xl border border-gray-700 bg-gray-800/60 p-8 text-center">
@@ -846,7 +1109,9 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
                     className="w-full text-left rounded-2xl border border-gray-700 bg-gray-800/60 p-4"
                     whileTap={{ scale: 0.98 }}
                   >
-                    <p className="text-white font-semibold mb-2 line-clamp-2">{theme.summary}</p>
+                    <p className="text-white font-semibold mb-2 line-clamp-2">
+                      {theme.title || theme.summary}
+                    </p>
                     <div className="flex flex-wrap gap-1.5">
                       {theme.keywords.slice(0, 5).map((k) => (
                         <span key={k} className="px-2 py-0.5 rounded-full text-[10px] bg-gray-700 text-gray-200">
@@ -911,25 +1176,92 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
     );
   }
 
+  // ②-別: オリジナル（キーワード手入力）
+  if (subview === 'create_keyword_manual') {
+    const parsed = parseManualKeywords(manualKeywordsText);
+    const canProceed = parsed.length >= 1;
+
+    return (
+      <div className="relative min-h-screen p-4 pb-24" style={academyScreenRootBg}>
+        <AcademyScreenBackdrop contrast="high" />
+        <div className="relative z-10 max-w-md mx-auto pt-6">
+          <CardHeader title="問題を作る：キーワード入力" onBack={() => setSubview('create_seed_list')} />
+
+          <div className="rounded-xl border border-emerald-500/25 bg-emerald-900/15 p-3 mb-4">
+            <p className="text-emerald-100 text-xs leading-relaxed">
+              キーワードを <span className="font-bold">1〜2個</span> 入力してください（スペース/改行/カンマ区切り）。
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-gray-700 bg-gray-800/60 p-4 mb-4">
+            <label className="block text-gray-300 text-sm font-semibold mb-2">
+              キーワード
+            </label>
+            <input
+              value={manualKeywordsText}
+              onChange={(e) => setManualKeywordsText(e.target.value)}
+              placeholder="例: 英語 TOEIC / 江戸時代"
+              className="w-full rounded-lg bg-gray-900 border border-gray-600 text-white text-sm p-3 outline-none focus:border-emerald-500 placeholder:text-gray-600"
+            />
+            <div className="mt-2 flex flex-wrap gap-2">
+              {parsed.length === 0 ? (
+                <span className="text-xs text-gray-500">まだ入力されていません</span>
+              ) : (
+                parsed.map((k) => (
+                  <span
+                    key={k}
+                    className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-xs text-emerald-100"
+                  >
+                    #{k}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+
+          <motion.button
+            onClick={() => {
+              const kws = parseManualKeywords(manualKeywordsText);
+              if (kws.length === 0) return;
+              setSelectedKeywordsForDraft(kws);
+              setSubview('create_category');
+            }}
+            disabled={!canProceed}
+            className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold"
+            whileTap={{ scale: 0.98 }}
+          >
+            {parsed.length > 0 ? `${parsed.length}個入力 → カテゴリを選ぶ` : 'キーワードを入力してください'}
+          </motion.button>
+        </div>
+      </div>
+    );
+  }
+
   // ② キーワード選択
   if (subview === 'create_keyword') {
     return (
       <div className="relative min-h-screen p-4 pb-24" style={academyScreenRootBg}>
-        <AcademyScreenBackdrop />
+        <AcademyScreenBackdrop contrast="high" />
         <div className="relative z-10 max-w-md mx-auto pt-6">
           <CardHeader title="問題を作る：キーワード選択" onBack={() => setSubview('create_seed_list')} />
 
           {selectedTheme && (
             <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-3 mb-4">
-              <p className="text-white text-sm font-semibold line-clamp-1">{selectedTheme.summary}</p>
+              <p className="text-white text-sm font-semibold line-clamp-1">
+                {selectedTheme.title || selectedTheme.summary}
+              </p>
             </div>
           )}
 
-          <p className="text-gray-300 text-sm mb-3">使いたいキーワードを1〜2個選んでください</p>
+          <div className="rounded-2xl border border-white/12 bg-slate-950/45 backdrop-blur-sm px-4 py-3 mb-4 shadow-lg shadow-black/25">
+            <p className="text-slate-50 text-sm font-semibold leading-relaxed drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]">
+              使いたいキーワードを1〜2個選んでください
+            </p>
+          </div>
 
           <div className="flex flex-wrap gap-2 mb-6">
             {allExtractedKeywords.length === 0 && (
-              <p className="text-gray-500 text-sm">キーワード候補がありません</p>
+              <p className="text-slate-200/90 text-sm">キーワード候補がありません</p>
             )}
             {allExtractedKeywords.map((kw) => {
               const picked = selectedKeywordsForDraft.includes(kw.label);
@@ -948,6 +1280,35 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
                 </motion.button>
               );
             })}
+          </div>
+
+          {/* 手入力（最大2つ） */}
+          <div className="rounded-2xl border border-gray-700 bg-gray-800/60 p-4 mb-4">
+            <p className="text-slate-100 text-sm font-semibold mb-2">キーワードを手入力（上記にない場合）</p>
+            <div className="flex gap-2">
+              <input
+                value={keywordInputText}
+                onChange={(e) => setKeywordInputText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  addManualKeywordToSelection(keywordInputText);
+                }}
+                placeholder="例: 英語 / 江戸 / 関数 など"
+                className="flex-1 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm p-3 outline-none focus:border-indigo-500 placeholder:text-gray-600"
+              />
+              <motion.button
+                type="button"
+                onClick={() => addManualKeywordToSelection(keywordInputText)}
+                className="shrink-0 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold"
+                whileTap={{ scale: 0.98 }}
+              >
+                追加
+              </motion.button>
+            </div>
+            <p className="text-xs text-slate-200/90 mt-2 leading-relaxed">
+              手入力キーワードも上の候補と同じように選択されます（最大2個まで）。
+            </p>
           </div>
 
           <motion.button
@@ -996,6 +1357,7 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
   if (subview === 'create_category') {
     return (
       <div className="relative min-h-screen overflow-x-hidden p-4 pb-24" style={academyScreenRootBg}>
+        <AcademyScreenBackdrop contrast="high" />
 
         <div className="relative z-10 max-w-md mx-auto pt-6">
           <CardHeader
@@ -1109,11 +1471,28 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
 
 // ④ 科目・作品を選ぶ
 if (subview === 'create_detail') {
-  const suggestions = SUBCATEGORY_SUGGESTIONS[selectedSubCategory ?? ''] ?? [];
+  const famous = SUBCATEGORY_SUGGESTIONS[selectedSubCategory ?? ''] ?? [];
+  const famousNorm = new Set(famous.map((f) => normalizeSubjectKey(f)));
+  const seenCustom = new Set<string>();
+  const customOrdered = customSubjectHistory.filter((e) => {
+    if (!e.text.trim()) return false;
+    const nk = normalizeSubjectKey(e.text);
+    if (famousNorm.has(nk)) return false;
+    if (seenCustom.has(nk)) return false;
+    seenCustom.add(nk);
+    return true;
+  });
+  const allSubjectChips = [...famous, ...customOrdered.map((e) => e.text)];
+  const overChipLimit = allSubjectChips.length > SUBJECT_CHIPS_DISPLAY_LIMIT;
+  const visibleSubjectChips =
+    !overChipLimit || subjectChipsExpanded
+      ? allSubjectChips
+      : allSubjectChips.slice(0, SUBJECT_CHIPS_DISPLAY_LIMIT);
+  const hiddenChipCount = overChipLimit ? allSubjectChips.length - visibleSubjectChips.length : 0;
 
   return (
     <div className="relative min-h-screen p-4 pb-24" style={academyScreenRootBg}>
-      <AcademyScreenBackdrop />
+      <AcademyScreenBackdrop contrast="high" />
       <div className="relative z-10 max-w-md mx-auto pt-6">
         <CardHeader title="問題を作る：科目・作品を選ぶ" onBack={() => setSubview('create_category')} />
 
@@ -1140,26 +1519,39 @@ if (subview === 'create_detail') {
             <span className="ml-1 text-gray-500 font-normal text-xs">（任意）</span>
           </label>
 
-          {/* 候補チップ */}
-          {suggestions.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {suggestions.map((s) => {
-                const selected = subjectText === s;
-                return (
-                  <motion.button
-                    key={s}
-                    onClick={() => setSubjectText(selected ? '' : s)}
-                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                      selected
-                        ? 'bg-indigo-500 border-indigo-400 text-white'
-                        : 'bg-gray-700 border-gray-600 text-gray-300 hover:border-gray-400'
-                    }`}
-                    whileTap={{ scale: 0.96 }}
-                  >
-                    {s}
-                  </motion.button>
-                );
-              })}
+          {/* 候補チップ：有名枠（固定順）＋作問で入力したもの（新しいほど上に近い） */}
+          {allSubjectChips.length > 0 && (
+            <div className="mb-3">
+              <div className="flex flex-wrap gap-2">
+                {visibleSubjectChips.map((s, idx) => {
+                  const selected = subjectText === s;
+                  return (
+                    <motion.button
+                      key={`${idx}-${s}`}
+                      onClick={() => setSubjectText(selected ? '' : s)}
+                      className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                        selected
+                          ? 'bg-indigo-500 border-indigo-400 text-white'
+                          : 'bg-gray-700 border-gray-600 text-gray-300 hover:border-gray-400'
+                      }`}
+                      whileTap={{ scale: 0.96 }}
+                    >
+                      {s}
+                    </motion.button>
+                  );
+                })}
+              </div>
+              {overChipLimit && (
+                <button
+                  type="button"
+                  onClick={() => setSubjectChipsExpanded((p) => !p)}
+                  className="mt-2 text-xs text-indigo-300 hover:text-indigo-200 w-full text-left"
+                >
+                  {subjectChipsExpanded
+                    ? '候補を折りたたむ'
+                    : `他${hiddenChipCount}件を表示（全${allSubjectChips.length}件）`}
+                </button>
+              )}
             </div>
           )}
 
@@ -1168,8 +1560,8 @@ if (subview === 'create_detail') {
             value={subjectText}
             onChange={(e) => setSubjectText(e.target.value)}
             placeholder={
-              suggestions.length > 0
-                ? `上から選ぶか直接入力（例: ${suggestions[0]}）`
+              allSubjectChips.length > 0
+                ? `上から選ぶか直接入力（例: ${allSubjectChips[0]}）`
                 : '例: ワンピース、英検2級、江戸時代 など'
             }
             className="w-full rounded-lg bg-gray-900 border border-gray-600 text-white text-sm p-3 outline-none focus:border-indigo-500 placeholder:text-gray-600"
@@ -1213,9 +1605,10 @@ if (subview === 'create_detail') {
 
   // ⑤ 編集
   if (subview === 'create_editor') {
+    const remainingAuto = Math.max(0, 3 - explanationAutoCount);
     return (
       <div className="relative min-h-screen p-4 pb-24" style={academyScreenRootBg}>
-        <AcademyScreenBackdrop />
+        <AcademyScreenBackdrop contrast="high" />
         <div className="relative z-10 max-w-md mx-auto pt-6">
           <CardHeader title="問題を作る：編集" onBack={() => setSubview('create_detail')} />
 
@@ -1230,10 +1623,21 @@ if (subview === 'create_detail') {
           ) : (
             <>
               <div className="rounded-2xl border border-gray-700 bg-gray-800/60 p-4 space-y-4">
+                <div className="rounded-xl border border-indigo-500/25 bg-indigo-950/20 px-3 py-2">
+                  <p className="text-indigo-100 text-xs leading-relaxed">
+                    下の「解説を再生成」で、現在の問題文・選択肢・正解に合わせて解説を作り直せます（最大3回
+                    {remainingAuto > 0 ? ` / 残り ${remainingAuto} 回` : ' / 残り0回'}）。解答の文字を打っている最中に解説が勝手に変わることはありません。
+                    {explanationAutoStoppedByUser
+                      ? ' 解説欄を手で書き換えたままでも、再生成するとその内容は上書きされます。'
+                      : ''}
+                  </p>
+                </div>
 
                 {/* 問題文 */}
                 <div>
-                  <p className="text-gray-400 text-xs mb-1">問題文</p>
+                  <p className="text-slate-100 text-xs font-semibold mb-1.5 drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]">
+                    問題文
+                  </p>
                   <textarea
                     value={draft.question}
                     onChange={(e) => setDraft({ ...draft, question: e.target.value })}
@@ -1243,7 +1647,9 @@ if (subview === 'create_detail') {
 
                 {/* 選択肢 */}
                 <div>
-                  <p className="text-gray-400 text-xs mb-2">選択肢（正解をラジオで選択）</p>
+                  <p className="text-slate-100 text-xs font-semibold mb-2 drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]">
+                    選択肢（正解をラジオで選択）
+                  </p>
                   <div className="space-y-2">
                     {draft.choices.map((choice, idx) => (
                       <div key={idx} className="flex items-center gap-2">
@@ -1265,14 +1671,46 @@ if (subview === 'create_detail') {
                       </div>
                     ))}
                   </div>
+                  <div className="mt-2 rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2 backdrop-blur-sm">
+                    <p className="text-xs text-slate-200/95 leading-relaxed drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]">
+                      正解のラジオを変えたり、正解行の表現を直したあと、「解説を再生成」で解説を合わせてください。入力中に解説が勝手に変わることはありません。
+                    </p>
+                  </div>
                 </div>
 
                 {/* 解説 */}
                 <div>
-                  <p className="text-gray-400 text-xs mb-1">解説</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                    <p className="text-slate-100 text-xs font-semibold drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]">解説</p>
+                    <motion.button
+                      type="button"
+                      onClick={() => void handleRegenerateExplanation()}
+                      disabled={explanationAutoLoading || remainingAuto === 0}
+                      className="shrink-0 rounded-lg border border-indigo-400/50 bg-indigo-600/80 hover:bg-indigo-500/90 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 text-xs font-bold text-white"
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      {explanationAutoLoading ? '再生成中…' : '解説を再生成'}
+                    </motion.button>
+                  </div>
+                  <div className="mb-2 rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2 backdrop-blur-sm">
+                    <p className="text-[11px] text-slate-200/90 leading-relaxed">
+                      下の枠の解説を手で直したあとも、「解説を再生成」で上書きできます。1回使うたび残り回数が減ります。
+                    </p>
+                  </div>
+                  {explanationAutoLoading && (
+                    <div className="mb-2 text-xs text-indigo-200 flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 rounded-full border-2 border-indigo-200 border-t-transparent animate-spin" />
+                      ことばを解析中...
+                    </div>
+                  )}
                   <textarea
                     value={draft.explanation}
-                    onChange={(e) => setDraft({ ...draft, explanation: e.target.value })}
+                    onChange={(e) => {
+                      if (!explanationAutoStoppedByUser) {
+                        setExplanationAutoStoppedByUser(true);
+                      }
+                      setDraft({ ...draft, explanation: e.target.value });
+                    }}
                     className="w-full rounded-lg bg-gray-900 border border-gray-600 text-white text-sm p-3 min-h-[80px] outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -1368,7 +1806,7 @@ if (subview === 'create_detail') {
   if (subview === 'create_done') {
     return (
       <div className="relative min-h-screen p-4 pb-24" style={academyScreenRootBg}>
-        <AcademyScreenBackdrop />
+        <AcademyScreenBackdrop contrast="high" />
         <div className="relative z-10 max-w-md mx-auto pt-6">
           <CardHeader
             title="問題を作る：完了"
