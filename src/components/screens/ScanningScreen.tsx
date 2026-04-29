@@ -105,6 +105,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const progressTimerRef = useRef<number | null>(null);
 
   const canScan = isVIP || remainingScans > 0;
@@ -705,6 +706,15 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
+                      className="hidden"
+                      onChange={handleInputChange}
+                      disabled={!canUpload}
+                    />
+                    {/* カメラ起動用（スマホで撮影しやすい） */}
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
                       capture="environment"
                       className="hidden"
                       onChange={handleInputChange}
@@ -720,8 +730,24 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                           {isQuizMode ? '写真を撮って、冒険開始' : '翻訳用の写真を撮る'}
                         </p>
                         <p className="text-gray-400 text-sm">
-                          タップして撮影（または選択）、またはドラッグ＆ドロップ
+                          タップして選択、またはドラッグ＆ドロップ
                         </p>
+
+                        {/* スマホで撮影したい人向け */}
+                        <div className="mt-4 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!canUpload) return;
+                              vibrateLight();
+                              cameraInputRef.current?.click();
+                            }}
+                            className="px-4 py-2 rounded-xl bg-cyan-600/20 border border-cyan-500/30 text-cyan-200 text-sm font-bold hover:bg-cyan-600/30"
+                          >
+                            写真を撮る
+                          </button>
+                        </div>
                         
                         {/* 注意書き */}
                         <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">

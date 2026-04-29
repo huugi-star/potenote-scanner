@@ -146,6 +146,7 @@ const AdventureMenuScreen = ({
   const setGeneratedQuiz = useGameStore((s) => s.setGeneratedQuiz);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [quickScanState, setQuickScanState] = useState<'idle' | 'processing' | 'error'>('idle');
   const [quickScanPreview, setQuickScanPreview] = useState<string | null>(null);
   const [quickScanError, setQuickScanError] = useState<string>('');
@@ -362,7 +363,7 @@ const AdventureMenuScreen = ({
             ) : (
               <button
                 type="button"
-                onClick={() => { vibrateLight(); fileInputRef.current?.click(); }}
+                onClick={() => { vibrateLight(); cameraInputRef.current?.click(); }}
                 className="shrink-0 px-3 py-2 rounded-xl bg-cyan-600/20 border border-cyan-500/30 text-cyan-200 text-xs font-bold hover:bg-cyan-600/30"
               >
                 <span className="inline-flex items-center gap-1">
@@ -391,13 +392,26 @@ const AdventureMenuScreen = ({
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
                 handleQuickScanFile(file);
                 // 同じファイルを連続で選べるように
+                e.currentTarget.value = '';
+              }}
+              disabled={quickScanState === 'processing'}
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                handleQuickScanFile(file);
                 e.currentTarget.value = '';
               }}
               disabled={quickScanState === 'processing'}
