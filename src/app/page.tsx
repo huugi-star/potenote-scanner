@@ -147,6 +147,7 @@ const AdventureMenuScreen = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const ignoreQuickFilePickerUntilRef = useRef(0);
   const [quickScanState, setQuickScanState] = useState<'idle' | 'processing' | 'error'>('idle');
   const [quickScanPreview, setQuickScanPreview] = useState<string | null>(null);
   const [quickScanError, setQuickScanError] = useState<string>('');
@@ -370,10 +371,12 @@ const AdventureMenuScreen = ({
                 onPointerDown={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  ignoreQuickFilePickerUntilRef.current = Date.now() + 1000;
                 }}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  ignoreQuickFilePickerUntilRef.current = Date.now() + 1000;
                   vibrateLight();
                   cameraInputRef.current?.click();
                 }}
@@ -391,6 +394,7 @@ const AdventureMenuScreen = ({
             onDrop={handleQuickDrop}
             onDragOver={(e) => e.preventDefault()}
             onClick={() => {
+              if (Date.now() < ignoreQuickFilePickerUntilRef.current) return;
               if (quickScanState === 'processing') return;
               vibrateLight();
               openQuickFilePicker();
