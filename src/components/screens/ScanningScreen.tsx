@@ -105,8 +105,18 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const progressTimerRef = useRef<number | null>(null);
+
+  const openImagePicker = useCallback((mode: 'file' | 'camera') => {
+    const el = fileInputRef.current;
+    if (!el) return;
+    if (mode === 'camera') {
+      el.setAttribute('capture', 'environment');
+    } else {
+      el.removeAttribute('capture');
+    }
+    el.click();
+  }, []);
 
   const canScan = isVIP || remainingScans > 0;
   const isQuizMode = scanType === 'quiz';
@@ -698,7 +708,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                     onClick={() => {
                       if (canUpload) {
                         vibrateLight();
-                        fileInputRef.current?.click();
+                        openImagePicker('file');
                       }
                     }}
                   >
@@ -706,16 +716,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
-                      className="hidden"
-                      onChange={handleInputChange}
-                      disabled={!canUpload}
-                    />
-                    {/* カメラ起動用（スマホで撮影しやすい） */}
-                    <input
-                      ref={cameraInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
                       className="hidden"
                       onChange={handleInputChange}
                       disabled={!canUpload}
@@ -741,7 +741,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                               e.stopPropagation();
                               if (!canUpload) return;
                               vibrateLight();
-                              cameraInputRef.current?.click();
+                              openImagePicker('camera');
                             }}
                             className="px-4 py-2 rounded-xl bg-cyan-600/20 border border-cyan-500/30 text-cyan-200 text-sm font-bold hover:bg-cyan-600/30"
                           >
