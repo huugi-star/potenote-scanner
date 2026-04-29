@@ -105,30 +105,12 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraVideoRef = useRef<HTMLVideoElement>(null);
-  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const progressTimerRef = useRef<number | null>(null);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [cameraError, setCameraError] = useState<string>('');
 
   const openImagePicker = useCallback(() => {
-    const el = fileInputRef.current;
-    if (!el) return;
-    el.removeAttribute('capture');
-    el.click();
+    fileInputRef.current?.click();
   }, []);
-
-  const stopCameraStream = useCallback(() => {
-    if (cameraStreamRef.current) {
-      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
-      cameraStreamRef.current = null;
-    }
-  }, []);
-
-  const closeCamera = useCallback(() => {
-    stopCameraStream();
-    setIsCameraOpen(false);
-  }, [stopCameraStream]);
 
   const canScan = isVIP || remainingScans > 0;
   const isQuizMode = scanType === 'quiz';
@@ -138,32 +120,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
   const usedToday = lastScanDate === today ? dailyScanCount : 0;
   const freeRemaining = Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - usedToday);
   const bonusRemaining = Math.max(0, bonusScanBalance ?? 0);
-
-  const handleOpenCamera = useCallback(async () => {
-    if (!canUpload || scanState === 'processing') return;
-    vibrateLight();
-    setCameraError('');
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError('この端末ではカメラ撮影に対応していません');
-      addToast('error', 'この端末ではカメラ撮影に対応していません');
-      return;
-    }
-
-    try {
-      stopCameraStream();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      });
-      cameraStreamRef.current = stream;
-      setIsCameraOpen(true);
-    } catch (error) {
-      console.error('Camera open error:', error);
-      setCameraError('カメラを起動できませんでした。権限を確認してください。');
-      addToast('error', 'カメラを起動できませんでした');
-    }
-  }, [addToast, canUpload, scanState, stopCameraStream]);
 
   const displayProgress = Math.min(100, Math.max(0, Math.round(progress)));
   const fallbackProgressLabel = scanState === 'uploading'
@@ -204,20 +160,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
   useEffect(() => {
     return () => {
       stopProgressTicker();
-      stopCameraStream();
     };
-  }, [stopProgressTicker, stopCameraStream]);
-
-  useEffect(() => {
-    if (!isCameraOpen) return;
-    const video = cameraVideoRef.current;
-    const stream = cameraStreamRef.current;
-    if (!video || !stream) return;
-    video.srcObject = stream;
-    void video.play().catch(() => {
-      setCameraError('カメラ映像を再生できませんでした');
-    });
-  }, [isCameraOpen]);
+  }, [stopProgressTicker]);
 
   // ページ更新後にストアから復元されたクイズがある場合は、ready状態にする
   useEffect(() => {
@@ -518,37 +462,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
     }
   }, [checkScanLimit, incrementScanCount, addToast, translationMode, scanType, onTranslationReady, saveQuizHistory, registerQuizBatchToWordDex, setGeneratedQuiz, setAspAdRecommendation, onQuizReady, startProgressTicker, stopProgressTicker]);
 
-  const handleCapturePhoto = useCallback(async () => {
-    const video = cameraVideoRef.current;
-    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
-      addToast('error', 'カメラ映像を取得できませんでした');
-      return;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      addToast('error', '撮影に失敗しました');
-      return;
-    }
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.92);
-    });
-
-    if (!blob) {
-      addToast('error', '撮影に失敗しました');
-      return;
-    }
-
-    closeCamera();
-    const file = new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
-    await handleFileSelect(file);
-  }, [addToast, closeCamera, handleFileSelect]);
-
   // ファイル入力変更
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -801,6 +714,15 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                       onChange={handleInputChange}
                       disabled={!canUpload}
                     />
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handleInputChange}
+                      disabled={!canUpload}
+                    />
 
                     {canUpload ? (
                       <>
@@ -822,7 +744,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                               e.stopPropagation();
                               if (!canUpload) return;
                               vibrateLight();
-                              void handleOpenCamera();
+                              cameraInputRef.current?.click();
                             }}
                             className="px-4 py-2 rounded-xl bg-cyan-600/20 border border-cyan-500/30 text-cyan-200 text-sm font-bold hover:bg-cyan-600/30"
                           >
@@ -1094,55 +1016,6 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
       </div>
       
       {/* ASP広告モーダル */}
-      <AnimatePresence>
-        {isCameraOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[70] bg-black/90 flex flex-col p-4"
-          >
-            <div className="max-w-md w-full mx-auto h-full flex flex-col">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-white font-bold">カメラで撮影</h2>
-                <button
-                  type="button"
-                  onClick={closeCamera}
-                  className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-sm"
-                >
-                  閉じる
-                </button>
-              </div>
-
-              <div className="flex-1 rounded-2xl overflow-hidden border border-white/20 bg-black">
-                <video ref={cameraVideoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
-              </div>
-
-              {cameraError && (
-                <p className="mt-3 text-sm text-red-300">{cameraError}</p>
-              )}
-
-              <div className="mt-4 flex items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={closeCamera}
-                  className="px-4 py-2 rounded-xl bg-gray-700 text-gray-200 font-semibold"
-                >
-                  キャンセル
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleCapturePhoto(); }}
-                  className="px-5 py-2 rounded-xl bg-cyan-600 text-white font-bold"
-                >
-                  撮影して使う
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <ASPSalesModal
         isOpen={showASPSalesModal}
         onClose={() => setShowASPSalesModal(false)}
