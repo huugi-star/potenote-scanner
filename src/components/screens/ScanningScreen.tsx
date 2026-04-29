@@ -740,7 +740,12 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                         <div className="mt-4 flex justify-center">
                           <button
                             type="button"
+                            onPointerDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
                             onClick={(e) => {
+                              e.preventDefault();
                               e.stopPropagation();
                               if (!canUpload) return;
                               vibrateLight();

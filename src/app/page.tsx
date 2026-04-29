@@ -367,7 +367,16 @@ const AdventureMenuScreen = ({
             ) : (
               <button
                 type="button"
-                onClick={() => { vibrateLight(); cameraInputRef.current?.click(); }}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  vibrateLight();
+                  cameraInputRef.current?.click();
+                }}
                 className="shrink-0 px-3 py-2 rounded-xl bg-cyan-600/20 border border-cyan-500/30 text-cyan-200 text-xs font-bold hover:bg-cyan-600/30"
               >
                 <span className="inline-flex items-center gap-1">
