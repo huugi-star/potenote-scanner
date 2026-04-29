@@ -118,6 +118,14 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
     el.click();
   }, []);
 
+  const openCapturePicker = useCallback(() => {
+    const el = fileInputRef.current;
+    if (!el) return;
+    // getUserMedia が使えない環境向けフォールバック
+    el.setAttribute('capture', 'environment');
+    el.click();
+  }, []);
+
   const stopCameraStream = useCallback(() => {
     if (cameraStreamRef.current) {
       cameraStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -144,9 +152,11 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
     vibrateLight();
     setCameraError('');
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError('この端末ではカメラ撮影に対応していません');
-      addToast('error', 'この端末ではカメラ撮影に対応していません');
+    // HTTPS でない等、ブラウザ条件を満たさない場合は capture にフォールバック
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError('この環境では直接カメラを起動できないため、撮影モードに切り替えます。');
+      addToast('info', '撮影モードに切り替えます');
+      openCapturePicker();
       return;
     }
 
@@ -160,10 +170,20 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
       setIsCameraOpen(true);
     } catch (error) {
       console.error('Camera open error:', error);
-      setCameraError('カメラを起動できませんでした。権限を確認してください。');
-      addToast('error', 'カメラを起動できませんでした');
+      const reason = error instanceof DOMException ? error.name : 'UnknownError';
+      const detail =
+        reason === 'NotAllowedError'
+          ? 'カメラ権限が拒否されています。権限設定をご確認ください。'
+          : reason === 'NotFoundError'
+            ? '使用できるカメラが見つかりませんでした。'
+            : reason === 'NotReadableError'
+              ? 'カメラを他のアプリが使用中の可能性があります。'
+              : '直接カメラを起動できませんでした。';
+      setCameraError(`${detail} 撮影モードに切り替えます。`);
+      addToast('info', '撮影モードに切り替えます');
+      openCapturePicker();
     }
-  }, [addToast, canUpload, scanState, stopCameraStream]);
+  }, [addToast, canUpload, openCapturePicker, scanState, stopCameraStream]);
 
   const displayProgress = Math.min(100, Math.max(0, Math.round(progress)));
   const fallbackProgressLabel = scanState === 'uploading'
