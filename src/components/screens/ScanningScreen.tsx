@@ -108,6 +108,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const progressTimerRef = useRef<number | null>(null);
   const ignoreFilePickerUntilRef = useRef(0);
+  const SUPPRESS_FILE_PICKER_MS = 8000;
 
   const openImagePicker = useCallback(() => {
     fileInputRef.current?.click();
@@ -724,7 +725,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                       accept="image/*"
                       capture="environment"
                       className="hidden"
-                      onChange={handleInputChange}
+                      onChange={(e) => {
+                        ignoreFilePickerUntilRef.current = Date.now() + SUPPRESS_FILE_PICKER_MS;
+                        handleInputChange(e);
+                      }}
                       disabled={!canUpload}
                     />
 
@@ -747,13 +751,13 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                             onPointerDown={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              ignoreFilePickerUntilRef.current = Date.now() + 1000;
+                              ignoreFilePickerUntilRef.current = Date.now() + SUPPRESS_FILE_PICKER_MS;
                             }}
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
                               if (!canUpload) return;
-                              ignoreFilePickerUntilRef.current = Date.now() + 1000;
+                              ignoreFilePickerUntilRef.current = Date.now() + SUPPRESS_FILE_PICKER_MS;
                               vibrateLight();
                               cameraInputRef.current?.click();
                             }}

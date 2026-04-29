@@ -1233,9 +1233,10 @@ export const useGameStore = create<GameStore>()(
               // VIP機能は廃止（クラウド値も取り込まない）
               isVIP: false,
               vipExpiresAt: undefined,
-              dailyScanCount,
-              lastScanDate,
-              bonusScanBalance,
+              // スキャン回数系も「努力の結晶」なので、クラウドが古い場合はローカルを優先する
+              dailyScanCount: shouldKeepLocalEffortState ? baseState.dailyScanCount : dailyScanCount,
+              lastScanDate: shouldKeepLocalEffortState ? baseState.lastScanDate : lastScanDate,
+              bonusScanBalance: shouldKeepLocalEffortState ? baseState.bonusScanBalance : bonusScanBalance,
               dailyFreeQuestGenerationCount:
                 cloudData.userState?.dailyFreeQuestGenerationCount ?? baseState.dailyFreeQuestGenerationCount,
               lastFreeQuestGenerationDate:
