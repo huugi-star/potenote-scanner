@@ -118,6 +118,14 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
     el.click();
   }, []);
 
+  const openCapturePicker = useCallback(() => {
+    const el = fileInputRef.current;
+    if (!el) return;
+    // getUserMedia が使えない環境向けフォールバック（端末のカメラUIへ）
+    el.setAttribute('capture', 'environment');
+    el.click();
+  }, []);
+
   const stopCameraStream = useCallback(() => {
     if (cameraStreamRef.current) {
       cameraStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -144,12 +152,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
     vibrateLight();
     setCameraError('');
 
-    // HTTPS でない等、ブラウザ条件を満たさない場合はカメラを起動できない。
-    // 「写真を撮る」では画像選択にフォールバックせず、原因を表示する。
+    // HTTPSでない / getUserMedia非対応 → capture(撮影モード)へフォールバック
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-      const message = 'カメラを起動できませんでした。HTTPSのページ、またはlocalhostで開いてください。';
-      setCameraError(message);
-      addToast('error', message);
+      addToast('info', '撮影モードに切り替えます');
+      openCapturePicker();
       return;
     }
 
@@ -172,10 +178,12 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
             : reason === 'NotReadableError'
               ? 'カメラを他のアプリが使用中の可能性があります。'
               : '直接カメラを起動できませんでした。';
-      setCameraError(detail);
-      addToast('error', detail);
+      // getUserMedia がダメでも capture で撮影できる場合があるのでフォールバック
+      setCameraError(`${detail}（撮影モードに切り替えます）`);
+      addToast('info', '撮影モードに切り替えます');
+      openCapturePicker();
     }
-  }, [addToast, canUpload, scanState, stopCameraStream]);
+  }, [addToast, canUpload, openCapturePicker, scanState, stopCameraStream]);
 
   const displayProgress = Math.min(100, Math.max(0, Math.round(progress)));
   const fallbackProgressLabel = scanState === 'uploading'
