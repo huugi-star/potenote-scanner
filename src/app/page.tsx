@@ -9,12 +9,15 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Gem, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword, Users, GraduationCap } from 'lucide-react';
-import { useGameStore } from '@/store/useGameStore';
+import { Gem, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword, Users, GraduationCap, MessageCircle, Scan, Camera, Loader2, AlertCircle, Play } from 'lucide-react';
+import { useGameStore, selectRemainingScanCount } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import type { QuizRaw, TranslationResult, LectureHistory, QuizQuestionAttempt } from '@/types';
+import { compressForAI, validateImageFile, preprocessImageForOCR } from '@/lib/imageUtils';
+import { LIMITS } from '@/lib/constants';
+import { getJstDateString } from '@/lib/dateUtils';
 
 // Screens
 import { ScanningScreen } from '@/components/screens/ScanningScreen';
@@ -123,16 +126,340 @@ const AdventureMenuScreen = ({
   onBack,
   onOpenScanAdventure,
   onOpenEnglishReading,
+  onQuickQuizReady,
 }: {
   onBack: () => void;
   onOpenScanAdventure: () => void;
   onOpenEnglishReading: () => void;
+  onQuickQuizReady: (quiz: QuizRaw, imageUrl: string) => void;
 }) => {
+  const uid = useGameStore((s) => s.uid);
+  const isVIP = useGameStore((s) => s.isVIP);
+  const dailyScanCount = useGameStore((s) => s.dailyScanCount);
+  const lastScanDate = useGameStore((s) => s.lastScanDate);
+  const bonusScanBalance = useGameStore((s) => s.bonusScanBalance);
+  const remainingScans = useGameStore(selectRemainingScanCount);
+  const checkScanLimit = useGameStore((s) => s.checkScanLimit);
+  const incrementScanCount = useGameStore((s) => s.incrementScanCount);
+  const saveQuizHistory = useGameStore((s) => s.saveQuizHistory);
+  const registerQuizBatchToWordDex = useGameStore((s) => s.registerQuizBatchToWordDex);
+  const setGeneratedQuiz = useGameStore((s) => s.setGeneratedQuiz);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [quickScanState, setQuickScanState] = useState<'idle' | 'processing' | 'error'>('idle');
+  const [quickScanPreview, setQuickScanPreview] = useState<string | null>(null);
+  const [quickScanError, setQuickScanError] = useState<string>('');
+  const [quickProgress, setQuickProgress] = useState<number>(0);
+  const [quickProgressLabel, setQuickProgressLabel] = useState<string>('');
+  const quickProgressTimerRef = useRef<number | null>(null);
+
+  const stopQuickProgressTicker = useCallback((finalValue?: number) => {
+    if (quickProgressTimerRef.current) {
+      clearInterval(quickProgressTimerRef.current);
+      quickProgressTimerRef.current = null;
+    }
+    if (typeof finalValue === 'number') {
+      setQuickProgress(finalValue);
+    }
+  }, []);
+
+  const startQuickProgressTicker = useCallback(() => {
+    stopQuickProgressTicker();
+    const step = 5; // ScanningScreen(quiz) と同じ
+    setQuickProgress(step);
+    quickProgressTimerRef.current = window.setInterval(() => {
+      setQuickProgress((prev) => {
+        const next = Math.min(prev + step, 95);
+        if (next >= 95 && quickProgressTimerRef.current) {
+          clearInterval(quickProgressTimerRef.current);
+          quickProgressTimerRef.current = null;
+        }
+        return next;
+      });
+    }, 1000);
+  }, [stopQuickProgressTicker]);
+
+  useEffect(() => {
+    return () => {
+      stopQuickProgressTicker();
+    };
+  }, [stopQuickProgressTicker]);
+
+  const quickDisplayProgress = Math.min(100, Math.max(0, Math.round(quickProgress)));
+  const quickEffectiveProgressLabel =
+    quickProgressLabel || (quickScanState === 'processing' ? 'クイズを生成中...' : '');
+
+  const today = getJstDateString();
+  const usedToday = lastScanDate === today ? dailyScanCount : 0;
+  const freeRemaining = Math.max(0, LIMITS.FREE_USER.DAILY_SCAN_LIMIT - usedToday);
+  const bonusRemaining = Math.max(0, bonusScanBalance ?? 0);
+
+  const handleQuickScanFile = useCallback(async (file: File) => {
+    vibrateLight();
+    // 「新しい冒険をスキャン」と同仕様（クイズスキャン）
+    useGameStore.getState().setScanType('quiz');
+
+    // 制限チェック（消費は成功時のみ）
+    const limitCheck = checkScanLimit();
+    if (!limitCheck.canScan) {
+      setQuickScanError(limitCheck.error || 'スキャン回数の上限に達しました');
+      setQuickScanState('error');
+      return;
+    }
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      setQuickScanError(validation.error || '無効なファイルです');
+      setQuickScanState('error');
+      return;
+    }
+
+    setQuickScanState('processing');
+    setQuickScanError('');
+    startQuickProgressTicker();
+    setQuickProgressLabel('画像を確認中...');
+
+    try {
+      // 1) プレビュー用に圧縮
+      const compressed = await compressForAI(file);
+      setQuickScanPreview(compressed.dataUrl);
+      setQuickProgressLabel('画像を最適化中...');
+
+      // 2) OCR用に補正
+      setQuickProgressLabel('OCR用に補正中...');
+      const enhancedImage = await preprocessImageForOCR(file);
+
+      // 3) クイズ生成
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 60000);
+      setQuickProgressLabel('クイズ生成をリクエスト中...');
+      const quizResponse = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: enhancedImage,
+          uid: uid ?? undefined,
+        }),
+        signal: controller.signal,
+      });
+      window.clearTimeout(timeoutId);
+      setQuickProgressLabel('問題を組み立て中...');
+
+      if (quizResponse.status === 429) {
+        setQuickScanState('idle');
+        setQuickScanPreview(null);
+        stopQuickProgressTicker(0);
+        setQuickProgressLabel('');
+        alert(
+          "🙏 申し訳ありません！\n\n本日のAI解析サーバーが混み合っており、1日の利用上限に達しました。\n（コスト制限のため、現在は1日限定数で運営しています）\n\n明日になるとリセットされますので、また明日お試しください！"
+        );
+        return;
+      }
+
+      if (!quizResponse.ok) {
+        throw new Error(`Quiz error: ${quizResponse.status}`);
+      }
+
+      const quizResult = await quizResponse.json();
+      if (!quizResult?.quiz?.questions?.length) {
+        throw new Error(quizResult?.error || 'クイズ生成に失敗しました');
+      }
+
+      // ★成功時のみ消費・履歴保存
+      incrementScanCount();
+      stopQuickProgressTicker(100);
+      setQuickProgressLabel('完了');
+      const scanQuizId = `scan_${Date.now()}`;
+      useGameStore.getState().setLastScanQuizId(scanQuizId);
+      await saveQuizHistory(quizResult.quiz, {
+        quizId: scanQuizId,
+        correctCount: 0,
+        totalQuestions: quizResult.quiz.questions.length,
+        isPerfect: false,
+        earnedCoins: 0,
+        earnedDistance: 0,
+        isDoubled: false,
+        timestamp: new Date(),
+      });
+      registerQuizBatchToWordDex(quizResult.quiz, scanQuizId);
+      // ScanningScreen と同様にストアへ保存（ページ更新後も保持）
+      setGeneratedQuiz(quizResult.quiz, compressed.dataUrl);
+
+      setQuickScanState('idle');
+      setQuickScanPreview(null);
+      setQuickProgressLabel('');
+
+      // すぐモード選択へ（ここからクイズ開始できる）
+      onQuickQuizReady(quizResult.quiz, compressed.dataUrl);
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? (e.name === 'AbortError'
+            ? '通信がタイムアウトしました。再度お試しください。'
+            : e.message)
+          : 'エラーが発生しました';
+      setQuickScanError(msg);
+      setQuickScanState('error');
+      stopQuickProgressTicker(0);
+      setQuickProgressLabel('');
+    }
+  }, [checkScanLimit, incrementScanCount, onQuickQuizReady, registerQuizBatchToWordDex, saveQuizHistory, setGeneratedQuiz, startQuickProgressTicker, stopQuickProgressTicker, uid]);
+
+  const handleQuickDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (quickScanState === 'processing') return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleQuickScanFile(file);
+  }, [handleQuickScanFile, quickScanState]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4 pb-24">
       <div className="max-w-md mx-auto pt-6">
-        <h2 className="text-2xl font-bold text-white mb-2 text-center">ことばを集める</h2>
-        <p className="text-gray-400 text-sm text-center mb-6">遊び方を選んでください</p>
+        <h2 className="text-2xl font-bold text-white mb-2 text-center">ことばを読み取る</h2>
+
+        {/* すぐスキャン（画像を置いたら即クイズ生成） */}
+        <div className="mb-4 rounded-2xl border border-cyan-500/25 bg-gray-800/50 p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="min-w-0">
+              <div className="text-white font-bold flex items-center gap-2">
+                <Scan className="w-4 h-4 text-cyan-300" />
+                すぐスキャンしてクイズ
+              </div>
+              <div className="text-gray-400 text-xs mt-1">
+                画像を置くと、そのままクイズ生成まで進みます
+              </div>
+            </div>
+            {/* スキャン残り回数（ScanningScreenと同形式） */}
+            <div
+              className={`px-3 py-2 rounded-xl text-xs font-bold border ${
+                isVIP
+                  ? 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25'
+                  : remainingScans > 0
+                    ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/25'
+                    : 'bg-red-500/15 text-red-200 border-red-500/25'
+              }`}
+              style={{ lineHeight: 1.15 }}
+            >
+              {isVIP ? (
+                <span className="flex items-center gap-1">
+                  <Crown className="w-3.5 h-3.5" />
+                  VIP Unlimited
+                </span>
+              ) : (
+                <div>
+                  <div>本日残り {remainingScans}回</div>
+                  <div className="text-[10px] opacity-80 mt-0.5">
+                    無料：{freeRemaining} / ボーナス：{bonusRemaining}
+                  </div>
+                </div>
+              )}
+            </div>
+            {quickScanState === 'processing' ? (
+              <div className="flex items-center gap-2 text-cyan-200 text-xs font-semibold">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                処理中…
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { vibrateLight(); fileInputRef.current?.click(); }}
+                className="shrink-0 px-3 py-2 rounded-xl bg-cyan-600/20 border border-cyan-500/30 text-cyan-200 text-xs font-bold hover:bg-cyan-600/30"
+              >
+                <span className="inline-flex items-center gap-1">
+                  <Camera className="w-3.5 h-3.5" />
+                  写真を撮る
+                </span>
+              </button>
+            )}
+          </div>
+
+          <div
+            onDrop={handleQuickDrop}
+            onDragOver={(e) => e.preventDefault()}
+            onClick={() => {
+              if (quickScanState === 'processing') return;
+              vibrateLight();
+              fileInputRef.current?.click();
+            }}
+            className={`rounded-2xl border-2 border-dashed p-4 text-center transition-colors ${
+              quickScanState === 'processing'
+                ? 'border-gray-700 bg-gray-900/40 cursor-wait'
+                : 'border-cyan-500/35 bg-gray-900/20 hover:border-cyan-400 cursor-pointer'
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                handleQuickScanFile(file);
+                // 同じファイルを連続で選べるように
+                e.currentTarget.value = '';
+              }}
+              disabled={quickScanState === 'processing'}
+            />
+
+            {quickScanPreview ? (
+              <div className="mx-auto w-full max-w-[260px]">
+                <div className="rounded-xl overflow-hidden border border-cyan-500/30">
+                  <img src={quickScanPreview} alt="preview" className="w-full h-40 object-cover" />
+                </div>
+                {quickScanState === 'processing' && (
+                  <div className="mt-3">
+                    {/* ScanningScreen と同じ進行度表示 */}
+                    <div className="max-w-md mx-auto mb-3">
+                      <div className="flex items-center justify-between text-sm text-cyan-100 mb-2 px-1">
+                        <span className="text-left line-clamp-2">{quickEffectiveProgressLabel}</span>
+                        <span className="font-semibold">{quickDisplayProgress}%</span>
+                      </div>
+                      <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden border border-cyan-500/30">
+                        <div
+                          className="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-500 transition-[width] duration-300 ease-out"
+                          style={{ width: `${quickDisplayProgress}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-3 text-gray-200">
+                      <Loader2 className="w-5 h-5 text-cyan-300 animate-spin" />
+                      <span className="text-sm font-semibold">クイズ作成中...</span>
+                    </div>
+                  </div>
+                )}
+                {quickScanState !== 'processing' && (
+                  <div className="mt-2 text-xs text-gray-300">タップで別の画像に変更</div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="mx-auto w-12 h-12 rounded-full bg-cyan-500/15 flex items-center justify-center">
+                  {quickScanState === 'processing' ? (
+                    <Loader2 className="w-6 h-6 text-cyan-300 animate-spin" />
+                  ) : (
+                    <Play className="w-6 h-6 text-cyan-300" />
+                  )}
+                </div>
+                <div className="text-white font-semibold text-sm">
+                  タップして選択 / ドラッグ&ドロップ
+                </div>
+                <div className="text-gray-400 text-xs flex items-center justify-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  1ページずつスキャンしてください
+                </div>
+              </div>
+            )}
+          </div>
+
+          {quickScanState === 'error' && quickScanError && (
+            <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {quickScanError}
+            </div>
+          )}
+        </div>
 
         <div className="space-y-3">
           <Link href="/word-collection" onClick={() => vibrateLight()}>
@@ -703,22 +1030,22 @@ const HomeScreen = ({
             onClick={()=>{vibrateLight();onNavigate('suhimochi_room');}}
             fromColor="#065f46" toColor="#10b981"
             glowColor="rgba(16,185,129,0.4)" shadowColor="rgba(3,40,26,0.95)"
-            icon={<Languages style={{width:22,height:22}}/>}
+            icon={<MessageCircle style={{width:22,height:22}}/>}
             label="すうひもちのお部屋"
           />
           <RpgButton
             onClick={()=>{vibrateLight();onNavigate('academy');}}
             fromColor="#312e81" toColor="#6366f1"
             glowColor="rgba(99,102,241,0.4)" shadowColor="rgba(25,22,80,0.95)"
-            icon={<GraduationCap style={{width:22,height:22}}/>}
-            label="ことば図書館"
+            icon={<BookOpen style={{width:22,height:22}}/>}
+            label="図書館を復興する"
           />
           <RpgButton
             onClick={()=>{vibrateLight();onNavigate('adventure_menu');}}
             fromColor="#92400e" toColor="#f59e0b"
             glowColor="rgba(245,158,11,0.4)" shadowColor="rgba(70,28,4,0.95)"
-            icon={<Sword style={{width:22,height:22}}/>}
-            label="スキャンする"
+            icon={<Scan style={{width:22,height:22}}/>}
+            label="ことばを読み取る"
           />
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
             <RpgButton
@@ -2107,6 +2434,16 @@ const AppContent = () => {
                 useGameStore.getState().setTranslationMode('english_learning');
                 useGameStore.getState().setScanType('translation');
                 handleNavigate('scanning');
+              }}
+              onQuickQuizReady={(quiz, imageUrl) => {
+                setQuizSession({
+                  quiz,
+                  imageUrl,
+                  mode: 'potato_pupil',
+                  correctCount: 0,
+                  isFreeQuest: false,
+                });
+                setPhase('mode_select');
               }}
             />
           </motion.div>

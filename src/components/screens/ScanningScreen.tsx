@@ -531,7 +531,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
           )}
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Scan className="w-6 h-6 text-cyan-400" />
-            冒険の拠点
+            ことばを読み取る
           </h1>
           
           {/* スキャン残り回数 */}
@@ -705,6 +705,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
+                      capture="environment"
                       className="hidden"
                       onChange={handleInputChange}
                       disabled={!canUpload}
@@ -716,10 +717,10 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                           <Camera className="w-8 h-8 text-cyan-400" />
                         </div>
                         <p className="text-white font-medium mb-2">
-                          {isQuizMode ? '画像を読み込んで、冒険開始' : '翻訳用の画像をアップロード'}
+                          {isQuizMode ? '写真を撮って、冒険開始' : '翻訳用の写真を撮る'}
                         </p>
                         <p className="text-gray-400 text-sm">
-                          タップして選択、またはドラッグ＆ドロップ
+                          タップして撮影（または選択）、またはドラッグ＆ドロップ
                         </p>
                         
                         {/* 注意書き */}
