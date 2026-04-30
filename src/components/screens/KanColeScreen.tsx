@@ -97,7 +97,6 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
 
   const [dexVolIndex, setDexVolIndex] = useState(0);
   const [dexTerm, setDexTerm] = useState<string | null>(null);
-  const [keyboardInset, setKeyboardInset] = useState(0);
 
   const answerInputRef = useRef<HTMLInputElement>(null);
   const scrollLockYRef = useRef(0);
@@ -105,7 +104,6 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
   const lockScroll = useCallback(() => {
     if (typeof window === 'undefined') return;
     const body = document.body;
-    // すでに固定されている場合は何もしない
     if (body.style.position === 'fixed') return;
     const y = window.scrollY || window.pageYOffset || 0;
     scrollLockYRef.current = y;
@@ -132,38 +130,17 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
   }, []);
 
   useEffect(() => {
-    // 画面遷移で入力中ロックが残るのを防ぐ
     if (view !== 'battle') {
       unlockScroll();
-      setKeyboardInset(0);
       return;
     }
 
-    // battle中は常時ロックして、フォーカス時の自動スクロール余地を消す
+    // battle中は常時ロックして、フォーカス時のスクロールを防ぐ
     lockScroll();
     window.scrollTo(0, 0);
 
-    const vv = window.visualViewport;
-    if (!vv) return () => unlockScroll();
-
-    const syncViewport = () => {
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      setKeyboardInset(inset);
-      // 入力中にブラウザが勝手にスクロールしてもトップへ戻す
-      if (document.activeElement === answerInputRef.current) window.scrollTo(0, 0);
-    };
-
-    vv.addEventListener('resize', syncViewport);
-    vv.addEventListener('scroll', syncViewport);
-    window.addEventListener('scroll', syncViewport, { passive: true });
-    syncViewport();
-
     return () => {
-      vv.removeEventListener('resize', syncViewport);
-      vv.removeEventListener('scroll', syncViewport);
-      window.removeEventListener('scroll', syncViewport);
       unlockScroll();
-      setKeyboardInset(0);
     };
   }, [unlockScroll, view]);
 
@@ -200,6 +177,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
     }
     if (typeof finalValue === 'number') setProgress(finalValue);
   }, []);
+  
   const startProgressTicker = useCallback(() => {
     stopProgressTicker();
     setProgress(3);
@@ -327,12 +305,9 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
     setBattleState('feedback');
   }, [answer, battleState, current, selectedScanId, updateKanColeEnemyState, markCorrect, recordWrong]);
 
-  // 2回目正解（封印）時のリング/吸い込み演出
+  // リング演出制御
   useEffect(() => {
-    if (view !== 'battle') return;
-    if (battleState !== 'feedback') return;
-    if (hitType !== 'seal') return;
-    if (!cardThrow?.isCorrect) return;
+    if (view !== 'battle' || battleState !== 'feedback' || hitType !== 'seal' || !cardThrow?.isCorrect) return;
 
     setSealArrived(false);
     setSealPhase('throw');
@@ -362,7 +337,6 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     if (view !== 'battle' || battleState !== 'feedback') return;
-    // 封印（2回目正解）は吸い込み完了後すぐ次へ。通常は解説を少し長めに見せる。
     const delayMs = lastSealed ? 1250 : 1500;
     const id = window.setTimeout(() => {
       if (!selectedScanId) return;
@@ -409,7 +383,10 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
     return () => clearTimeout(id);
   }, [view, battleState, idx, roundItems.length, selectedScanId, defeatedCount, capturedWords.length, addCoins, getKanColeScanById, saveKanColeAdventureSnapshot, lastSealed]);
 
-  // hub
+  // ==========================================
+  // Render: Hub / Log / Scan / Result / Dex ...
+  // ==========================================
+
   if (view === 'hub') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 text-white p-4">
@@ -450,39 +427,16 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
   }
 
   if (view === 'dex') {
-    return (
-      <KanDexScreen
-        kanDexOrder={kanDexOrder}
-        scans={kanColeScans}
-        onSelectVol={(volIndex) => {
-          setDexVolIndex(volIndex);
-          setView('dexVol');
-        }}
-        onBack={() => setView('hub')}
-      />
-    );
+    return <KanDexScreen kanDexOrder={kanDexOrder} scans={kanColeScans} onSelectVol={(volIndex) => { setDexVolIndex(volIndex); setView('dexVol'); }} onBack={() => setView('hub')} />;
   }
 
   if (view === 'dexVol') {
-    return (
-      <KanDexVolScreen
-        volIndex={dexVolIndex}
-        kanDexOrder={kanDexOrder}
-        scans={kanColeScans}
-        onSelectTerm={(term) => {
-          setDexTerm(term);
-          setView('dexDetail');
-        }}
-        onBack={() => setView('dex')}
-      />
-    );
+    return <KanDexVolScreen volIndex={dexVolIndex} kanDexOrder={kanDexOrder} scans={kanColeScans} onSelectTerm={(term) => { setDexTerm(term); setView('dexDetail'); }} onBack={() => setView('dex')} />;
   }
 
   if (view === 'dexDetail' && dexTerm) {
     const dexNo = Math.max(1, kanDexOrder.indexOf(dexTerm) + 1);
-    return (
-      <KanDexDetailScreen term={dexTerm} dexNo={dexNo} scans={kanColeScans} onBack={() => setView('dexVol')} />
-    );
+    return <KanDexDetailScreen term={dexTerm} dexNo={dexNo} scans={kanColeScans} onBack={() => setView('dexVol')} />;
   }
 
   if (view === 'log') {
@@ -568,8 +522,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
               撃破 <span className="text-3xl text-gray-100">{displayDefeatedCount}</span> 回
             </p>
             <p className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-amber-400/40 bg-amber-500/10 px-2.5 py-1 text-sm font-semibold text-amber-300">
-              <Coins className="w-4 h-4" />
-              今回獲得 +{earnedCoins} コイン
+              <Coins className="w-4 h-4" /> 今回獲得 +{earnedCoins} コイン
             </p>
             <p className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-emerald-400/40 bg-emerald-500/10 px-2.5 py-1 text-sm font-semibold text-emerald-300 ml-2">
               今回獲得 +{earnedLeaves} ことの葉
@@ -588,7 +541,6 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
                     <div className="font-mono font-extrabold text-amber-200 text-xl tracking-wider">{w.term}</div>
                     <div className="text-amber-200/80 text-xs mt-0.5">よみ: {w.reading}</div>
                     <div className="text-gray-100 text-sm mt-0.5">— {w.meaning || '—'}</div>
-                    <div className="text-gray-400 text-[11px] mt-1">★ 図鑑登録</div>
                   </div>
                 ))}
               </div>
@@ -603,7 +555,6 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
                   <div key={w.term} className="rounded-xl border border-amber-500/40 bg-gradient-to-b from-gray-800/80 to-gray-900/80 text-center px-3 py-2">
                     <p className="font-mono font-bold text-amber-200 uppercase tracking-wider text-sm">{w.term}</p>
                     <p className="text-amber-200/80 mt-0.5 text-[10px]">よみ: {w.reading}</p>
-                    <p className="text-gray-100 mt-1 text-[10px]">— {w.meaning || '—'}</p>
                   </div>
                 ))}
               </div>
@@ -612,48 +563,30 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
 
           {missedWords.length > 0 ? (
             <section className="mb-5">
-              <button
-                onClick={() => {
-                  vibrateLight();
-                  setMissedListOpen((o) => !o);
-                }}
-                className="w-full flex items-center justify-between py-2 text-left text-sm text-gray-100"
-              >
+              <button onClick={() => { vibrateLight(); setMissedListOpen((o) => !o); }} className="w-full flex items-center justify-between py-2 text-left text-sm text-gray-100">
                 <span>▼ ミスした単語（{missedWords.length}体）</span>
-                <motion.span animate={{ rotate: missedListOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                  <ChevronDown className="w-4 h-4" />
-                </motion.span>
+                <motion.span animate={{ rotate: missedListOpen ? 180 : 0 }} transition={{ duration: 0.2 }}><ChevronDown className="w-4 h-4" /></motion.span>
               </button>
               <AnimatePresence>
                 {missedListOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden"
-                  >
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                     <div className="pt-2 space-y-1.5">
                       {missedWords.map(({ word, missCount }) => (
                         <div key={word.term} className="rounded-lg border border-gray-700/50 bg-gray-800/30 px-3 py-2 flex items-center justify-between gap-2">
                           <div>
                             <span className="font-mono text-amber-200/80 text-sm uppercase">{word.term}</span>
-                            <span className="text-amber-200/75 text-xs ml-2">（{word.reading}）</span>
                             <span className="text-gray-200 text-xs ml-2">— {word.meaning || '—'}</span>
                           </div>
                           {missCount > 1 && <span className="text-orange-400/80 text-xs shrink-0">×{missCount}</span>}
                         </div>
                       ))}
                     </div>
-                    <p className="text-gray-200 text-xs mt-2">次の探索ではミスした単語が優先的に出現します</p>
                   </motion.div>
                 )}
               </AnimatePresence>
             </section>
           ) : (
-            <section className="mb-5">
-              <p className="text-center text-amber-500/70 text-sm">取り逃がしなし！</p>
-            </section>
+            <section className="mb-5"><p className="text-center text-amber-500/70 text-sm">取り逃がしなし！</p></section>
           )}
 
           <button onClick={() => selectedScanId && startQuest(selectedScanId, 'explore')} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2"><Sword className="w-4 h-4" />続けて探索する</button>
@@ -664,7 +597,9 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
     );
   }
 
-  // battle
+  // ==========================================
+  // Battle View
+  // ==========================================
   if (!current) {
     return <div className="min-h-screen bg-black text-white flex items-center justify-center">問題がありません</div>;
   }
@@ -695,228 +630,111 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
         }}
         className="fixed top-4 left-4 z-30 flex items-center gap-1 text-gray-500 hover:text-gray-300 text-sm"
       >
-        <ChevronLeft className="w-4 h-4" />
-        やめる
+        <ChevronLeft className="w-4 h-4" /> やめる
       </button>
 
-      <div
-        className="absolute inset-0 flex items-center justify-center p-4"
-        style={{ transform: keyboardInset > 0 ? `translateY(-${Math.min(160, keyboardInset * 0.55)}px)` : undefined }}
-      >
-        <div className="relative w-full max-w-[min(360px,90vw)] aspect-[9/16] rounded-[2rem] p-3 bg-gradient-to-b from-gray-800 to-gray-900 shadow-[0_0_0_4px_rgba(55,65,81,0.8),0_0_0_8px_rgba(31,41,55,0.6),0_25px_50px_-12px_rgba(0,0,0,0.6)]">
-        <div className="relative w-full h-full rounded-[1.25rem] overflow-hidden bg-transparent flex flex-col">
-          <div className="absolute top-0 left-0 right-0 h-1 z-10 bg-black/60"><motion.div className={`${isTimeWarning ? 'bg-red-600' : 'bg-amber-500'} h-full`} animate={{ width: `${timePct}%` }} transition={{ duration: 0.2 }} /></div>
-          <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-            <div className="absolute inset-0 z-0" style={{ backgroundImage: "url('/images/backgrounds/forest.png')", backgroundSize: 'cover', backgroundPosition: 'center' }} />
-            <div className="absolute inset-0 z-0 bg-black/30" />
-            <div className="absolute top-6 left-3 z-20 rounded-md border-2 border-amber-700/80 bg-black/60 px-3 py-2 shadow-lg"><div className="text-amber-200 font-mono text-xs tracking-widest">{current.term}</div></div>
-            <div className="absolute top-6 right-3 z-20 flex items-center gap-2"><span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isTimeWarning ? 'bg-red-900/60 text-red-400' : 'bg-black/40 text-amber-300'}`}>{Math.max(0, Math.round(timeLeft * 2) / 2)}s</span></div>
-            <div className="relative flex-1 flex items-center justify-center pt-8 pb-2 z-10">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={`${idx}-${current.term}`}
-                  animate={{ y: (1 - timeLeft / TIME_LIMIT_SEC) * 20, scale: 1 + (1 - timeLeft / TIME_LIMIT_SEC) * 0.25 }}
-                  transition={{ duration: 0.2 }}
-                  className={`text-3xl font-bold text-white tracking-wider drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] ${
-                    hitType === 'shake' ? 'animate-pulse' : ''
-                  }`}
-                >
-                  {hitType === 'split' ? (
-                    <div className="flex items-center justify-center gap-1">
-                      <motion.span
-                        initial={{ x: 0, opacity: 1 }}
-                        animate={{ x: -12, opacity: 0.96 }}
-                        transition={{ duration: 0.3, ease: 'easeOut' }}
-                      >
-                        {current.term.slice(0, Math.ceil(current.term.length / 2))}
-                      </motion.span>
-                      <motion.span
-                        initial={{ x: 0, opacity: 1 }}
-                        animate={{ x: 12, opacity: 0.96 }}
-                        transition={{ duration: 0.3, ease: 'easeOut' }}
-                      >
-                        {current.term.slice(Math.ceil(current.term.length / 2))}
-                      </motion.span>
-                    </div>
-                  ) : (
-                    <span className={hitType === 'seal' && sealPhase === 'seal' ? 'animate-absorb-to-card' : undefined}>
-                      {current.term}
-                    </span>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-
-              {/* 封印リング（2回目正解のみ） */}
-              {hitType === 'seal' && sealPhase === 'seal' && (
-  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-    {/* 背景の残光 */}
-    <motion.div
-      initial={{ scale: 0.3, opacity: 0 }}
-      animate={{ scale: [0.3, 1.25, 0.8], opacity: [0, 0.9, 0] }}
-      transition={{ duration: 0.34, ease: 'easeOut' }}
-      className="absolute w-20 h-20 rounded-full bg-cyan-400/30 blur-lg"
-    />
-
-    <motion.svg
-      className="absolute overflow-visible"
-      width="120"
-      height="120"
-      viewBox="0 0 100 100"
-      fill="none"
-      initial={{ opacity: 0, scale: 0.5, rotate: -45 }}
-      animate={{
-        opacity: [0, 1, 1, 0],
-        scale: [0.5, 1, 1.08, 0.9],
-        rotate: [-45, 0, 8, 0],
-      }}
-      transition={{
-        duration: 0.42,
-        times: [0, 0.25, 0.72, 1],
-        ease: 'easeOut',
-      }}
-    >
-      {/* 外周リング：一瞬だけ回転 */}
-      <motion.circle
-        cx="50"
-        cy="50"
-        r="45"
-        stroke="rgba(100, 210, 255, 0.5)"
-        strokeWidth="0.8"
-        strokeDasharray="2 6"
-        initial={{ rotate: 0, opacity: 0 }}
-        animate={{ rotate: -180, opacity: [0, 1, 0] }}
-        transition={{ duration: 0.28, ease: 'easeOut' }}
-      />
-
-      {/* メイン魔法陣：一瞬だけ回転 */}
-      <motion.circle
-        cx="50"
-        cy="50"
-        r="36"
-        stroke="rgba(120, 230, 255, 0.8)"
-        strokeWidth="2"
-        strokeDasharray="25 10"
-        style={{ filter: 'drop-shadow(0 0 2px rgba(0, 150, 255, 0.9))' }}
-        initial={{ rotate: 0, opacity: 0 }}
-        animate={{ rotate: 220, opacity: [0, 1, 0] }}
-        transition={{ duration: 0.32, ease: 'easeOut' }}
-      />
-
-      {/* 幾何学模様 */}
-      <motion.path
-        d="M50 15 L80 32 L80 68 L50 85 L20 68 L20 32 Z"
-        stroke="rgba(150, 240, 255, 0.6)"
-        strokeWidth="1"
-        initial={{ pathLength: 0, opacity: 0 }}
-        animate={{ pathLength: 1, opacity: [0, 1, 0] }}
-        transition={{ duration: 0.28, delay: 0.04, ease: 'easeOut' }}
-      />
-
-      {/* 中心に収束する内円 */}
-      <motion.circle
-        cx="50"
-        cy="50"
-        r="12"
-        stroke="white"
-        strokeWidth="2.5"
-        initial={{ scale: 1.5, opacity: 0 }}
-        animate={{ scale: [1.5, 1, 0.7], opacity: [0, 1, 0] }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-        style={{ filter: 'drop-shadow(0 0 4px #fff)' }}
-      />
-    </motion.svg>
-
-    {/* 中心部のコアフラッシュ */}
-    <motion.div
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: [0, 1.3, 0.7], opacity: [0, 1, 0] }}
-      transition={{ duration: 0.28, times: [0, 0.45, 1], ease: 'easeOut' }}
-      className="absolute w-4 h-4 bg-white rounded-full shadow-[0_0_15px_3px_rgba(255,255,255,0.9)]"
-    />
-  </div>
-)}
-
-              <AnimatePresence>
-                {cardThrow && (
+      {/* translateYを外し、aspect固定も解除して、柔軟に縦方向に縮むように修正 */}
+      <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-4">
+        <div className="relative w-full h-full max-w-[min(400px,100vw)] sm:h-auto sm:aspect-[9/16] flex flex-col rounded-2xl sm:rounded-[2rem] p-2 sm:p-3 bg-gradient-to-b from-gray-800 to-gray-900 shadow-[0_0_0_4px_rgba(55,65,81,0.8),0_0_0_8px_rgba(31,41,55,0.6),0_25px_50px_-12px_rgba(0,0,0,0.6)]">
+          <div className="relative w-full h-full rounded-xl sm:rounded-[1.25rem] overflow-hidden bg-transparent flex flex-col">
+            <div className="absolute top-0 left-0 right-0 h-1 z-10 bg-black/60"><motion.div className={`${isTimeWarning ? 'bg-red-600' : 'bg-amber-500'} h-full`} animate={{ width: `${timePct}%` }} transition={{ duration: 0.2 }} /></div>
+            
+            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="absolute inset-0 z-0" style={{ backgroundImage: "url('/images/backgrounds/forest.png')", backgroundSize: 'cover', backgroundPosition: 'center' }} />
+              <div className="absolute inset-0 z-0 bg-black/30" />
+              <div className="absolute top-4 left-3 z-20 rounded-md border-2 border-amber-700/80 bg-black/60 px-3 py-1.5 shadow-lg"><div className="text-amber-200 font-mono text-xs tracking-widest">{current.term}</div></div>
+              <div className="absolute top-4 right-3 z-20 flex items-center gap-2"><span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isTimeWarning ? 'bg-red-900/60 text-red-400' : 'bg-black/40 text-amber-300'}`}>{Math.max(0, Math.round(timeLeft * 2) / 2)}s</span></div>
+              
+              <div className="relative flex-1 flex items-center justify-center pt-8 pb-2 z-10">
+                <AnimatePresence mode="wait">
                   <motion.div
-                    key={cardThrow.key}
-                    className="absolute inset-0 pointer-events-none overflow-visible"
-                    initial={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                    key={`${idx}-${current.term}`}
+                    animate={{ y: (1 - timeLeft / TIME_LIMIT_SEC) * 20, scale: 1 + (1 - timeLeft / TIME_LIMIT_SEC) * 0.25 }}
+                    transition={{ duration: 0.2 }}
+                    className={`text-3xl font-bold text-white tracking-wider drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] ${hitType === 'shake' ? 'animate-pulse' : ''}`}
                   >
-                    <motion.div
-                      className="absolute"
-                      style={{ right: '8%', bottom: '12%', width: '2.4rem', height: '3.8rem' }}
-                      initial={{ x: 0, y: 0, rotateZ: 0, rotateY: 0, opacity: 1, scale: 0.92, filter: 'blur(0px)' }}
-                      animate={
-                        cardThrow.isCorrect
-                          ? {
-                              x: ['0px', '-105px', '-138px'],
-                              y: ['0px', '-115px', '-140px'],
-                              rotateZ: [0, 520, 680],
-                              rotateY: [0, 18, 24],
-                              opacity: [1, 1, 0],
-                              scale: [0.92, 1.05, 0.9],
-                              filter: ['blur(0px)', 'blur(0px)', 'blur(0.35px)'],
-                            }
-                          : {
-                              x: ['0px', '-98px', '-52px', '8px'],
-                              y: ['0px', '-118px', '-60px', '14px'],
-                              rotateZ: [0, 520, 240, -20],
-                              rotateY: [0, 18, 8, -3],
-                              opacity: [1, 1, 0.9, 0],
-                              scale: [0.92, 1.05, 0.96, 0.86],
-                              filter: ['blur(0px)', 'blur(0px)', 'blur(0.15px)', 'blur(0.55px)'],
-                            }
-                      }
-                      transition={{
-                        duration: cardThrow.isCorrect ? 0.48 : 0.62,
-                        ease: 'linear',
-                        times: cardThrow.isCorrect ? [0, 0.78, 1] : [0, 0.48, 0.76, 1],
-                      }}
-                    >
-                      <img src="/cards/seal-card.svg" className="w-full h-full object-contain" alt="seal" />
-                    </motion.div>
+                    {hitType === 'split' ? (
+                      <div className="flex items-center justify-center gap-1">
+                        <motion.span initial={{ x: 0, opacity: 1 }} animate={{ x: -12, opacity: 0.96 }} transition={{ duration: 0.3, ease: 'easeOut' }}>{current.term.slice(0, Math.ceil(current.term.length / 2))}</motion.span>
+                        <motion.span initial={{ x: 0, opacity: 1 }} animate={{ x: 12, opacity: 0.96 }} transition={{ duration: 0.3, ease: 'easeOut' }}>{current.term.slice(Math.ceil(current.term.length / 2))}</motion.span>
+                      </div>
+                    ) : (
+                      <span className={hitType === 'seal' && sealPhase === 'seal' ? 'animate-absorb-to-card' : undefined}>{current.term}</span>
+                    )}
                   </motion.div>
+                </AnimatePresence>
+
+                {/* 封印リング */}
+                {hitType === 'seal' && sealPhase === 'seal' && (
+                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                    <motion.div initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: [0.3, 1.25, 0.8], opacity: [0, 0.9, 0] }} transition={{ duration: 0.34, ease: 'easeOut' }} className="absolute w-20 h-20 rounded-full bg-cyan-400/30 blur-lg" />
+                    <motion.svg className="absolute overflow-visible" width="120" height="120" viewBox="0 0 100 100" fill="none" initial={{ opacity: 0, scale: 0.5, rotate: -45 }} animate={{ opacity: [0, 1, 1, 0], scale: [0.5, 1, 1.08, 0.9], rotate: [-45, 0, 8, 0] }} transition={{ duration: 0.42, times: [0, 0.25, 0.72, 1], ease: 'easeOut' }}>
+                      <motion.circle cx="50" cy="50" r="45" stroke="rgba(100, 210, 255, 0.5)" strokeWidth="0.8" strokeDasharray="2 6" initial={{ rotate: 0, opacity: 0 }} animate={{ rotate: -180, opacity: [0, 1, 0] }} transition={{ duration: 0.28, ease: 'easeOut' }} />
+                      <motion.circle cx="50" cy="50" r="36" stroke="rgba(120, 230, 255, 0.8)" strokeWidth="2" strokeDasharray="25 10" style={{ filter: 'drop-shadow(0 0 2px rgba(0, 150, 255, 0.9))' }} initial={{ rotate: 0, opacity: 0 }} animate={{ rotate: 220, opacity: [0, 1, 0] }} transition={{ duration: 0.32, ease: 'easeOut' }} />
+                      <motion.path d="M50 15 L80 32 L80 68 L50 85 L20 68 L20 32 Z" stroke="rgba(150, 240, 255, 0.6)" strokeWidth="1" initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 1, 0] }} transition={{ duration: 0.28, delay: 0.04, ease: 'easeOut' }} />
+                      <motion.circle cx="50" cy="50" r="12" stroke="white" strokeWidth="2.5" initial={{ scale: 1.5, opacity: 0 }} animate={{ scale: [1.5, 1, 0.7], opacity: [0, 1, 0] }} transition={{ duration: 0.3, ease: 'easeOut' }} style={{ filter: 'drop-shadow(0 0 4px #fff)' }} />
+                    </motion.svg>
+                    <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: [0, 1.3, 0.7], opacity: [0, 1, 0] }} transition={{ duration: 0.28, times: [0, 0.45, 1], ease: 'easeOut' }} className="absolute w-4 h-4 bg-white rounded-full shadow-[0_0_15px_3px_rgba(255,255,255,0.9)]" />
+                  </div>
                 )}
-              </AnimatePresence>
+
+                <AnimatePresence>
+                  {cardThrow && (
+                    <motion.div key={cardThrow.key} className="absolute inset-0 pointer-events-none overflow-visible" initial={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <motion.div
+                        className="absolute"
+                        style={{ right: '8%', bottom: '12%', width: '2.4rem', height: '3.8rem' }}
+                        initial={{ x: 0, y: 0, rotateZ: 0, rotateY: 0, opacity: 1, scale: 0.92, filter: 'blur(0px)' }}
+                        animate={
+                          cardThrow.isCorrect
+                            ? { x: ['0px', '-105px', '-138px'], y: ['0px', '-115px', '-140px'], rotateZ: [0, 520, 680], rotateY: [0, 18, 24], opacity: [1, 1, 0], scale: [0.92, 1.05, 0.9], filter: ['blur(0px)', 'blur(0px)', 'blur(0.35px)'] }
+                            : { x: ['0px', '-98px', '-52px', '8px'], y: ['0px', '-118px', '-60px', '14px'], rotateZ: [0, 520, 240, -20], rotateY: [0, 18, 8, -3], opacity: [1, 1, 0.9, 0], scale: [0.92, 1.05, 0.96, 0.86], filter: ['blur(0px)', 'blur(0px)', 'blur(0.15px)', 'blur(0.55px)'] }
+                        }
+                        transition={{ duration: cardThrow.isCorrect ? 0.48 : 0.62, ease: 'linear', times: cardThrow.isCorrect ? [0, 0.78, 1] : [0, 0.48, 0.76, 1] }}
+                      >
+                        <img src="/cards/seal-card.svg" className="w-full h-full object-contain" alt="seal" />
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
-          </div>
-          <div className="shrink-0 border-t-2 border-amber-900/60 bg-[#0a0e14] p-3">
-            <div className="min-h-[1.25rem] flex items-center justify-center mb-2">{battleLog && <p className="text-center text-xs text-amber-200/90">{battleLog}</p>}</div>
-            <div className="space-y-2">
-              <div className="text-[11px] text-gray-300 font-bold">次の漢字の読みを入力してください</div>
-              <input
-                ref={answerInputRef}
-                value={answer}
-                onFocus={() => {
-                  // フォーカス直後に「見える位置へスクロール」を抑止
-                  window.setTimeout(() => window.scrollTo(0, 0), 0);
-                }}
-                onChange={(e) => setAnswer(e.target.value)}
-                disabled={battleState === 'feedback'}
-                inputMode="text"
-                lang="ja"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
-                className="w-full rounded-lg border-2 border-gray-600 bg-gray-800/90 px-3 py-2 text-base text-gray-100 outline-none"
-                placeholder="ひらがなで入力"
-              />
-              {battleState === 'feedback' ? (
-                <div className="rounded-lg border border-gray-700 bg-gray-900/60 px-3 py-2 text-xs text-gray-200">
-                  <div className="flex items-center gap-2 mb-1">{lastCorrect ? <CheckCircle className="w-4 h-4 text-green-400" /> : <XCircle className="w-4 h-4 text-red-400" />}{lastCorrect ? '正解' : '不正解'}</div>
-                  <div>読み: {current.reading}</div><div className="mt-1">意味: {current.meaning}</div><div className="mt-1 text-gray-300">{current.explanation}</div>
-                </div>
-              ) : (
-                <button onClick={judge} disabled={!answer.trim()} className="w-full py-2.5 rounded-lg text-sm font-bold border-2 bg-gray-800/90 text-gray-200 border-gray-600 hover:border-amber-600/50 disabled:opacity-50">封印札を放つ</button>
-              )}
+
+            <div className="shrink-0 border-t-2 border-amber-900/60 bg-[#0a0e14] p-3">
+              <div className="min-h-[1.25rem] flex items-center justify-center mb-1">{battleLog && <p className="text-center text-xs text-amber-200/90">{battleLog}</p>}</div>
+              <div className="space-y-2">
+                <div className="text-[11px] text-gray-300 font-bold">次の漢字の読みを入力してください</div>
+                <input
+                  ref={answerInputRef}
+                  value={answer}
+                  onFocus={(e) => {
+                    // ネイティブの不要なスクロールを防ぎつつ要素を表示
+                    setTimeout(() => window.scrollTo(0, 0), 0);
+                    e.target.scrollIntoView({ block: 'nearest' });
+                  }}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  disabled={battleState === 'feedback'}
+                  inputMode="text"
+                  lang="ja"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="w-full rounded-lg border-2 border-gray-600 bg-gray-800/90 px-3 py-2 text-base text-gray-100 outline-none"
+                  placeholder="ひらがなで入力"
+                />
+                {battleState === 'feedback' ? (
+                  <div className="rounded-lg border border-gray-700 bg-gray-900/60 px-3 py-2 text-xs text-gray-200">
+                    <div className="flex items-center gap-2 mb-1">{lastCorrect ? <CheckCircle className="w-4 h-4 text-green-400" /> : <XCircle className="w-4 h-4 text-red-400" />}{lastCorrect ? '正解' : '不正解'}</div>
+                    <div>読み: {current.reading}</div><div className="mt-1">意味: {current.meaning}</div><div className="mt-1 text-gray-300">{current.explanation}</div>
+                  </div>
+                ) : (
+                  <button onClick={judge} disabled={!answer.trim()} className="w-full py-2.5 rounded-lg text-sm font-bold border-2 bg-gray-800/90 text-gray-200 border-gray-600 hover:border-amber-600/50 disabled:opacity-50">封印札を放つ</button>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-      </div>
     </div>
   );
 }
-
