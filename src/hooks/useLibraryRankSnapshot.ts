@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { calcBooksFromFragments, calcRankInfo } from '@/constants/rankSystem';
 import { getRepairSpentFragments, migrateRepairProgressIfNeeded } from '@/lib/repairBookFragments';
 
@@ -10,6 +10,12 @@ import { getRepairSpentFragments, migrateRepairProgressIfNeeded } from '@/lib/re
  */
 export function useLibraryRankSnapshot() {
   const [spent, setSpent] = useState(0);
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return;
+    migrateRepairProgressIfNeeded();
+    setSpent(getRepairSpentFragments());
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

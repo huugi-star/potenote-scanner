@@ -17,6 +17,11 @@ import type { GeminiMessage, SuhimochiRequest } from '@/lib/suhimochiConversatio
 import { ALL_ITEMS, getItemById } from '@/data/items';
 import { ACADEMY_SEED_QUESTIONS } from '@/data/academySeedQuestions';
 import { REWARDS, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
+import { TOTAL_TIERS } from '@/constants/rankSystem';
+import {
+  isEquippedShoulderPresetId,
+  type EquippedShoulderPresetId,
+} from '@/data/shoulderTitlePresets';
 import { getJstDateString } from '@/lib/dateUtils';
 import { extractWords } from '@/lib/wordExtraction';
 import { calculateSpiralPosition } from '@/lib/mapUtils';
@@ -911,6 +916,8 @@ interface GameActions {
   
   setHasLaunched: () => void;
   setDisplayName: (name: string) => void;
+  setEquippedLibraryTitleTierIndex: (tierIndex: number | null) => void;
+  setEquippedShoulderPresetId: (presetId: EquippedShoulderPresetId | null) => void;
 
   // すうひもち SNS タイムライン MVP
   setSuhimochiInterests: (interests: string[]) => void;
@@ -959,6 +966,8 @@ const DEV_INVENTORY = isLocalDevelopment()
 const initialState: GameState = {
   uid: null,
   displayName: '',
+  equippedLibraryTitleTierIndex: null,
+  equippedShoulderPresetId: null,
   coins: isLocalDevelopment() ? 999999 : 0,
   tickets: isLocalDevelopment() ? 999 : 0,
   stamina: STAMINA.MAX,
@@ -1223,10 +1232,29 @@ export const useGameStore = create<GameStore>()(
               /* ignore */
             }
 
+            const cloudEquipped = cloudData.userState?.equippedLibraryTitleTierIndex;
+            const mergedEquipped =
+              typeof cloudEquipped === 'number' && Number.isFinite(cloudEquipped)
+                ? cloudEquipped
+                : cloudEquipped === null
+                  ? null
+                  : baseState.equippedLibraryTitleTierIndex;
+
+            const cloudPresetRaw = cloudData.userState?.equippedShoulderPresetId;
+            const mergedPreset: EquippedShoulderPresetId | null = isEquippedShoulderPresetId(
+              cloudPresetRaw
+            )
+              ? cloudPresetRaw
+              : cloudPresetRaw === null
+                ? null
+                : baseState.equippedShoulderPresetId ?? null;
+
             set({
               // ユーザー状態系（努力の結晶のみ）
               uid,
               displayName: cloudData.userState?.displayName ?? baseState.displayName,
+              equippedLibraryTitleTierIndex: mergedEquipped,
+              equippedShoulderPresetId: mergedPreset,
               coins: shouldKeepLocalEffortState ? baseState.coins : coins,
               tickets: shouldKeepLocalEffortState ? baseState.tickets : (cloudData.userState?.tickets ?? baseState.tickets),
               stamina: shouldKeepLocalEffortState ? baseState.stamina : (cloudData.userState?.stamina ?? baseState.stamina),
@@ -1497,6 +1525,8 @@ export const useGameStore = create<GameStore>()(
               userState: {
                 uid: state.uid,
                 displayName: state.displayName,
+                equippedLibraryTitleTierIndex: state.equippedLibraryTitleTierIndex ?? null,
+                equippedShoulderPresetId: state.equippedShoulderPresetId ?? null,
                 coins: state.coins,
                 tickets: state.tickets,
                 stamina: state.stamina,
@@ -3186,6 +3216,25 @@ export const useGameStore = create<GameStore>()(
         set({ displayName: normalized });
       },
 
+      setEquippedLibraryTitleTierIndex: (tierIndex) => {
+        if (tierIndex === null) {
+          set({ equippedLibraryTitleTierIndex: null });
+          return;
+        }
+        const n = Math.floor(tierIndex);
+        if (!Number.isFinite(n) || n < 0 || n >= TOTAL_TIERS) return;
+        set({ equippedLibraryTitleTierIndex: n, equippedShoulderPresetId: null });
+      },
+
+      setEquippedShoulderPresetId: (presetId) => {
+        if (presetId === null) {
+          set({ equippedShoulderPresetId: null });
+          return;
+        }
+        if (!isEquippedShoulderPresetId(presetId)) return;
+        set({ equippedShoulderPresetId: presetId, equippedLibraryTitleTierIndex: null });
+      },
+
       // ===== すうひもち SNS タイムライン MVP =====
 
       setSuhimochiInterests: (interests) => {
@@ -3558,6 +3607,8 @@ export const useGameStore = create<GameStore>()(
       partialize: (state) => ({
         coins: state.coins,
         displayName: state.displayName,
+        equippedLibraryTitleTierIndex: state.equippedLibraryTitleTierIndex ?? null,
+        equippedShoulderPresetId: state.equippedShoulderPresetId ?? null,
         tickets: state.tickets,
         stamina: state.stamina,
         dailyScanCount: state.dailyScanCount,

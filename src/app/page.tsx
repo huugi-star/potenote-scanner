@@ -6,7 +6,7 @@
  * GamePhase管理とすべての画面を統合
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Gem, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword, Users, GraduationCap, MessageCircle, Scan, Camera, Loader2, AlertCircle, Play, Lock } from 'lucide-react';
@@ -34,6 +34,7 @@ import { LectureScreen } from '@/components/screens/LectureScreen';
 import { LectureHistoryScreen } from '@/components/screens/LectureHistoryScreen';
 import { SuhimochiRoomScreen } from '@/components/screens/SuhimochiRoomScreen';
 import { AcademyScreen } from '@/components/screens/AcademyScreen';
+import { LibraryTitleSelectScreen } from '@/components/screens/LibraryTitleSelectScreen';
 
 // UI Components
 import { LoginBonusModal } from '@/components/ui/LoginBonusModal';
@@ -55,6 +56,7 @@ import {
   UNLOCK_ENGLISH_LEARNING_TRANSLATION_MIN_TIER_INDEX,
 } from '@/constants/rankSystem';
 import { useLibraryRankSnapshot } from '@/hooks/useLibraryRankSnapshot';
+import { SHOULDER_TITLE_PRESETS } from '@/data/shoulderTitlePresets';
 
 // ===== Types =====
 
@@ -77,7 +79,8 @@ type GamePhase =
   | 'translation_result'
   | 'translation_history'
   | 'lecture'
-  | 'lecture_history';
+  | 'lecture_history'
+  | 'library_title_select';
 
 interface QuizSession {
   quiz: QuizRaw;
@@ -737,6 +740,13 @@ const HomeScreen = ({
   const [repairSpentCount, setRepairSpentCount] = useState(0);
   const [showSupportModal, setShowSupportModal] = useState(false);
 
+  /** 描画前にローカル進捗を読む（初回 spent=0 のまま tierIndex=0 になり装備表示が壊れるのを防ぐ） */
+  useLayoutEffect(() => {
+    migrateRepairProgressIfNeeded();
+    setKotobaLeafCount(getRepairBookFragments());
+    setRepairSpentCount(getRepairSpentFragments());
+  }, []);
+
   useEffect(() => {
     migrateRepairProgressIfNeeded();
     const sync = () => {
@@ -762,13 +772,28 @@ const HomeScreen = ({
     return { ...calcRankInfo(totalBooks), totalBooks };
   }, [repairSpentCount]);
 
+  const equippedLibraryTitleTierIndex = useGameStore((s) => s.equippedLibraryTitleTierIndex);
+  const equippedShoulderPresetId = useGameStore((s) => s.equippedShoulderPresetId);
+
+  const actualTierIndex = libraryRankInfo.tierIndex;
+  const clampEquipped =
+    equippedLibraryTitleTierIndex != null
+      ? Math.min(equippedLibraryTitleTierIndex, actualTierIndex)
+      : null;
+  /** 上部バーは級を出さず。プリセット優先、なければランク肩書き名のみ */
+  const glowTierIndex = clampEquipped != null ? clampEquipped : actualTierIndex;
+  const presetCfg = equippedShoulderPresetId
+    ? SHOULDER_TITLE_PRESETS[equippedShoulderPresetId]
+    : null;
+  const GLOW = presetCfg ? presetCfg.glow : RANK_TIERS[glowTierIndex].glow;
+  const bannerTitle = presetCfg ? presetCfg.label : RANK_TIERS[glowTierIndex].name;
+
   const booksToNext: number   = (libraryRankInfo as any).booksToNext   ?? 0;
   const nextThreshold: number = (libraryRankInfo as any).nextThreshold ?? 20;
   const isMaxRank             = booksToNext === 0 && nextThreshold === 0;
   const isAlmostRankUp        = !isMaxRank && booksToNext <= 3;
   const progressRatio         = nextThreshold > 0
     ? Math.min(1,(nextThreshold - booksToNext)/nextThreshold) : 1;
-  const GLOW = libraryRankInfo.tier.glow;
 
   return (
     <div style={{
@@ -862,11 +887,26 @@ const HomeScreen = ({
           <AuthButton/>
         </div>
 
-        {/* ── ゴールドバナー ── */}
-        <motion.div
+        {/* ── ゴールドバナー（タップで称号選択） ── */}
+        <motion.button
+          type="button"
           initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}
           transition={{duration:0.4}}
-          style={{position:'relative'}}
+          onClick={() => {
+            vibrateLight();
+            onNavigate('library_title_select');
+          }}
+          style={{
+            position:'relative',
+            width:'100%',
+            border:'none',
+            background:'transparent',
+            padding:0,
+            cursor:'pointer',
+            WebkitTapHighlightColor:'transparent',
+            textAlign:'left',
+          }}
+          aria-label="称号を選ぶ"
         >
           {/* 三重縁 */}
           <div style={{
@@ -904,7 +944,7 @@ const HomeScreen = ({
                     fontSize:19,fontWeight:900,letterSpacing:'0.04em',
                     color:'#fff8d0',
                     textShadow:'0 1px 0 rgba(0,0,0,0.8),0 0 14px rgba(255,230,80,0.5)',
-                  }}>{libraryRankInfo.fullTitle}</div>
+                  }}>{bannerTitle}</div>
                 </div>
                 {/* 右：コイン */}
                 <div style={{
@@ -935,7 +975,7 @@ const HomeScreen = ({
               pointerEvents:'none',
             }}>◆</div>
           ))}
-        </motion.div>
+        </motion.button>
 
         {/* ── ランクカード（コンパクト横長版）── */}
         <motion.div
@@ -2510,6 +2550,17 @@ const AppContent = () => {
               onShowShare={() => setShowShareModal(true)}
               onOpenMyPage={() => handleNavigate('mypage')}
             />
+          </motion.div>
+        )}
+
+        {phase === 'library_title_select' && (
+          <motion.div
+            key="library_title_select"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <LibraryTitleSelectScreen onBack={() => handleNavigate('home')} />
           </motion.div>
         )}
 

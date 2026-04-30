@@ -5,6 +5,7 @@
  */
 
 import type { Item } from '@/data/items';
+import type { EquippedShoulderPresetId } from '@/data/shoulderTitlePresets';
 
 // ===== Quiz Types =====
 
@@ -319,6 +320,14 @@ export interface UserState {
   uid?: string | null;
   // 表示名（ローカル保存）
   displayName: string;
+  /**
+   * ホーム上部に表示する図書館ランク称号（見習い司書〜言詠士）の選択。
+   * null = 進行ランクに合わせる（インデックスは内部的に進行ティア／上部バーは肩書き名のみ・級なし）。
+   * 数値は RANK_TIERS のインデックス（獲得済みのみ）。明示選択時も上部は級を表示しない。
+   */
+  equippedLibraryTitleTierIndex: number | null;
+  /** 図書館ランクと排他: セット時は equippedLibraryTitleTierIndex を null にする */
+  equippedShoulderPresetId: EquippedShoulderPresetId | null;
 
   // リソース
   coins: number;                 // 所持コイン
