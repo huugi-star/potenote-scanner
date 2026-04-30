@@ -57,6 +57,7 @@ import {
 } from '@/constants/rankSystem';
 import { useLibraryRankSnapshot } from '@/hooks/useLibraryRankSnapshot';
 import { SHOULDER_TITLE_PRESETS } from '@/data/shoulderTitlePresets';
+import { KanColeScreen } from '@/components/screens/KanColeScreen';
 
 // ===== Types =====
 
@@ -66,6 +67,7 @@ type GamePhase =
   | 'suhimochi_room'
   | 'academy'
   | 'adventure_menu'
+  | 'kancole'
   | 'scanning'
   | 'mode_select'
   | 'translation_mode_select' // 翻訳モード選択画面
@@ -138,12 +140,14 @@ const AdventureMenuScreen = ({
   onOpenWordDex,
   onOpenEnglishReading,
   onQuickQuizReady,
+  onOpenKanCole,
 }: {
   onBack: () => void;
   onOpenFreeQuest: () => void;
   onOpenWordDex: () => void;
   onOpenEnglishReading: () => void;
   onQuickQuizReady: (quiz: QuizRaw, imageUrl: string) => void;
+  onOpenKanCole: () => void;
 }) => {
   const router = useRouter();
   const { addToast } = useToast();
@@ -537,6 +541,20 @@ const AdventureMenuScreen = ({
           <div className="pt-2">
             <div className="h-px w-full bg-gray-700/60" />
           </div>
+
+          <motion.button
+            type="button"
+            onClick={() => {
+              vibrateLight();
+              onOpenKanCole();
+            }}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-slate-700 to-slate-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-slate-500/20"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <BookOpen className="w-5 h-5" />
+            漢コレ
+          </motion.button>
 
           <motion.button
             type="button"
@@ -2626,6 +2644,7 @@ const AppContent = () => {
                 useGameStore.getState().setScanType('translation');
                 handleNavigate('scanning');
               }}
+              onOpenKanCole={() => handleNavigate('kancole')}
               onQuickQuizReady={(quiz, imageUrl) => {
                 setQuizSession({
                   quiz,
@@ -2637,6 +2656,17 @@ const AppContent = () => {
                 setPhase('mode_select');
               }}
             />
+          </motion.div>
+        )}
+
+        {phase === 'kancole' && (
+          <motion.div
+            key="kancole"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <KanColeScreen onBack={handleBackToHome} />
           </motion.div>
         )}
 

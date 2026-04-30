@@ -106,6 +106,51 @@ export interface WordDexWord {
 }
 
 /**
+ * 漢コレ：読み問題（1語）
+ */
+export interface KanColeCard {
+  term: string;        // 漢字語（例: 情報処理）
+  reading: string;     // ひらがな（例: じょうほうしょり）
+  meaning: string;     // 意味（短め）
+  explanation: string; // 軽い解説（短め）
+  sourceSnippet?: string; // 本文中の出典（任意）
+}
+
+export interface KanColeEnemy extends KanColeCard {
+  hp: number; // 2=未封印, 1=弱体, 0=封印
+  asked: boolean;
+  wrongCount: number;
+}
+
+/**
+ * 漢コレ：封印済み（=2回正解）
+ */
+export interface KanColeSealedEntry extends KanColeCard {
+  sealedAt: string; // ISO
+  correctCount: number; // 封印時点の累計（通常2）
+}
+
+export interface KanColeScan {
+  id: string;
+  title: string;
+  createdAt: string;
+  imageUrl?: string;
+  words: KanColeEnemy[];
+  activeEnemyTerms?: string[];
+  activeEnemyTotal?: number;
+  defeatedCount?: number;
+  lastAdventureSnapshot?: {
+    timestamp: string;
+    capturedCount: number;
+    defeatedCount: number;
+    remainingCount: number;
+    total: number;
+    capturedWords: KanColeEnemy[];
+    defeatedWords: KanColeEnemy[];
+  };
+}
+
+/**
  * ことば図鑑: 関連語リンク
  */
 export interface WordDexRelation {

@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
-import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult, QuizQuestionAttempt, WordDexDictionary, WordDexRelation, WordDexWord, AcademyUserQuestion } from '@/types';
+import type { UserState, EquippedItems, QuizResult, GachaResult, Flag, Coordinate, QuizRaw, QuizHistory, Island, TranslationResult, TranslationHistory, LectureScript, LectureHistory, WordCollectionScan, WordEnemy, WordCollectionScanResult, QuizQuestionAttempt, WordDexDictionary, WordDexRelation, WordDexWord, AcademyUserQuestion, KanColeCard, KanColeSealedEntry, KanColeScan, KanColeEnemy } from '@/types';
 import type {
   AnataZukanEntry,
   AnataZukanExtractedEntry,
@@ -730,6 +730,18 @@ interface GameState extends UserState {
   wordDexDictionaries: WordDexDictionary[];
   wordDexWords: WordDexWord[];
 
+  // 漢コレ：正解回数（termをキーに累計）
+  kanColeCorrectCounts: Record<string, number>;
+  // 漢コレ：封印済み（termをキー）
+  kanColeSealed: Record<string, KanColeSealedEntry>;
+  // 漢コレ：不正解の再挑戦キュー（term重複可）
+  kanColeRetryQueue: KanColeCard[];
+  // 漢コレ冒険ログ
+  kanColeScans: KanColeScan[];
+
+  // 漢字図鑑：発見順（スキャンで初出した順）
+  kanDexOrder: string[];
+
   // すうひもちアカデミー: 表示用問題（公式 + ユーザー投稿のFirestoreマージ）
   academyUserQuestions: AcademyUserQuestion[];
 
@@ -858,6 +870,18 @@ interface GameActions {
   renameWordDexDictionary: (dictionaryId: string, nextName: string) => void;
   deleteWordDexDictionary: (dictionaryId: string) => void;
   registerQuizBatchToWordDex: (quiz: QuizRaw, batchId: string, dictionaryId?: string) => void;
+  // 漢コレ
+  recordKanColeWrong: (card: KanColeCard) => void;
+  markKanColeCorrect: (card: KanColeCard) => { correctCount: number; sealed: boolean; newlySealed: boolean };
+  clearKanColeRetryQueue: () => void;
+  saveKanColeScan: (cards: KanColeCard[], imageUrl?: string) => string | undefined;
+  getKanColeScanById: (id: string) => KanColeScan | undefined;
+  updateKanColeEnemyState: (scanId: string, term: string, updates: Partial<Pick<KanColeEnemy, 'hp' | 'asked' | 'wrongCount'>>) => void;
+  saveKanColeAdventureSnapshot: (
+    scanId: string,
+    snapshot: NonNullable<KanColeScan['lastAdventureSnapshot']>
+  ) => void;
+  registerKanDexTerms: (terms: string[]) => void;
   upsertWordDexWordContext: (
     wordId: string,
     patch: Partial<Pick<WordDexWord, 'description' | 'relatedFacts' | 'relations'>>
@@ -1019,6 +1043,11 @@ const initialState: GameState = {
   wordDexOrder: [],
   wordDexDictionaries: DEFAULT_WORD_DEX_DICTIONARIES,
   wordDexWords: [],
+  kanColeCorrectCounts: {},
+  kanColeSealed: {},
+  kanColeRetryQueue: [],
+  kanColeScans: [],
+  kanDexOrder: [],
   academyUserQuestions: mergeSeedAndPostedAcademyQuestions([], []),
 
   lectureHistory: [],
@@ -2357,6 +2386,157 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      // ===== KanCole (漢コレ) =====
+      recordKanColeWrong: (card) => {
+        const state = get();
+        const term = String(card?.term ?? '').trim();
+        if (!term) return;
+        set({
+          kanColeRetryQueue: [
+            ...state.kanColeRetryQueue,
+            {
+              term,
+              reading: String(card.reading ?? '').trim(),
+              meaning: String(card.meaning ?? '').trim(),
+              explanation: String(card.explanation ?? '').trim(),
+              sourceSnippet: card.sourceSnippet ? String(card.sourceSnippet).trim() : undefined,
+            },
+          ],
+        });
+      },
+
+      markKanColeCorrect: (card) => {
+        const state = get();
+        const term = String(card?.term ?? '').trim();
+        if (!term) return { correctCount: 0, sealed: false, newlySealed: false };
+
+        const prevCount = Number(state.kanColeCorrectCounts?.[term] ?? 0) || 0;
+        const nextCount = prevCount + 1;
+        const prevSealed = !!state.kanColeSealed?.[term];
+        const newlySealed = !prevSealed && nextCount >= 2;
+
+        const nextCorrectCounts = { ...(state.kanColeCorrectCounts ?? {}), [term]: nextCount };
+        const nextSealed = { ...(state.kanColeSealed ?? {}) };
+        if (newlySealed) {
+          nextSealed[term] = {
+            term,
+            reading: String(card.reading ?? '').trim(),
+            meaning: String(card.meaning ?? '').trim(),
+            explanation: String(card.explanation ?? '').trim(),
+            sourceSnippet: card.sourceSnippet ? String(card.sourceSnippet).trim() : undefined,
+            sealedAt: new Date().toISOString(),
+            correctCount: nextCount,
+          } satisfies KanColeSealedEntry;
+        }
+
+        set({
+          kanColeCorrectCounts: nextCorrectCounts,
+          kanColeSealed: nextSealed,
+        });
+
+        return { correctCount: nextCount, sealed: newlySealed || prevSealed, newlySealed };
+      },
+
+      clearKanColeRetryQueue: () => {
+        set({ kanColeRetryQueue: [] });
+      },
+
+      saveKanColeScan: (cards, imageUrl) => {
+        const state = get();
+        const words: KanColeEnemy[] = (cards ?? [])
+          .map((c) => ({
+            term: String(c.term ?? '').trim(),
+            reading: String(c.reading ?? '').trim(),
+            meaning: String(c.meaning ?? '').trim(),
+            explanation: String(c.explanation ?? '').trim(),
+            sourceSnippet: c.sourceSnippet ? String(c.sourceSnippet).trim() : undefined,
+            hp: 2,
+            asked: false,
+            wrongCount: 0,
+          }))
+          .filter((w) => w.term && w.reading);
+
+        if (words.length === 0) return undefined;
+        const id = `kancole_${Date.now()}`;
+        const titleBase = words.slice(0, 2).map((w) => w.term).join('・');
+        const title = `漢コレスキャン${state.kanColeScans.length + 1}：${titleBase}${words.length > 2 ? '…' : ''}`;
+        const scan: KanColeScan = {
+          id,
+          title,
+          createdAt: new Date().toISOString(),
+          imageUrl,
+          words,
+          activeEnemyTerms: words.map((w) => w.term).slice(0, 21),
+          activeEnemyTotal: Math.min(21, words.length),
+        };
+        // 漢字図鑑：発見順に登録（初出のみ）
+        const nextDex = [...(state.kanDexOrder ?? [])];
+        const seen = new Set(nextDex);
+        for (const w of words) {
+          if (!seen.has(w.term)) {
+            seen.add(w.term);
+            nextDex.push(w.term);
+          }
+        }
+
+        set({ kanColeScans: [scan, ...(state.kanColeScans ?? [])], kanDexOrder: nextDex });
+        return id;
+      },
+
+      getKanColeScanById: (id) => {
+        return get().kanColeScans.find((s) => s.id === id);
+      },
+
+      updateKanColeEnemyState: (scanId, term, updates) => {
+        set((state) => ({
+          kanColeScans: state.kanColeScans.map((scan) =>
+            scan.id !== scanId
+              ? scan
+              : {
+                  ...scan,
+                  words: scan.words.map((w) =>
+                    w.term !== term
+                      ? w
+                      : {
+                          ...w,
+                          hp: typeof updates.hp === 'number' ? updates.hp : w.hp,
+                          asked: typeof updates.asked === 'boolean' ? updates.asked : w.asked,
+                          wrongCount: typeof updates.wrongCount === 'number' ? updates.wrongCount : w.wrongCount,
+                        }
+                  ),
+                }
+          ),
+        }));
+      },
+
+      saveKanColeAdventureSnapshot: (scanId, snapshot) => {
+        set((state) => ({
+          kanColeScans: state.kanColeScans.map((scan) =>
+            scan.id !== scanId
+              ? scan
+              : {
+                  ...scan,
+                  lastAdventureSnapshot: snapshot,
+                }
+          ),
+        }));
+      },
+
+      registerKanDexTerms: (terms) => {
+        const state = get();
+        const next = [...(state.kanDexOrder ?? [])];
+        const seen = new Set(next);
+        let changed = false;
+        for (const t of terms ?? []) {
+          const term = String(t ?? '').trim();
+          if (!term || seen.has(term)) continue;
+          seen.add(term);
+          next.push(term);
+          changed = true;
+        }
+        if (changed) set({ kanDexOrder: next });
+      },
+
       upsertWordDexWordContext: (wordId, patch) => {
         const state = get();
         const description = normalizeSentence(String(patch.description ?? ''));
@@ -3638,6 +3818,11 @@ export const useGameStore = create<GameStore>()(
         wordDexOrder: state.wordDexOrder,
         wordDexDictionaries: state.wordDexDictionaries,
         wordDexWords: state.wordDexWords,
+        kanColeScans: state.kanColeScans,
+        kanColeCorrectCounts: state.kanColeCorrectCounts,
+        kanColeSealed: state.kanColeSealed,
+        kanColeRetryQueue: state.kanColeRetryQueue,
+        kanDexOrder: state.kanDexOrder,
         lectureHistory: state.lectureHistory,
         scanType: state.scanType,
         translationResult: state.translationResult,
