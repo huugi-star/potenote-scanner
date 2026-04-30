@@ -97,6 +97,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
 
   const [dexVolIndex, setDexVolIndex] = useState(0);
   const [dexTerm, setDexTerm] = useState<string | null>(null);
+  const [keyboardInset, setKeyboardInset] = useState(0);
 
   const answerInputRef = useRef<HTMLInputElement>(null);
   const scrollLockYRef = useRef(0);
@@ -132,7 +133,38 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     // 画面遷移で入力中ロックが残るのを防ぐ
-    if (view !== 'battle') unlockScroll();
+    if (view !== 'battle') {
+      unlockScroll();
+      setKeyboardInset(0);
+      return;
+    }
+
+    // battle中は常時ロックして、フォーカス時の自動スクロール余地を消す
+    lockScroll();
+    window.scrollTo(0, 0);
+
+    const vv = window.visualViewport;
+    if (!vv) return () => unlockScroll();
+
+    const syncViewport = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKeyboardInset(inset);
+      // 入力中にブラウザが勝手にスクロールしてもトップへ戻す
+      if (document.activeElement === answerInputRef.current) window.scrollTo(0, 0);
+    };
+
+    vv.addEventListener('resize', syncViewport);
+    vv.addEventListener('scroll', syncViewport);
+    window.addEventListener('scroll', syncViewport, { passive: true });
+    syncViewport();
+
+    return () => {
+      vv.removeEventListener('resize', syncViewport);
+      vv.removeEventListener('scroll', syncViewport);
+      window.removeEventListener('scroll', syncViewport);
+      unlockScroll();
+      setKeyboardInset(0);
+    };
   }, [unlockScroll, view]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -638,7 +670,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-gradient-to-b from-[#0a0e17] to-[#0d1321]">
+    <div className="fixed inset-0 h-[100dvh] overflow-hidden bg-gradient-to-b from-[#0a0e17] to-[#0d1321]">
       <style jsx global>{`
         html, body { height: 100%; }
         @keyframes sealGlow {
@@ -667,7 +699,10 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
         やめる
       </button>
 
-      <div className="absolute inset-0 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 flex items-center justify-center p-4"
+        style={{ transform: keyboardInset > 0 ? `translateY(-${Math.min(160, keyboardInset * 0.55)}px)` : undefined }}
+      >
         <div className="relative w-full max-w-[min(360px,90vw)] aspect-[9/16] rounded-[2rem] p-3 bg-gradient-to-b from-gray-800 to-gray-900 shadow-[0_0_0_4px_rgba(55,65,81,0.8),0_0_0_8px_rgba(31,41,55,0.6),0_25px_50px_-12px_rgba(0,0,0,0.6)]">
         <div className="relative w-full h-full rounded-[1.25rem] overflow-hidden bg-transparent flex flex-col">
           <div className="absolute top-0 left-0 right-0 h-1 z-10 bg-black/60"><motion.div className={`${isTimeWarning ? 'bg-red-600' : 'bg-amber-500'} h-full`} animate={{ width: `${timePct}%` }} transition={{ duration: 0.2 }} /></div>
@@ -855,12 +890,8 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
                 ref={answerInputRef}
                 value={answer}
                 onFocus={() => {
-                  lockScroll();
                   // フォーカス直後に「見える位置へスクロール」を抑止
                   window.setTimeout(() => window.scrollTo(0, 0), 0);
-                }}
-                onBlur={() => {
-                  unlockScroll();
                 }}
                 onChange={(e) => setAnswer(e.target.value)}
                 disabled={battleState === 'feedback'}
