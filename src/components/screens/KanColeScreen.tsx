@@ -98,6 +98,43 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
   const [dexVolIndex, setDexVolIndex] = useState(0);
   const [dexTerm, setDexTerm] = useState<string | null>(null);
 
+  const answerInputRef = useRef<HTMLInputElement>(null);
+  const scrollLockYRef = useRef(0);
+
+  const lockScroll = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const body = document.body;
+    // すでに固定されている場合は何もしない
+    if (body.style.position === 'fixed') return;
+    const y = window.scrollY || window.pageYOffset || 0;
+    scrollLockYRef.current = y;
+    body.style.position = 'fixed';
+    body.style.top = `-${y}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    body.style.overflow = 'hidden';
+  }, []);
+
+  const unlockScroll = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const body = document.body;
+    if (body.style.position !== 'fixed') return;
+    const y = scrollLockYRef.current || 0;
+    body.style.position = '';
+    body.style.top = '';
+    body.style.left = '';
+    body.style.right = '';
+    body.style.width = '';
+    body.style.overflow = '';
+    window.scrollTo(0, y);
+  }, []);
+
+  useEffect(() => {
+    // 画面遷移で入力中ロックが残るのを防ぐ
+    if (view !== 'battle') unlockScroll();
+  }, [unlockScroll, view]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const progressTimerRef = useRef<number | null>(null);
@@ -601,8 +638,9 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#0a0e17] to-[#0d1321] p-4">
+    <div className="fixed inset-0 overflow-hidden bg-gradient-to-b from-[#0a0e17] to-[#0d1321]">
       <style jsx global>{`
+        html, body { height: 100%; }
         @keyframes sealGlow {
           0% { transform: scale(0.9); opacity: 0.9; }
           50% { transform: scale(1.05); opacity: 1; }
@@ -617,8 +655,20 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
         }
         .animate-absorb-to-card { animation: absorbToCard 0.62s ease-in forwards; transform-origin: center; }
       `}</style>
-      <button onClick={() => { vibrateLight(); setView('hub'); }} className="absolute top-4 left-4 z-20 flex items-center gap-1 text-gray-500 hover:text-gray-300 text-sm"><ChevronLeft className="w-4 h-4" />やめる</button>
-      <div className="relative w-full max-w-[min(360px,90vw)] aspect-[9/16] rounded-[2rem] p-3 bg-gradient-to-b from-gray-800 to-gray-900 shadow-[0_0_0_4px_rgba(55,65,81,0.8),0_0_0_8px_rgba(31,41,55,0.6),0_25px_50px_-12px_rgba(0,0,0,0.6)]">
+      <button
+        onClick={() => {
+          vibrateLight();
+          unlockScroll();
+          setView('hub');
+        }}
+        className="fixed top-4 left-4 z-30 flex items-center gap-1 text-gray-500 hover:text-gray-300 text-sm"
+      >
+        <ChevronLeft className="w-4 h-4" />
+        やめる
+      </button>
+
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="relative w-full max-w-[min(360px,90vw)] aspect-[9/16] rounded-[2rem] p-3 bg-gradient-to-b from-gray-800 to-gray-900 shadow-[0_0_0_4px_rgba(55,65,81,0.8),0_0_0_8px_rgba(31,41,55,0.6),0_25px_50px_-12px_rgba(0,0,0,0.6)]">
         <div className="relative w-full h-full rounded-[1.25rem] overflow-hidden bg-transparent flex flex-col">
           <div className="absolute top-0 left-0 right-0 h-1 z-10 bg-black/60"><motion.div className={`${isTimeWarning ? 'bg-red-600' : 'bg-amber-500'} h-full`} animate={{ width: `${timePct}%` }} transition={{ duration: 0.2 }} /></div>
           <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -801,7 +851,27 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
             <div className="min-h-[1.25rem] flex items-center justify-center mb-2">{battleLog && <p className="text-center text-xs text-amber-200/90">{battleLog}</p>}</div>
             <div className="space-y-2">
               <div className="text-[11px] text-gray-300 font-bold">次の漢字の読みを入力してください</div>
-              <input value={answer} onChange={(e) => setAnswer(e.target.value)} disabled={battleState === 'feedback'} className="w-full rounded-lg border-2 border-gray-600 bg-gray-800/90 px-3 py-2 text-sm text-gray-100 outline-none" placeholder="ひらがなで入力" />
+              <input
+                ref={answerInputRef}
+                value={answer}
+                onFocus={() => {
+                  lockScroll();
+                  // フォーカス直後に「見える位置へスクロール」を抑止
+                  window.setTimeout(() => window.scrollTo(0, 0), 0);
+                }}
+                onBlur={() => {
+                  unlockScroll();
+                }}
+                onChange={(e) => setAnswer(e.target.value)}
+                disabled={battleState === 'feedback'}
+                inputMode="text"
+                lang="ja"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                className="w-full rounded-lg border-2 border-gray-600 bg-gray-800/90 px-3 py-2 text-base text-gray-100 outline-none"
+                placeholder="ひらがなで入力"
+              />
               {battleState === 'feedback' ? (
                 <div className="rounded-lg border border-gray-700 bg-gray-900/60 px-3 py-2 text-xs text-gray-200">
                   <div className="flex items-center gap-2 mb-1">{lastCorrect ? <CheckCircle className="w-4 h-4 text-green-400" /> : <XCircle className="w-4 h-4 text-red-400" />}{lastCorrect ? '正解' : '不正解'}</div>
@@ -813,6 +883,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
