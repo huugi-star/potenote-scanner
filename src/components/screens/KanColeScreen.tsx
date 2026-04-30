@@ -732,13 +732,22 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
             </div>
 
             <div
-              className="shrink-0 border-t-2 border-amber-900/60 bg-[#0a0e14] p-3"
+              className="relative shrink-0 border-t-2 border-amber-900/60 p-3 overflow-hidden"
               style={{
                 transform: keyboardInset > 0 ? `translateY(-${Math.min(120, keyboardInset * 0.35)}px)` : undefined,
               }}
             >
-              <div className="min-h-[1.25rem] flex items-center justify-center mb-1">{battleLog && <p className="text-center text-xs text-amber-200/90">{battleLog}</p>}</div>
-              <div className="space-y-2">
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundImage: "url('/images/backgrounds/forest.png')",
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center bottom',
+                }}
+              />
+              <div className="absolute inset-0 bg-[#0a0e14]/80" />
+              <div className="relative z-10 min-h-[1.25rem] flex items-center justify-center mb-1">{battleLog && <p className="text-center text-xs text-amber-200/90">{battleLog}</p>}</div>
+              <div className="relative z-10 space-y-2">
                 <div className="text-[11px] text-gray-300 font-bold">次の漢字の読みを入力してください</div>
                 <input
                   ref={answerInputRef}
