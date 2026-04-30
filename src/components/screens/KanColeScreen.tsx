@@ -94,6 +94,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
   const [earnedCoins, setEarnedCoins] = useState(0);
   const [earnedLeaves, setEarnedLeaves] = useState(0);
   const [missedListOpen, setMissedListOpen] = useState(false);
+  const [keyboardInset, setKeyboardInset] = useState(0);
 
   const [dexVolIndex, setDexVolIndex] = useState(0);
   const [dexTerm, setDexTerm] = useState<string | null>(null);
@@ -132,6 +133,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     if (view !== 'battle') {
       unlockScroll();
+      setKeyboardInset(0);
       return;
     }
 
@@ -139,10 +141,34 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
     lockScroll();
     window.scrollTo(0, 0);
 
-    return () => {
-      unlockScroll();
+    const vv = window.visualViewport;
+    if (!vv) {
+      return () => {
+        unlockScroll();
+        setKeyboardInset(0);
+      };
+    }
+
+    const syncKeyboardInset = () => {
+      // Android Chrome: キーボード表示時は visualViewport が縮む
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKeyboardInset(inset);
+      if (document.activeElement === answerInputRef.current) {
+        window.scrollTo(0, 0);
+      }
     };
-  }, [unlockScroll, view]);
+
+    vv.addEventListener('resize', syncKeyboardInset);
+    vv.addEventListener('scroll', syncKeyboardInset);
+    syncKeyboardInset();
+
+    return () => {
+      vv.removeEventListener('resize', syncKeyboardInset);
+      vv.removeEventListener('scroll', syncKeyboardInset);
+      unlockScroll();
+      setKeyboardInset(0);
+    };
+  }, [lockScroll, unlockScroll, view]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -634,7 +660,12 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
       </button>
 
       {/* translateYを外し、aspect固定も解除して、柔軟に縦方向に縮むように修正 */}
-      <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-4">
+      <div
+        className="absolute inset-0 flex items-center justify-center p-2 sm:p-4"
+        style={{
+          paddingBottom: keyboardInset > 0 ? `${keyboardInset + 8}px` : undefined,
+        }}
+      >
         <div className="relative w-full h-full max-w-[min(400px,100vw)] sm:h-auto sm:aspect-[9/16] flex flex-col rounded-2xl sm:rounded-[2rem] p-2 sm:p-3 bg-gradient-to-b from-gray-800 to-gray-900 shadow-[0_0_0_4px_rgba(55,65,81,0.8),0_0_0_8px_rgba(31,41,55,0.6),0_25px_50px_-12px_rgba(0,0,0,0.6)]">
           <div className="relative w-full h-full rounded-xl sm:rounded-[1.25rem] overflow-hidden bg-transparent flex flex-col">
             <div className="absolute top-0 left-0 right-0 h-1 z-10 bg-black/60"><motion.div className={`${isTimeWarning ? 'bg-red-600' : 'bg-amber-500'} h-full`} animate={{ width: `${timePct}%` }} transition={{ duration: 0.2 }} /></div>
@@ -700,17 +731,21 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
               </div>
             </div>
 
-            <div className="shrink-0 border-t-2 border-amber-900/60 bg-[#0a0e14] p-3">
+            <div
+              className="shrink-0 border-t-2 border-amber-900/60 bg-[#0a0e14] p-3"
+              style={{
+                transform: keyboardInset > 0 ? `translateY(-${Math.min(120, keyboardInset * 0.35)}px)` : undefined,
+              }}
+            >
               <div className="min-h-[1.25rem] flex items-center justify-center mb-1">{battleLog && <p className="text-center text-xs text-amber-200/90">{battleLog}</p>}</div>
               <div className="space-y-2">
                 <div className="text-[11px] text-gray-300 font-bold">次の漢字の読みを入力してください</div>
                 <input
                   ref={answerInputRef}
                   value={answer}
-                  onFocus={(e) => {
-                    // ネイティブの不要なスクロールを防ぎつつ要素を表示
+                  onFocus={() => {
+                  // Android Chromeの自動スクロールを最小化
                     setTimeout(() => window.scrollTo(0, 0), 0);
-                    e.target.scrollIntoView({ block: 'nearest' });
                   }}
                   onChange={(e) => setAnswer(e.target.value)}
                   disabled={battleState === 'feedback'}
