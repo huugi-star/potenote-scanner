@@ -647,7 +647,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                     whileTap={quizHistoryCount > 0 ? { scale: 0.98 } : {}}
                   >
                     <History className="w-5 h-5" />
-                    フリークエスト
+                    ことばを振り返る
                     <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
                       {quizHistoryCount}
                     </span>

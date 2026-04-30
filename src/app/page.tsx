@@ -7,9 +7,9 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Gem, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword, Users, GraduationCap, MessageCircle, Scan, Camera, Loader2, AlertCircle, Play } from 'lucide-react';
+import { Gem, Crown, Coins, Zap, BookOpen, Shirt, Share2, Languages, Sword, Users, GraduationCap, MessageCircle, Scan, Camera, Loader2, AlertCircle, Play, Lock } from 'lucide-react';
 import { useGameStore, selectRemainingScanCount } from '@/store/useGameStore';
 import { getItemById } from '@/data/items';
 import { auth } from '@/lib/firebase';
@@ -39,15 +39,22 @@ import { AcademyScreen } from '@/components/screens/AcademyScreen';
 import { LoginBonusModal } from '@/components/ui/LoginBonusModal';
 // import { ShopModal } from '@/components/ui/ShopModal'; // 一時的に非表示
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
-import { ToastProvider } from '@/components/ui/Toast';
+import { ToastProvider, useToast } from '@/components/ui/Toast';
 import { AuthButton } from '@/components/ui/AuthButton';
 import { OnboardingOverlay } from '@/components/ui/OnboardingOverlay';
 import { ShareModal } from '@/components/ui/ShareModal';
 import { DeveloperSupport } from '@/components/ui/DeveloperSupport';
 
-import { vibrateLight } from '@/lib/haptics';
+import { vibrateLight, vibrateError } from '@/lib/haptics';
 import { getRepairBookFragments, getRepairSpentFragments, migrateRepairProgressIfNeeded } from '@/lib/repairBookFragments';
-import { calcBooksFromFragments, calcRankInfo } from '@/constants/rankSystem';
+import {
+  calcBooksFromFragments,
+  calcRankInfo,
+  RANK_TIERS,
+  UNLOCK_WORD_COLLECTION_MIN_TIER_INDEX,
+  UNLOCK_ENGLISH_LEARNING_TRANSLATION_MIN_TIER_INDEX,
+} from '@/constants/rankSystem';
+import { useLibraryRankSnapshot } from '@/hooks/useLibraryRankSnapshot';
 
 // ===== Types =====
 
@@ -124,15 +131,25 @@ const TranslationResultScreenWrapper = ({ onBack }: { onBack: () => void }) => {
  */
 const AdventureMenuScreen = ({
   onBack,
-  onOpenScanAdventure,
+  onOpenFreeQuest,
+  onOpenWordDex,
   onOpenEnglishReading,
   onQuickQuizReady,
 }: {
   onBack: () => void;
-  onOpenScanAdventure: () => void;
+  onOpenFreeQuest: () => void;
+  onOpenWordDex: () => void;
   onOpenEnglishReading: () => void;
   onQuickQuizReady: (quiz: QuizRaw, imageUrl: string) => void;
 }) => {
+  const router = useRouter();
+  const { addToast } = useToast();
+  const libraryRank = useLibraryRankSnapshot();
+  const unlockWordCollection = libraryRank.tierIndex >= UNLOCK_WORD_COLLECTION_MIN_TIER_INDEX;
+  const unlockEnglishLearning = libraryRank.tierIndex >= UNLOCK_ENGLISH_LEARNING_TRANSLATION_MIN_TIER_INDEX;
+  const requiredTankoreTierName = RANK_TIERS[UNLOCK_WORD_COLLECTION_MIN_TIER_INDEX].name;
+  const requiredEnglishTierName = RANK_TIERS[UNLOCK_ENGLISH_LEARNING_TRANSLATION_MIN_TIER_INDEX].name;
+
   const uid = useGameStore((s) => s.uid);
   const isVIP = useGameStore((s) => s.isVIP);
   const dailyScanCount = useGameStore((s) => s.dailyScanCount);
@@ -330,10 +347,6 @@ const AdventureMenuScreen = ({
             <div className="min-w-0">
               <div className="text-white font-bold flex items-center gap-2">
                 <Scan className="w-4 h-4 text-cyan-300" />
-                すぐスキャンしてクイズ
-              </div>
-              <div className="text-gray-400 text-xs mt-1">
-                画像を置くと、そのままクイズ生成まで進みます
               </div>
             </div>
             {/* スキャン残り回数（ScanningScreenと同形式） */}
@@ -477,7 +490,7 @@ const AdventureMenuScreen = ({
                   )}
                 </div>
                 <div className="text-white font-semibold text-sm">
-                  タップして選択 / ドラッグ&ドロップ
+                  タップして画像選択
                 </div>
                 <div className="text-gray-400 text-xs flex items-center justify-center gap-1">
                   <AlertCircle className="w-3.5 h-3.5" />
@@ -495,41 +508,102 @@ const AdventureMenuScreen = ({
         </div>
 
         <div className="space-y-3">
-          <Link href="/word-collection" onClick={() => vibrateLight()}>
-            <motion.div
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Sword className="w-5 h-5" />
-              単コレ
-            </motion.div>
-          </Link>
-
           <motion.button
             onClick={() => {
               vibrateLight();
-              onOpenScanAdventure();
+              onOpenFreeQuest();
             }}
-            className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25"
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            スキャンして学ぶ
+            <Users className="w-5 h-5" />
+            ことばを振り返る
+          </motion.button>
+
+          <div className="pt-2">
+            <div className="h-px w-full bg-gray-700/60" />
+          </div>
+
+          <motion.button
+            type="button"
+            onClick={() => {
+              if (!unlockWordCollection) {
+                vibrateError();
+                addToast('error', `🔒 「${requiredTankoreTierName}」ランクで単コレが解放されます`);
+                return;
+              }
+              vibrateLight();
+              router.push('/word-collection');
+            }}
+            className={`relative w-full overflow-hidden py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 ${
+              unlockWordCollection ? '' : 'opacity-75 saturate-75 ring-2 ring-gray-700/90'
+            }`}
+            whileHover={unlockWordCollection ? { scale: 1.02 } : { scale: 1 }}
+            whileTap={unlockWordCollection ? { scale: 0.98 } : { scale: 0.995 }}
+          >
+            {!unlockWordCollection && (
+              <>
+                <div className="pointer-events-none absolute inset-0 bg-black/35" aria-hidden />
+                <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5">
+                  <Lock className="w-7 h-7 text-amber-100 drop-shadow-[0_0_10px_rgba(251,191,36,0.85)]" />
+                  <span className="text-[9px] font-black tracking-widest text-amber-50/95">LOCK</span>
+                </div>
+              </>
+            )}
+            <Sword className="w-5 h-5" />
+            単コレ
           </motion.button>
 
           <motion.button
+            type="button"
             onClick={() => {
+              if (!unlockEnglishLearning) {
+                vibrateError();
+                addToast('error', `🔒 「${requiredEnglishTierName}」ランクで英文解釈が解放されます`);
+                return;
+              }
               vibrateLight();
               onOpenEnglishReading();
             }}
-            className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            className={`relative w-full overflow-hidden py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 ${
+              unlockEnglishLearning ? '' : 'opacity-75 saturate-75 ring-2 ring-gray-700/90'
+            }`}
+            whileHover={unlockEnglishLearning ? { scale: 1.02 } : { scale: 1 }}
+            whileTap={unlockEnglishLearning ? { scale: 0.98 } : { scale: 0.995 }}
           >
+            {!unlockEnglishLearning && (
+              <>
+                <div className="pointer-events-none absolute inset-0 bg-black/35" aria-hidden />
+                <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5">
+                  <Lock className="w-7 h-7 text-emerald-100 drop-shadow-[0_0_10px_rgba(52,211,153,0.85)]" />
+                  <span className="text-[9px] font-black tracking-widest text-emerald-50/95">LOCK</span>
+                </div>
+              </>
+            )}
             <Languages className="w-5 h-5" />
             英文解釈
           </motion.button>
+
+          {/* ことば図鑑は「保留」扱いで普段は隠す */}
+          <details className="rounded-xl border border-gray-700/60 bg-gray-900/20 px-4 py-3">
+            <summary className="cursor-pointer select-none text-sm font-bold text-gray-200">
+              その他
+            </summary>
+            <div className="pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  vibrateLight();
+                  onOpenWordDex();
+                }}
+                className="w-full rounded-xl border border-orange-500/25 bg-orange-500/10 px-4 py-3 text-left text-sm font-bold text-orange-100 hover:bg-orange-500/15 transition-colors flex items-center gap-2"
+              >
+                <BookOpen className="w-4 h-4 text-orange-300" />
+                ことば図鑑
+              </button>
+            </div>
+          </details>
         </div>
 
         <button
@@ -1995,6 +2069,11 @@ const TranslationModeSelectScreen = ({
   onBack: () => void;
   onOpenHistory: () => void;
 }) => {
+  const { addToast } = useToast();
+  const libraryRank = useLibraryRankSnapshot();
+  const englishLearningUnlocked = libraryRank.tierIndex >= UNLOCK_ENGLISH_LEARNING_TRANSLATION_MIN_TIER_INDEX;
+  const requiredEnglishTierName = RANK_TIERS[UNLOCK_ENGLISH_LEARNING_TRANSLATION_MIN_TIER_INDEX].name;
+
   const translationHistoryCount = useGameStore(state => state.translationHistory.length);
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4 pb-24">
@@ -2027,18 +2106,34 @@ const TranslationModeSelectScreen = ({
           {/* 英語学習・構造解析モード */}
           <motion.button
             onClick={() => {
+              if (!englishLearningUnlocked) {
+                vibrateError();
+                addToast('error', `🔒 「${requiredEnglishTierName}」ランクで解放されます`);
+                return;
+              }
               vibrateLight();
               useGameStore.getState().setTranslationMode('english_learning');
               useGameStore.getState().setScanType('translation');
               onSelectMode('english_learning');
             }}
-            className="w-full p-6 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 text-white text-left shadow-lg shadow-blue-500/25"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            className={`relative w-full overflow-hidden p-6 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 text-white text-left shadow-lg shadow-blue-500/25 ${
+              englishLearningUnlocked ? '' : 'opacity-75 saturate-[0.82] ring-2 ring-gray-700/95'
+            }`}
+            whileHover={englishLearningUnlocked ? { scale: 1.02 } : { scale: 1 }}
+            whileTap={englishLearningUnlocked ? { scale: 0.98 } : { scale: 0.995 }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
+            {!englishLearningUnlocked && (
+              <>
+                <div className="pointer-events-none absolute inset-0 bg-black/40" aria-hidden />
+                <div className="pointer-events-none absolute right-4 top-4 flex flex-col items-center gap-0.5">
+                  <Lock className="w-10 h-10 text-blue-100 drop-shadow-[0_0_12px_rgba(147,197,253,0.9)] animate-pulse" />
+                  <span className="text-[10px] font-black tracking-[0.2em] text-blue-50">LOCKED</span>
+                </div>
+              </>
+            )}
             <div className="flex items-start gap-4">
               <div className="text-4xl">🎓</div>
               <div className="flex-1">
@@ -2459,10 +2554,8 @@ const AppContent = () => {
           >
             <AdventureMenuScreen
               onBack={() => handleNavigate('home')}
-              onOpenScanAdventure={() => {
-                useGameStore.getState().setScanType('quiz');
-                handleNavigate('scanning');
-              }}
+              onOpenFreeQuest={() => handleNavigate('freequest')}
+              onOpenWordDex={() => handleOpenWordDex('adventure_menu')}
               onOpenEnglishReading={() => {
                 useGameStore.getState().setTranslationMode('english_learning');
                 useGameStore.getState().setScanType('translation');

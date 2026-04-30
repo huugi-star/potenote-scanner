@@ -317,7 +317,7 @@ export const FreeQuestScreen = ({ onBack, onStartQuiz }: FreeQuestScreenProps) =
 
           <h1 className="text-xl font-bold text-white flex items-center gap-2">
             <BookOpen className="w-6 h-6 text-emerald-400" />
-            フリークエスト
+            ことばを振り返る
           </h1>
 
           <div className="w-16" />

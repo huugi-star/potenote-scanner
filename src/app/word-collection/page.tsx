@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Scan, BookOpen, BookMarked } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Scan, BookOpen, BookMarked, Sword, Lock } from 'lucide-react';
 import { vibrateLight } from '@/lib/haptics';
 import { useToast } from '@/components/ui/Toast';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -22,6 +22,8 @@ import { WordDexVolScreen } from '@/components/word-collection/WordDexVolScreen'
 import { WordDexDetailScreen } from '@/components/word-collection/WordDexDetailScreen';
 import { LIMITS } from '@/lib/constants';
 import { getJstDateString } from '@/lib/dateUtils';
+import { RANK_TIERS, UNLOCK_WORD_COLLECTION_MIN_TIER_INDEX } from '@/constants/rankSystem';
+import { useLibraryRankSnapshot } from '@/hooks/useLibraryRankSnapshot';
 
 // ===== Page Content =====
 
@@ -42,6 +44,8 @@ function WordCollectionContent() {
   const refillActiveEnemies = useGameStore((s) => s.refillActiveEnemies);
   const saveAdventureSnapshot = useGameStore((s) => s.saveAdventureSnapshot);
   const addCoins = useGameStore((s) => s.addCoins);
+  const libraryRank = useLibraryRankSnapshot();
+  const wordCollectionUnlocked = libraryRank.tierIndex >= UNLOCK_WORD_COLLECTION_MIN_TIER_INDEX;
 
   const scansForDisplay: ScanCardData[] = wordCollectionScans.map((scan) => {
     // 冒険ログは「完了時のスナップショット」を最優先で表示（続きを探索しても崩れない）
@@ -105,6 +109,35 @@ function WordCollectionContent() {
       setSelectedScanId(null);
     }
   }, [view, selectedScanId, selectedScan]);
+
+  if (!wordCollectionUnlocked) {
+    const needRank = RANK_TIERS[UNLOCK_WORD_COLLECTION_MIN_TIER_INDEX].name;
+    return (
+      <div className="min-h-[100dvh] bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 text-white flex flex-col items-center justify-center px-6 py-12">
+        <div className="relative mb-1">
+          <div className="w-28 h-28 rounded-3xl bg-amber-500/12 border-2 border-amber-400/35 flex items-center justify-center shadow-[0_0_48px_rgba(251,191,36,0.14)]">
+            <Sword className="w-14 h-14 text-amber-300" />
+          </div>
+          <div className="absolute -right-2 -top-2 rounded-2xl bg-gray-950/95 border border-amber-400/45 p-2.5 shadow-lg">
+            <Lock className="w-9 h-9 text-amber-200 animate-pulse" />
+          </div>
+        </div>
+        <h1 className="mt-6 text-xl font-black text-white text-center tracking-tight">単コレはロック中</h1>
+        <p className="mt-3 text-gray-400 text-sm text-center max-w-[20rem] leading-relaxed">
+          アカデミーで本を修繕して図書館ランクが
+          <span className="text-amber-200 font-bold"> 「{needRank}」 </span>
+          に達すると解放されます。
+        </p>
+        <Link
+          href="/"
+          onClick={() => vibrateLight()}
+          className="mt-10 w-full max-w-xs py-4 rounded-xl text-center font-bold bg-gradient-to-r from-amber-600 to-amber-500 shadow-lg shadow-amber-600/25"
+        >
+          ホームへ戻る
+        </Link>
+      </div>
+    );
+  }
 
   // ワード図鑑
   if (view === 'dex') {

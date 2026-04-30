@@ -32,6 +32,11 @@ export const FRAGMENTS_PER_BOOK_BY_TIER = [
 export const GRADES_PER_TIER = 10;
 export const TOTAL_TIERS     = RANK_TIERS.length; // 11
 
+/** 単コレ等: 「司書」ティアに到達（tierIndex >= 1）で解放（見習い司書とは別ランクとして扱う） */
+export const UNLOCK_WORD_COLLECTION_MIN_TIER_INDEX = 1;
+/** 英文解釈（英語学習モード）: 「司書長」ティア以上で解放（tierIndex >= 3） */
+export const UNLOCK_ENGLISH_LEARNING_TRANSLATION_MIN_TIER_INDEX = 3;
+
 // 累計冊数: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110]
 export const TIER_CUMULATIVE_BOOKS = BOOKS_PER_TIER_LIST.reduce<number[]>(
   (acc, v) => { acc.push((acc[acc.length - 1] ?? 0) + v); return acc; },
