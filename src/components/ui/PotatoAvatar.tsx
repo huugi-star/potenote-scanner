@@ -27,6 +27,8 @@ interface PotatoAvatarProps {
     accessory? : Item;
   };
   emotion?  : PotatoEmotion;
+  showEmotionEffect?: boolean;
+  idleAnimation?: boolean;
   ssrEffect?: boolean;
   size?     : number;
   className?: string;
@@ -381,11 +383,17 @@ const EquipmentLayer = ({
 // ===== Idle animation hooks =====
 
 /** ランダム間隔で一瞬だけ true にするフック */
-function useRandomBlink(minMs: number, maxMs: number, durationMs: number) {
+function useRandomBlink(enabled: boolean, minMs: number, maxMs: number, durationMs: number) {
   const [active, setActive] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!enabled) {
+      setActive(false);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = null;
+      return;
+    }
     const schedule = () => {
       const delay = minMs + Math.random() * (maxMs - minMs);
       timerRef.current = setTimeout(() => {
@@ -408,6 +416,8 @@ function useRandomBlink(minMs: number, maxMs: number, durationMs: number) {
 export const PotatoAvatar = ({
   equipped  = {},
   emotion   = 'normal',
+  showEmotionEffect = true,
+  idleAnimation = true,
   ssrEffect = false,
   size      = 120,
   className = '',
@@ -419,12 +429,18 @@ export const PotatoAvatar = ({
   const showSSREffect = ssrEffect;
 
   // (4) まばたき: 3〜6秒に1回、120ms だけ face_close を表示
-  const isBlinking = useRandomBlink(3000, 6000, 120);
+  const isBlinking = useRandomBlink(idleAnimation, 3000, 6000, 120);
 
   // (5) 手振り: 8〜14秒に1回、500〜700ms だけ pose=up に切替
   const [waving, setWaving] = useState(false);
   const waveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (!idleAnimation) {
+      setWaving(false);
+      if (waveTimerRef.current) clearTimeout(waveTimerRef.current);
+      waveTimerRef.current = null;
+      return;
+    }
     const schedule = () => {
       const delay    = 8000 + Math.random() * 6000;
       const duration = 500  + Math.random() * 200;
@@ -438,7 +454,7 @@ export const PotatoAvatar = ({
     };
     schedule();
     return () => { if (waveTimerRef.current) clearTimeout(waveTimerRef.current); };
-  }, []);
+  }, [idleAnimation]);
 
   const activePose = waving ? 'up' : pose;
   const arms       = ARM_IMAGES[activePose];
@@ -546,7 +562,7 @@ export const PotatoAvatar = ({
 
         {/* Layer 7: 感情エフェクト（最前面） */}
         <AnimatePresence>
-          <EmotionEffect key={emotion} emotion={emotion} size={size} />
+          {showEmotionEffect && <EmotionEffect key={emotion} emotion={emotion} size={size} />}
         </AnimatePresence>
       </div>
 

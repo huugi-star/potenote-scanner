@@ -523,7 +523,19 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4">
+    <div
+      className="min-h-screen p-4 relative overflow-hidden"
+      style={{
+        backgroundImage: "url('/images/backgrounds/home.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: '#0b1220',
+      }}
+    >
+      {/* 読みやすさ用の暗幕 */}
+      <div className="absolute inset-0 bg-gradient-to-b from-gray-900/10 via-gray-900/5 to-gray-900/20" />
+      <div className="relative">
       {/* ヘッダー */}
       <div className="max-w-md mx-auto pt-4 pb-4">
         <div className="flex items-center justify-between mb-6">
@@ -647,7 +659,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                     whileTap={quizHistoryCount > 0 ? { scale: 0.98 } : {}}
                   >
                     <History className="w-5 h-5" />
-                    ことばを振り返る
+                    記録の書庫
                     <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
                       {quizHistoryCount}
                     </span>
@@ -1044,6 +1056,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
         onPurchase={handleVIPPurchase}
         isVIP={isVIP}
       /> */}
+      </div>
     </div>
   );
 };

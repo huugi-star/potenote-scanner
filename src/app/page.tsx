@@ -340,7 +340,17 @@ const AdventureMenuScreen = ({
   }, [handleQuickScanFile, quickScanState]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4 pb-24">
+    <div
+      className="min-h-screen p-4 pb-24"
+      style={{
+        backgroundImage:
+          "linear-gradient(180deg, rgba(10,14,25,0.28) 0%, rgba(10,14,25,0.18) 45%, rgba(10,14,25,0.42) 100%), url('/images/backgrounds/home.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: '#0b1220',
+      }}
+    >
       <div className="max-w-md mx-auto pt-6">
         <h2 className="text-2xl font-bold text-white mb-2 text-center">ことばを読み取る</h2>
 
@@ -521,7 +531,7 @@ const AdventureMenuScreen = ({
             whileTap={{ scale: 0.98 }}
           >
             <Users className="w-5 h-5" />
-            ことばを振り返る
+            記録の書庫
           </motion.button>
 
           <div className="pt-2">
@@ -787,6 +797,10 @@ const HomeScreen = ({
     : null;
   const GLOW = presetCfg ? presetCfg.glow : RANK_TIERS[glowTierIndex].glow;
   const bannerTitle = presetCfg ? presetCfg.label : RANK_TIERS[glowTierIndex].name;
+  const RANK_TIER_EMOJIS = ['📖', '📚', '🗂️', '🏛️', '👑', '🌟', '⚡', '💎', '🔮', '✨'] as const;
+  const bannerIcon = presetCfg
+    ? (equippedShoulderPresetId === 'suhimochi_master' ? '🐾' : '🌱')
+    : (RANK_TIER_EMOJIS[glowTierIndex] ?? '⚔️');
 
   const booksToNext: number   = (libraryRankInfo as any).booksToNext   ?? 0;
   const nextThreshold: number = (libraryRankInfo as any).nextThreshold ?? 20;
@@ -932,7 +946,7 @@ const HomeScreen = ({
                     border:'2px solid rgba(255,240,140,0.4)',
                     boxShadow:'0 2px 8px rgba(0,0,0,0.55),inset 0 1px 0 rgba(255,255,200,0.45)',
                     display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,
-                  }}>⚔️</div>
+                  }}>{bannerIcon}</div>
                   {isVIP && (
                     <div style={{
                       display:'inline-flex',alignItems:'center',gap:2,
