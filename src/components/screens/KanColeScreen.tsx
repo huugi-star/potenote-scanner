@@ -21,6 +21,7 @@ type MissedWord = { word: KanColeEnemy; missCount: number };
 
 const QUESTIONS_PER_ROUND = 7;
 const TIME_LIMIT_SEC = 10;
+const FEEDBACK_EXTRA_MS = 400;
 
 function selectKanColeQuestions(scan: KanColeScan, mode: QuestMode, retryPriorityTerms: string[] = []): KanColeEnemy[] {
   const activeSet = new Set(scan.activeEnemyTerms ?? scan.words.map((w) => w.term));
@@ -363,7 +364,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     if (view !== 'battle' || battleState !== 'feedback') return;
-    const delayMs = lastSealed ? 1250 : 1500;
+    const delayMs = (lastSealed ? 1250 : 1500) + FEEDBACK_EXTRA_MS;
     const id = window.setTimeout(() => {
       if (!selectedScanId) return;
       if (idx + 1 >= roundItems.length) {
@@ -565,7 +566,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
                     <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-200/50 via-amber-300/40 to-transparent opacity-90" />
                     <div className="text-amber-300 text-sm font-bold mb-1">★ GET</div>
                     <div className="font-mono font-extrabold text-amber-200 text-xl tracking-wider">{w.term}</div>
-                    <div className="text-amber-200/80 text-xs mt-0.5">よみ: {w.reading}</div>
+                    <div className="text-amber-200/80 text-xs mt-0.5">よみ: {normalizeReading(w.reading) || w.reading}</div>
                     <div className="text-gray-100 text-sm mt-0.5">— {w.meaning || '—'}</div>
                   </div>
                 ))}
@@ -580,7 +581,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
                 {defeatedWords.slice(0, 5).map((w) => (
                   <div key={w.term} className="rounded-xl border border-amber-500/40 bg-gradient-to-b from-gray-800/80 to-gray-900/80 text-center px-3 py-2">
                     <p className="font-mono font-bold text-amber-200 uppercase tracking-wider text-sm">{w.term}</p>
-                    <p className="text-amber-200/80 mt-0.5 text-[10px]">よみ: {w.reading}</p>
+                    <p className="text-amber-200/80 mt-0.5 text-[10px]">よみ: {normalizeReading(w.reading) || w.reading}</p>
                   </div>
                 ))}
               </div>
@@ -601,6 +602,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
                         <div key={word.term} className="rounded-lg border border-gray-700/50 bg-gray-800/30 px-3 py-2 flex items-center justify-between gap-2">
                           <div>
                             <span className="font-mono text-amber-200/80 text-sm uppercase">{word.term}</span>
+                            <span className="text-amber-200/75 text-xs ml-2">（{normalizeReading(word.reading) || word.reading}）</span>
                             <span className="text-gray-200 text-xs ml-2">— {word.meaning || '—'}</span>
                           </div>
                           {missCount > 1 && <span className="text-orange-400/80 text-xs shrink-0">×{missCount}</span>}
@@ -745,7 +747,6 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
                   backgroundPosition: 'center bottom',
                 }}
               />
-              <div className="absolute inset-0 bg-[#0a0e14]/80" />
               <div className="relative z-10 min-h-[1.25rem] flex items-center justify-center mb-1">{battleLog && <p className="text-center text-xs text-amber-200/90">{battleLog}</p>}</div>
               <div className="relative z-10 space-y-2">
                 <div className="text-[11px] text-gray-300 font-bold">次の漢字の読みを入力してください</div>
