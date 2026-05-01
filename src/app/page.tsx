@@ -685,57 +685,41 @@ const RpgButton = ({
         width: '100%',
         position: 'relative',
         overflow: 'hidden',
-        padding: small ? '11px 8px' : '14px 16px',
-        borderRadius: 14,
-        background: `linear-gradient(180deg,${toColor} 0%,${fromColor} 100%)`,
-        borderTop: '2px solid rgba(255,255,255,0.28)',
-        borderLeft: '1px solid rgba(255,255,255,0.10)',
-        borderRight: '1px solid rgba(0,0,0,0.20)',
-        borderBottom: pressed ? `3px solid ${shadowColor}` : `5px solid ${shadowColor}`,
-        transform: pressed ? 'translateY(2px)' : 'translateY(0)',
+        padding: small ? '12px 10px' : '15px 18px',
+        borderRadius: 999,
+        background: pressed
+          ? `linear-gradient(180deg, ${fromColor} 0%, ${toColor} 100%)`
+          : `linear-gradient(180deg, ${toColor} 0%, ${fromColor} 100%)`,
+        border: `3px solid rgba(255,255,255,0.55)`,
+        borderBottom: pressed ? `3px solid rgba(255,255,255,0.55)` : `5px solid ${shadowColor}`,
+        transform: pressed ? 'translateY(3px)' : 'translateY(0)',
         boxShadow: pressed
-          ? `0 2px 8px ${glowColor}`
-          : `0 6px 18px ${glowColor}, inset 0 1px 0 rgba(255,255,255,0.22)`,
+          ? `0 2px 0 ${shadowColor}`
+          : `0 6px 0 ${shadowColor}, 0 8px 16px rgba(0,0,0,0.12)`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: small ? 5 : 8,
+        gap: small ? 6 : 9,
         color: '#fff',
         fontWeight: 900,
-        fontSize: small ? 14 : 17,
-        letterSpacing: '0.02em',
-        textShadow: '0 1px 4px rgba(0,0,0,0.55)',
+        fontSize: small ? 14 : 16,
+        letterSpacing: '0.03em',
+        textShadow: '0 1px 3px rgba(0,0,0,0.25)',
         cursor: 'pointer',
         WebkitTapHighlightColor: 'transparent',
-        transition: 'border-bottom .07s,transform .07s,box-shadow .07s',
+        transition: 'transform .07s, box-shadow .07s, border-bottom .07s',
         outline: 'none',
-        border: 'none', // reset then re-add below via individual props
+        fontFamily: "'Rounded Mplus 1c', 'M PLUS Rounded 1c', 'Hiragino Maru Gothic Pro', sans-serif",
       }}
     >
-      {/* 上縁ハイライト */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: '10%',
-          right: '10%',
-          height: 1,
-          background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent)',
-          pointerEvents: 'none',
-        }}
-      />
-      {/* shimmer */}
-      <motion.div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'linear-gradient(105deg,transparent 40%,rgba(255,255,255,0.15) 50%,transparent 60%)',
-          pointerEvents: 'none',
-        }}
-        animate={{ x: ['-150%', '250%'] }}
-        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut', repeatDelay: 6 }}
-      />
-      <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: small ? 5 : 8 }}>
+      {/* 上部ハイライト */}
+      <div style={{
+        position: 'absolute', top: 0, left: '15%', right: '15%', height: 3,
+        background: 'rgba(255,255,255,0.6)',
+        borderRadius: '0 0 50% 50%',
+        pointerEvents: 'none',
+      }} />
+      <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: small ? 6 : 9 }}>
         {icon}
         {label}
       </span>
@@ -827,6 +811,35 @@ const HomeScreen = ({
   const progressRatio         = nextThreshold > 0
     ? Math.min(1,(nextThreshold - booksToNext)/nextThreshold) : 1;
 
+  // AC風カラーパレット（どうぶつの森スタイル）
+  const AC = {
+    sky:     '#D4EFF7',
+    skyDeep: '#A8D8EA',
+    grass:   '#7EC8A4',
+    grassDk: '#5BAF8A',
+    cream:   '#FFF8E8',
+    yellow:  '#FFD93D',
+    yellowDk:'#E6B800',
+    brown:   '#A0744A',
+    brownDk: '#7A5234',
+    coral:   '#FF8C69',
+    mint:    '#A8E6CF',
+    lavender:'#D4A8E6',
+    white:   '#FFFFFF',
+    textDk:  '#5A3E28',
+    textMd:  '#7A5A3A',
+    textLt:  '#A08060',
+  };
+
+  // 浮かぶ装飾（葉っぱ・花）
+  const floaters = [
+    { emoji: '🌿', top: '8%',  left: '5%',  delay: 0,   dur: 4.2, size: 18 },
+    { emoji: '🌸', top: '12%', left: '85%', delay: 1.2, dur: 3.8, size: 16 },
+    { emoji: '🍃', top: '5%',  left: '65%', delay: 0.6, dur: 4.5, size: 14 },
+    { emoji: '⭐', top: '20%', left: '92%', delay: 2.0, dur: 3.2, size: 13 },
+    { emoji: '🌼', top: '18%', left: '2%',  delay: 1.8, dur: 4.0, size: 15 },
+  ];
+
   return (
     <div style={{
       position: 'relative',
@@ -836,486 +849,448 @@ const HomeScreen = ({
       overflowY: 'auto',
       display: 'flex',
       flexDirection: 'column',
+      background: `linear-gradient(180deg, ${AC.skyDeep} 0%, ${AC.sky} 22%, ${AC.cream} 48%, #F0FAF0 100%)`,
+      fontFamily: "'Rounded Mplus 1c', 'M PLUS Rounded 1c', 'Hiragino Maru Gothic Pro', 'Noto Sans JP', sans-serif",
     }}>
-      <style jsx>{`
-        .homeBg {
-          background-position: center top;
-        }
-        /* スマホだけ：背景を少し下へ（アバター見せ） */
-        @media (max-width: 480px) {
-          .homeBg {
-            background-position: center 70px;
-          }
-        }
-        .avatarButton {
-          /* アバターが上方向にはみ出しても、直前カードに当たらない余白を確保 */
-          margin-top: 6px;
-          height: clamp(160px, 22vh, 220px);
-        }
-        @media (min-width: 481px) {
-          .avatarButton {
-            margin-top: 10px;
-            height: max(230px, 26vh);
-          }
-        }
-      `}</style>
-      <div className="homeBg" style={{
-        position: 'absolute', inset: 0, zIndex: 0,
-        backgroundImage: 'url(/images/backgrounds/home.png)',
-        backgroundSize: 'cover',
-        backgroundRepeat: 'no-repeat',
-      }}/>
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 1,
-        background: [
-          'linear-gradient(180deg,rgba(8,5,20,0.50) 0%,rgba(8,5,20,0.05) 18%)',
-          'linear-gradient(180deg,rgba(0,0,0,0) 55%,rgba(8,5,20,0.82) 85%,rgba(8,5,20,0.95) 100%)',
-        ].join(','),
-        pointerEvents: 'none',
-      }}/>
 
+      {/* 背景の草原 */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        height: '38%',
+        background: `linear-gradient(180deg, transparent 0%, ${AC.mint}55 40%, ${AC.grass}44 100%)`,
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
+
+      {/* 地面の丸い丘 */}
+      <div style={{
+        position: 'absolute', bottom: -60, left: '-10%', right: '-10%',
+        height: 140,
+        background: `radial-gradient(ellipse at 50% 100%, ${AC.grassDk}88 0%, ${AC.grass}44 60%, transparent 100%)`,
+        borderRadius: '50%',
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
+
+      {/* 背景の木 */}
       {[
-        {top:'12%',left:'6%', delay:0,   dur:3.4,size:10},
-        {top:'25%',left:'88%',delay:0.9, dur:2.7,size:8 },
-        {top:'7%', left:'76%',delay:1.5, dur:4.0,size:12},
-        {top:'35%',left:'4%', delay:0.4, dur:3.1,size:7 },
-      ].map((p,i)=>(
-        <motion.span key={i} style={{
-          pointerEvents:'none',position:'absolute',zIndex:2,userSelect:'none',
-          top:p.top,left:p.left,fontSize:p.size,
-          color:GLOW,textShadow:`0 0 8px ${GLOW},0 0 20px ${GLOW}66`,
-        }}
-          animate={{y:[0,-12,0],opacity:[0,0.8,0]}}
-          transition={{duration:p.dur,delay:p.delay,repeat:Infinity,ease:'easeInOut'}}
-        >✦</motion.span>
+        { left: '-3%', bottom: 60, scale: 0.9 },
+        { left: '82%', bottom: 55, scale: 0.85 },
+        { left: '92%', bottom: 62, scale: 0.75 },
+      ].map((t, i) => (
+        <div key={i} style={{
+          position: 'absolute', bottom: t.bottom, left: t.left,
+          fontSize: 48 * t.scale, pointerEvents: 'none', zIndex: 1,
+          opacity: 0.75,
+        }}>🌳</div>
       ))}
 
+      {/* 浮かぶデコ */}
+      {floaters.map((f, i) => (
+        <motion.span key={i} style={{
+          pointerEvents: 'none', position: 'absolute', zIndex: 2,
+          top: f.top, left: f.left, fontSize: f.size,
+          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.12))',
+        }}
+          animate={{ y: [0, -10, 0], rotate: [-5, 5, -5] }}
+          transition={{ duration: f.dur, delay: f.delay, repeat: Infinity, ease: 'easeInOut' }}
+        >{f.emoji}</motion.span>
+      ))}
+
+      {/* 雲 */}
+      {[
+        { top: '6%', left: '15%', w: 70, delay: 0 },
+        { top: '3%', left: '55%', w: 55, delay: 1.5 },
+      ].map((c, i) => (
+        <motion.div key={i} style={{
+          position: 'absolute', top: c.top, left: c.left,
+          width: c.w, height: c.w * 0.5,
+          borderRadius: 999,
+          background: 'rgba(255,255,255,0.85)',
+          pointerEvents: 'none', zIndex: 1,
+          boxShadow: '0 3px 10px rgba(255,255,255,0.6)',
+        }}
+          animate={{ x: [0, 12, 0] }}
+          transition={{ duration: 8 + i * 2, delay: c.delay, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      ))}
+
+      {/* メインコンテンツ */}
       <div style={{
         position: 'relative', zIndex: 10,
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        padding: '10px 14px 16px',
+        padding: '10px 14px 20px',
         maxWidth: 480,
         width: '100%',
         margin: '0 auto',
-        gap: 8,
-        justifyContent: 'flex-start',
+        gap: 10,
       }}>
-        <div style={{display:'flex',justifyContent:'flex-end',alignItems:'center',gap:6}}>
-          <button onClick={()=>{vibrateLight();onOpenMyPage();}} style={{
-            padding:'6px 13px',borderRadius:18,fontSize:12,fontWeight:700,
-            color:'rgba(255,255,255,0.85)',
-            background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.14)',
-            backdropFilter:'blur(8px)',cursor:'pointer',WebkitTapHighlightColor:'transparent',
+
+        {/* 上部ナビ */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => { vibrateLight(); onOpenMyPage(); }} style={{
+            padding: '7px 16px', borderRadius: 999,
+            fontSize: 12, fontWeight: 800,
+            color: AC.textDk,
+            background: AC.white,
+            border: `2.5px solid ${AC.brown}44`,
+            boxShadow: `0 3px 0 ${AC.brown}33, 0 4px 10px rgba(0,0,0,0.08)`,
+            cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
           }}>マイページ</button>
-          <button onClick={()=>{vibrateLight();onShowShare();}} style={{
-            width:30,height:30,borderRadius:'50%',
-            display:'flex',alignItems:'center',justifyContent:'center',
-            background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.14)',
-            color:'rgba(255,255,255,0.75)',cursor:'pointer',backdropFilter:'blur(8px)',
-            WebkitTapHighlightColor:'transparent',
-          }}><Share2 style={{width:13,height:13}}/></button>
-          <AuthButton/>
+          <button onClick={() => { vibrateLight(); onShowShare(); }} style={{
+            width: 34, height: 34, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: AC.white,
+            border: `2.5px solid ${AC.brown}44`,
+            boxShadow: `0 3px 0 ${AC.brown}33`,
+            color: AC.textDk, cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+          }}><Share2 style={{ width: 14, height: 14 }} /></button>
+          <AuthButton />
         </div>
 
-        {/* ── ゴールドバナー（タップで称号選択） ── */}
+        {/* ランクバナー（看板スタイル） */}
         <motion.button
           type="button"
-          initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}
-          transition={{duration:0.4}}
-          onClick={() => {
-            vibrateLight();
-            onNavigate('library_title_select');
-          }}
+          initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          onClick={() => { vibrateLight(); onNavigate('library_title_select'); }}
           style={{
-            position:'relative',
-            width:'100%',
-            border:'none',
-            background:'transparent',
-            padding:0,
-            cursor:'pointer',
-            WebkitTapHighlightColor:'transparent',
-            textAlign:'left',
+            width: '100%', border: 'none', background: 'transparent',
+            padding: 0, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
           }}
-          aria-label="称号を選ぶ"
         >
-          {/* 三重縁 */}
+          {/* 看板の支柱 */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 60, marginBottom: -4, position: 'relative', zIndex: 0 }}>
+            {[0, 1].map(i => (
+              <div key={i} style={{
+                width: 10, height: 18, borderRadius: '0 0 4px 4px',
+                background: `linear-gradient(180deg, ${AC.brownDk} 0%, ${AC.brown} 100%)`,
+                boxShadow: `2px 0 0 rgba(0,0,0,0.15)`,
+              }} />
+            ))}
+          </div>
+          {/* 看板本体 */}
           <div style={{
-            borderRadius:16,padding:2,
-            background:'linear-gradient(180deg,#8b6008 0%,#5a3d04 100%)',
-            boxShadow:'0 4px 18px rgba(0,0,0,0.65)',
+            position: 'relative', zIndex: 1,
+            background: `linear-gradient(180deg, #FFF9EC 0%, #F5E8C8 100%)`,
+            borderRadius: 16,
+            border: `3px solid ${AC.brown}`,
+            boxShadow: `0 5px 0 ${AC.brownDk}, 0 8px 20px rgba(0,0,0,0.12)`,
+            padding: '10px 14px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
-            <div style={{
-              borderRadius:14,padding:'2px 2px 2px',
-              background:'linear-gradient(180deg,#f5d060 0%,#d4a010 45%,#f5d060 100%)',
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* アイコン枠 */}
               <div style={{
-                borderRadius:12,padding:'8px 12px',
-                background:'linear-gradient(180deg,#5c3a06 0%,#7a5010 40%,#5c3a06 100%)',
-                boxShadow:'inset 0 2px 5px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,240,140,0.18)',
-                display:'flex',alignItems:'center',justifyContent:'space-between',
-              }}>
-                {/* 左 */}
-                <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <div style={{
-                    width:36,height:36,borderRadius:9,flexShrink:0,
-                    background:'linear-gradient(135deg,#ffe566,#b87800)',
-                    border:'2px solid rgba(255,240,140,0.4)',
-                    boxShadow:'0 2px 8px rgba(0,0,0,0.55),inset 0 1px 0 rgba(255,255,200,0.45)',
-                    display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,
-                  }}>{bannerIcon}</div>
-                  {isVIP && (
-                    <div style={{
-                      display:'inline-flex',alignItems:'center',gap:2,
-                      background:'rgba(255,200,0,0.18)',border:'1px solid rgba(255,220,60,0.35)',
-                      borderRadius:8,padding:'1px 6px',fontSize:9,fontWeight:700,color:'#ffe070',
-                    }}><Crown style={{width:9,height:9}}/>VIP</div>
-                  )}
-                  <div style={{
-                    fontSize:19,fontWeight:900,letterSpacing:'0.04em',
-                    color:'#fff8d0',
-                    textShadow:'0 1px 0 rgba(0,0,0,0.8),0 0 14px rgba(255,230,80,0.5)',
-                  }}>{bannerTitle}</div>
-                </div>
-                {/* 右：コイン */}
+                width: 38, height: 38, borderRadius: 12,
+                background: `linear-gradient(135deg, ${AC.yellow}, #FFA800)`,
+                border: `2px solid ${AC.yellowDk}`,
+                boxShadow: `0 3px 0 ${AC.yellowDk}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+              }}>{bannerIcon}</div>
+              {isVIP && (
                 <div style={{
-                  display:'flex',alignItems:'center',gap:5,
-                  background:'rgba(0,0,0,0.4)',borderRadius:18,padding:'5px 11px',
-                  border:'1px solid rgba(240,208,80,0.35)',
+                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                  background: '#FFF0B3', border: `1.5px solid ${AC.yellowDk}`,
+                  borderRadius: 8, padding: '2px 7px', fontSize: 10, fontWeight: 800,
+                  color: '#8A6000',
                 }}>
-                  <div style={{
-                    width:18,height:18,borderRadius:'50%',flexShrink:0,fontSize:10,
-                    background:'linear-gradient(135deg,#ffe566,#b87800)',
-                    border:'1.5px solid rgba(255,240,140,0.5)',
-                    display:'flex',alignItems:'center',justifyContent:'center',
-                  }}>🪙</div>
-                  <span style={{
-                    fontSize:15,fontWeight:900,fontVariantNumeric:'tabular-nums',
-                    color:'#fff8a0',textShadow:'0 1px 4px rgba(0,0,0,0.7)',
-                  }}>{coins.toLocaleString()}</span>
+                  <Crown style={{ width: 9, height: 9 }} /> VIP
                 </div>
-              </div>
+              )}
+              <span style={{
+                fontSize: 18, fontWeight: 900, letterSpacing: '0.02em',
+                color: AC.textDk,
+                textShadow: '0 1px 0 rgba(255,255,255,0.8)',
+              }}>{bannerTitle}</span>
+            </div>
+            {/* コイン */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              background: '#FFF8E0', borderRadius: 20, padding: '5px 12px',
+              border: `2px solid ${AC.yellowDk}55`,
+              boxShadow: `0 2px 0 ${AC.yellowDk}44`,
+            }}>
+              <span style={{ fontSize: 15 }}>🪙</span>
+              <span style={{
+                fontSize: 15, fontWeight: 900, color: '#6A4800',
+                fontVariantNumeric: 'tabular-nums',
+              }}>{coins.toLocaleString()}</span>
             </div>
           </div>
-          {/* 左右◆ */}
-          {['left','right'].map(s=>(
-            <div key={s} style={{
-              position:'absolute',top:'50%',[s]:-1,transform:'translateY(-50%)',
-              fontSize:14,color:'#f0d060',
-              textShadow:'0 0 6px #c89000,0 1px 2px rgba(0,0,0,0.8)',
-              pointerEvents:'none',
-            }}>◆</div>
-          ))}
         </motion.button>
 
-        {/* ── ランクカード（コンパクト横長版）── */}
+        {/* ランクカード（AC風ボード） */}
         <motion.div
-          initial={{opacity:0,scale:0.96,y:8}}
-          animate={{opacity:1,scale:1,y:0}}
-          transition={{duration:0.4,delay:0.1}}
+          initial={{ opacity: 0, scale: 0.96, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
           style={{
-            position:'relative',overflow:'hidden',borderRadius:18,
-            background:'linear-gradient(140deg,rgba(15,10,38,0.92),rgba(25,16,55,0.88),rgba(12,8,30,0.92))',
-            border:`2px solid ${GLOW}77`,
-            boxShadow:`0 0 0 1px ${GLOW}22,0 8px 28px rgba(0,0,0,0.55),0 0 30px ${GLOW}14`,
+            background: `linear-gradient(135deg, #FDFFF5 0%, #F0FAF0 100%)`,
+            borderRadius: 20,
+            border: `3px solid ${AC.grassDk}`,
+            boxShadow: `0 5px 0 ${AC.grassDk}88, 0 8px 20px rgba(0,0,0,0.08)`,
+            overflow: 'hidden',
           }}
         >
-          {/* 四隅装飾 */}
-          {[
-            {top:0,left:0,br:'0 0 10px 0'},{top:0,right:0,br:'0 0 0 10px'},
-            {bottom:0,left:0,br:'0 10px 0 0'},{bottom:0,right:0,br:'10px 0 0 0'},
-          ].map((c,i)=>(
-            <div key={i} style={{
-              position:'absolute',width:16,height:16,
-              background:GLOW,opacity:0.4,borderRadius:c.br,pointerEvents:'none',
-              ...(c.top    !==undefined?{top:c.top}:{}),
-              ...(c.bottom !==undefined?{bottom:c.bottom}:{}),
-              ...(c.left   !==undefined?{left:c.left}:{}),
-              ...(c.right  !==undefined?{right:c.right}:{}),
-            }}/>
-          ))}
+          {/* カードヘッダー */}
+          <div style={{
+            background: `linear-gradient(90deg, ${AC.grass} 0%, ${AC.mint} 100%)`,
+            padding: '8px 16px',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <span style={{ fontSize: 14 }}>🏡</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#2A5A3A', letterSpacing: '0.06em' }}>
+              図書館ランク
+            </span>
+          </div>
 
-          <div style={{padding:'12px 14px 10px'}}>
-            {/* 上段 */}
-            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10,marginBottom:10}}>
+          <div style={{ padding: '12px 14px 14px' }}>
+            {/* ランク名 + 昇級まで */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
               <div>
-                <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
-                  <span style={{fontSize:10,fontWeight:800,letterSpacing:'0.18em',color:'rgba(255,255,255,0.45)'}}>
-                    図書館ランク
-                  </span>
-                  <motion.div style={{
-                    width:7,height:7,borderRadius:'50%',
-                    background:GLOW,boxShadow:`0 0 0 3px ${GLOW}44`,
-                  }}
-                    animate={{boxShadow:[`0 0 0 2px ${GLOW}55`,`0 0 0 6px ${GLOW}00`]}}
-                    transition={{duration:1.6,repeat:Infinity,ease:'easeOut'}}
-                  />
-                </div>
                 <div style={{
-                  fontSize:24,fontWeight:900,letterSpacing:'0.04em',lineHeight:1.05,
-                  color:libraryRankInfo.tier.light,
-                  textShadow:`0 0 20px ${GLOW}88,0 2px 10px rgba(0,0,0,0.8)`,
+                  fontSize: 22, fontWeight: 900, color: AC.textDk, lineHeight: 1.1,
+                  textShadow: '0 1px 0 rgba(255,255,255,0.9)',
                 }}>{libraryRankInfo.fullTitle}</div>
               </div>
-
-              {/* 昇級まで */}
+              {/* 昇級バッジ */}
               <motion.div
-                animate={isAlmostRankUp?{
-                  borderColor:['rgba(239,68,68,0.4)','rgba(239,68,68,0.9)','rgba(239,68,68,0.4)'],
-                  boxShadow:['0 0 0 0 transparent',`0 0 14px 2px rgba(239,68,68,0.4)`,'0 0 0 0 transparent'],
-                }:{}}
-                transition={{duration:1.4,repeat:Infinity}}
+                animate={isAlmostRankUp ? {
+                  scale: [1, 1.06, 1],
+                  boxShadow: [`0 3px 0 #D45000`, `0 3px 10px #FF8C6966`, `0 3px 0 #D45000`],
+                } : {}}
+                transition={{ duration: 1.2, repeat: Infinity }}
                 style={{
-                  flexShrink:0,minWidth:82,textAlign:'center',
-                  background:'rgba(0,0,0,0.42)',borderRadius:14,padding:'8px 10px',
-                  border:`1.5px solid ${isAlmostRankUp?'rgba(239,68,68,0.6)':'rgba(255,255,255,0.16)'}`,
+                  flexShrink: 0, minWidth: 80, textAlign: 'center',
+                  background: isAlmostRankUp
+                    ? `linear-gradient(135deg, ${AC.coral} 0%, #FF6B40 100%)`
+                    : `linear-gradient(135deg, #FFF8E0 0%, #FFF0C0 100%)`,
+                  borderRadius: 14, padding: '7px 10px',
+                  border: `2.5px solid ${isAlmostRankUp ? '#D45000' : AC.yellowDk}`,
+                  boxShadow: `0 4px 0 ${isAlmostRankUp ? '#D45000' : AC.yellowDk}88`,
                 }}
               >
-                <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:3,marginBottom:2}}>
-                  <span style={{fontSize:13}}>🏆</span>
-                  <span style={{fontSize:9,fontWeight:800,letterSpacing:'0.08em',color:'rgba(255,255,255,0.48)'}}>昇級まで</span>
+                <div style={{ fontSize: 11, fontWeight: 800, color: isAlmostRankUp ? '#fff' : '#6A4800', marginBottom: 2 }}>
+                  🏆 昇級まで
                 </div>
-                {isMaxRank?(
-                  <div style={{fontSize:13,fontWeight:900,color:'#fde68a'}}>MAX!</div>
-                ):(
-                  <div style={{lineHeight:1,display:'flex',alignItems:'baseline',justifyContent:'center',gap:1}}>
+                {isMaxRank ? (
+                  <div style={{ fontSize: 14, fontWeight: 900, color: isAlmostRankUp ? '#fff' : '#6A4800' }}>MAX!</div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 2 }}>
                     <motion.span
                       key={booksToNext}
-                      initial={{scale:1.4,opacity:0}} animate={{scale:1,opacity:1}}
+                      initial={{ scale: 1.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                       style={{
-                        fontSize:34,fontWeight:900,fontVariantNumeric:'tabular-nums',letterSpacing:'-0.03em',
-                        color:isAlmostRankUp?'#fca5a5':'#fde68a',
-                        textShadow:isAlmostRankUp?'0 0 18px rgba(239,68,68,0.8)':'0 0 18px rgba(251,191,36,0.6)',
+                        fontSize: 30, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
+                        color: isAlmostRankUp ? '#fff' : '#6A4800',
+                        letterSpacing: '-0.02em',
                       }}
                     >{booksToNext}</motion.span>
-                    <span style={{fontSize:12,color:'rgba(255,255,255,0.28)',marginBottom:2}}>/{nextThreshold}</span>
+                    <span style={{ fontSize: 11, color: isAlmostRankUp ? 'rgba(255,255,255,0.7)' : '#A08040', marginBottom: 2 }}>/{nextThreshold}</span>
                   </div>
                 )}
               </motion.div>
             </div>
 
-            {/* ことの葉 + プログレスバー（横並び） */}
+            {/* ことの葉 + プログレス */}
             <div style={{
-              display:'flex',alignItems:'center',gap:10,
-              background:'rgba(16,185,129,0.10)',borderRadius:12,padding:'8px 12px',marginBottom:8,
-              border:'1.5px solid rgba(16,185,129,0.28)',
+              display: 'flex', alignItems: 'center', gap: 10,
+              background: 'rgba(126,200,164,0.15)',
+              borderRadius: 12, padding: '8px 12px', marginBottom: 8,
+              border: `2px solid ${AC.grass}66`,
             }}>
-              <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
-                <span style={{fontSize:16}}>🍃</span>
-                <span style={{fontSize:12,fontWeight:700,color:'rgba(255,255,255,0.55)'}}>ことの葉</span>
-                <div style={{display:'flex',alignItems:'baseline',gap:2}}>
-                  <span style={{
-                    fontSize:22,fontWeight:900,fontVariantNumeric:'tabular-nums',
-                    color:'#6ee7b7',textShadow:'0 0 12px rgba(52,211,153,0.5)',
-                  }}>{kotobaLeafCount}</span>
-                  <span style={{fontSize:11,fontWeight:700,color:'rgba(110,231,183,0.55)'}}>枚</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <span style={{ fontSize: 18 }}>🍃</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: AC.textMd }}>ことの葉</span>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                  <span style={{ fontSize: 22, fontWeight: 900, color: AC.grassDk, fontVariantNumeric: 'tabular-nums' }}>
+                    {kotobaLeafCount}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#5BAF8A88' }}>枚</span>
                 </div>
               </div>
-
               {/* プログレスバー */}
-              <div style={{flex:1}}>
-                <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
-                  <span style={{fontSize:9,fontWeight:700,color:'rgba(255,255,255,0.35)'}}>修繕進捗</span>
-                  <span style={{fontSize:9,fontWeight:700,color:isAlmostRankUp?'#fca5a5':'rgba(255,255,255,0.35)'}}>
-                    {Math.round(progressRatio*100)}%
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: AC.textLt }}>修繕進捗</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: isAlmostRankUp ? AC.coral : AC.textLt }}>
+                    {Math.round(progressRatio * 100)}%
                   </span>
                 </div>
                 <div style={{
-                  width:'100%',height:9,borderRadius:99,
-                  background:'rgba(0,0,0,0.45)',border:'1px solid rgba(255,255,255,0.1)',
-                  overflow:'hidden',
+                  width: '100%', height: 10, borderRadius: 99,
+                  background: 'rgba(255,255,255,0.7)',
+                  border: `1.5px solid ${AC.grass}55`,
+                  overflow: 'hidden',
                 }}>
                   <motion.div
-                    initial={{width:0}}
-                    animate={{width:`${progressRatio*100}%`}}
-                    transition={{duration:1.1,delay:0.4,ease:'easeOut'}}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progressRatio * 100}%` }}
+                    transition={{ duration: 1.1, delay: 0.4, ease: 'easeOut' }}
                     style={{
-                      height:'100%',borderRadius:99,position:'relative',overflow:'hidden',
-                      background:isAlmostRankUp
-                        ?'linear-gradient(90deg,#ef4444,#f97316,#fbbf24)'
-                        :`linear-gradient(90deg,${GLOW},${libraryRankInfo.tier.light})`,
-                      boxShadow:`0 0 8px ${isAlmostRankUp?'rgba(239,68,68,0.7)':GLOW+'88'}`,
+                      height: '100%', borderRadius: 99,
+                      background: isAlmostRankUp
+                        ? `linear-gradient(90deg, ${AC.coral}, #FFB347)`
+                        : `linear-gradient(90deg, ${AC.grassDk}, ${AC.yellow})`,
+                      boxShadow: isAlmostRankUp ? '0 0 8px rgba(255,140,105,0.5)' : '0 0 6px rgba(90,175,138,0.4)',
                     }}
-                  >
-                    <motion.div
-                      style={{
-                        position:'absolute',inset:0,
-                        background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.5),transparent)',
-                      }}
-                      animate={{x:['-130%','230%']}}
-                      transition={{duration:2,repeat:Infinity,ease:'easeInOut',repeatDelay:2}}
-                    />
-                  </motion.div>
+                  />
                 </div>
               </div>
             </div>
 
-            {/* リボン */}
+            {/* ひとことリボン */}
             <div style={{
-              display:'flex',alignItems:'center',justifyContent:'space-between',
-              background:`linear-gradient(135deg,${GLOW}14,rgba(255,255,255,0.02))`,
-              borderRadius:10,padding:'5px 10px',
-              border:`1px solid ${GLOW}25`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              background: 'rgba(255,248,220,0.8)',
+              borderRadius: 10, padding: '5px 10px',
+              border: `1.5px solid ${AC.yellowDk}44`,
             }}>
-              <span style={{fontSize:10,fontWeight:600,color:'rgba(255,255,255,0.45)'}}>修繕してランクアップ</span>
-              <span style={{fontSize:9,color:'rgba(255,255,255,0.18)'}}>|</span>
-              <span style={{fontSize:10,fontWeight:600,color:'rgba(255,255,255,0.45)'}}>クイズでことの葉を集めよう</span>
+              <span style={{ fontSize: 10 }}>🌟</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: AC.textMd }}>修繕してランクアップ</span>
+              <span style={{ fontSize: 10 }}>🌟</span>
             </div>
           </div>
         </motion.div>
 
-        {/* ── ポテトアバター（コンパクト）── */}
+        {/* アバター（AC風フレーム） */}
         <motion.button
-          onClick={()=>{vibrateLight();onNavigate('dressup');}}
-          whileTap={{scale:0.97}}
-          className="avatarButton"
+          onClick={() => { vibrateLight(); onNavigate('dressup'); }}
+          whileTap={{ scale: 0.97 }}
           style={{
-            display:'flex',justifyContent:'center',alignItems:'flex-end',
-            position:'relative',background:'none',border:'none',
-            cursor:'pointer',WebkitTapHighlightColor:'transparent',
-            flex:'0 0 auto',
-            overflow:'visible',
+            display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+            position: 'relative', background: 'none', border: 'none',
+            cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+            height: 'clamp(160px, 22vh, 200px)',
+            flex: '0 0 auto', overflow: 'visible',
           }}
         >
-          {/* グロー床 */}
+          {/* 芝生の丸 */}
           <div style={{
-            position:'absolute',bottom:10,left:'50%',transform:'translateX(-50%)',
-            width:160,height:20,borderRadius:'50%',
-            background:`${GLOW}30`,filter:'blur(14px)',pointerEvents:'none',
-          }}/>
-          <PotatoAvatar
-            equipped={equippedDetails} emotion="happy"
-            size={180}   /* ← clampより小さめの固定値でOK、表示領域に合わせる */
-            ssrEffect={false}
-          />
-          {/* 着せ替えボタン */}
+            position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+            width: 140, height: 24, borderRadius: '50%',
+            background: `${AC.grassDk}44`, filter: 'blur(8px)',
+            pointerEvents: 'none',
+          }} />
+          <PotatoAvatar equipped={equippedDetails} emotion="happy" size={180} ssrEffect={false} />
+          {/* 着せ替えボタン（AC風ピンクボタン） */}
           <div style={{
-            position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',
-            background:'linear-gradient(90deg,#ec4899,#f43f5e)',
-            borderRadius:18,padding:'4px 14px',
-            display:'flex',alignItems:'center',gap:4,
-            fontSize:11,fontWeight:800,color:'#fff',
-            boxShadow:'0 3px 10px rgba(236,72,153,0.5),0 2px 0 rgba(0,0,0,0.3)',
-            whiteSpace:'nowrap',
+            position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+            background: `linear-gradient(180deg, #FF9EBE 0%, #FF6B9D 100%)`,
+            borderRadius: 999, padding: '5px 16px',
+            display: 'flex', alignItems: 'center', gap: 5,
+            fontSize: 12, fontWeight: 900, color: '#fff',
+            border: '2.5px solid rgba(255,255,255,0.6)',
+            boxShadow: '0 4px 0 #D44A7A, 0 6px 14px rgba(212,74,122,0.35)',
+            whiteSpace: 'nowrap',
+            textShadow: '0 1px 2px rgba(0,0,0,0.2)',
           }}>
-            <Shirt style={{width:11,height:11}}/>着せ替え
+            <Shirt style={{ width: 12, height: 12 }} />着せ替え
           </div>
         </motion.button>
 
-        {/* ── ボタン群 ── */}
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {/* ボタン群（AC風カラー） */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <RpgButton
-            onClick={()=>{vibrateLight();onNavigate('suhimochi_room');}}
-            fromColor="#065f46" toColor="#10b981"
-            glowColor="rgba(16,185,129,0.4)" shadowColor="rgba(3,40,26,0.95)"
-            icon={<MessageCircle style={{width:22,height:22}}/>}
+            onClick={() => { vibrateLight(); onNavigate('suhimochi_room'); }}
+            fromColor="#4CAF82" toColor="#6DD9A8"
+            glowColor="rgba(78,175,130,0.35)" shadowColor="#2E8055"
+            icon={<MessageCircle style={{ width: 22, height: 22 }} />}
             label="すうひもちのお部屋"
           />
           <RpgButton
-            onClick={()=>{vibrateLight();onNavigate('academy');}}
-            fromColor="#312e81" toColor="#6366f1"
-            glowColor="rgba(99,102,241,0.4)" shadowColor="rgba(25,22,80,0.95)"
-            icon={<BookOpen style={{width:22,height:22}}/>}
+            onClick={() => { vibrateLight(); onNavigate('academy'); }}
+            fromColor="#5B8FD4" toColor="#7EB5F0"
+            glowColor="rgba(91,143,212,0.35)" shadowColor="#3360A8"
+            icon={<BookOpen style={{ width: 22, height: 22 }} />}
             label="図書館を復興する"
           />
           <RpgButton
-            onClick={()=>{vibrateLight();onNavigate('adventure_menu');}}
-            fromColor="#92400e" toColor="#f59e0b"
-            glowColor="rgba(245,158,11,0.4)" shadowColor="rgba(70,28,4,0.95)"
-            icon={<Scan style={{width:22,height:22}}/>}
+            onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
+            fromColor="#E6A030" toColor="#FFD060"
+            glowColor="rgba(230,160,48,0.35)" shadowColor="#B07800"
+            icon={<Scan style={{ width: 22, height: 22 }} />}
             label="ことばを読み取る"
           />
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <RpgButton
-              onClick={()=>{vibrateLight();onNavigate('gacha');}}
-              fromColor="#4c1d95" toColor="#8b5cf6"
-              glowColor="rgba(139,92,246,0.4)" shadowColor="rgba(35,12,80,0.95)"
-              icon={<Gem style={{width:17,height:17}}/>}
-              label="ガチャ" small
+              onClick={() => { vibrateLight(); onNavigate('gacha'); }}
+              fromColor="#B06DD0" toColor="#D095E8"
+              glowColor="rgba(176,109,208,0.35)" shadowColor="#7840A0"
+              icon={<Gem style={{ width: 17, height: 17 }} />}
+              label="ガチャ"
+              small
             />
             <RpgButton
-              onClick={()=>{vibrateLight();onNavigate('researcher_dex');}}
-              fromColor="#78350f" toColor="#d97706"
-              glowColor="rgba(217,119,6,0.4)" shadowColor="rgba(55,22,3,0.95)"
-              icon={<Users style={{width:17,height:17}}/>}
-              label="研究員図鑑" small
+              onClick={() => { vibrateLight(); onNavigate('researcher_dex'); }}
+              fromColor="#E07850" toColor="#F5A07A"
+              glowColor="rgba(224,120,80,0.35)" shadowColor="#B04820"
+              icon={<Users style={{ width: 17, height: 17 }} />}
+              label="研究員図鑑"
+              small
             />
           </div>
         </div>
       </div>
 
-      <button
-        onClick={()=>{vibrateLight();setShowSupportModal(true);}}
-        style={{
-          position:'fixed',bottom:20,right:16,zIndex:50,
-          width:44,height:44,borderRadius:'50%',
-          background:'linear-gradient(135deg,rgba(20,12,40,0.92),rgba(30,18,55,0.92))',
-          border:'1.5px solid rgba(200,160,30,0.4)',
-          boxShadow:'0 4px 16px rgba(0,0,0,0.55),0 0 12px rgba(200,160,30,0.2)',
-          display:'flex',alignItems:'center',justifyContent:'center',
-          fontSize:20,cursor:'pointer',WebkitTapHighlightColor:'transparent',
-          backdropFilter:'blur(8px)',
-        }}
-      >🧪</button>
+      {/* サポートボタン（AC風） */}
+      <button onClick={() => { vibrateLight(); setShowSupportModal(true); }} style={{
+        position: 'fixed', bottom: 20, right: 16, zIndex: 50,
+        width: 48, height: 48, borderRadius: '50%',
+        background: `linear-gradient(135deg, ${AC.yellow} 0%, #FFA800 100%)`,
+        border: '3px solid rgba(255,255,255,0.7)',
+        boxShadow: `0 5px 0 ${AC.yellowDk}, 0 8px 18px rgba(0,0,0,0.15)`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 22, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+      }}>🧪</button>
 
+      {/* サポートモーダル（AC風） */}
       <AnimatePresence>
         {showSupportModal && (
-          <motion.div
-            initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            style={{
-              position:'fixed',inset:0,zIndex:60,
-              background:'rgba(0,0,0,0.72)',
-              display:'flex',alignItems:'flex-end',justifyContent:'center',
-              padding:'0 0 16px',
-            }}
-            onClick={()=>setShowSupportModal(false)}
-          >
-            <motion.div
-              initial={{y:80,opacity:0}} animate={{y:0,opacity:1}} exit={{y:80,opacity:0}}
-              transition={{type:'spring',damping:28}}
-              onClick={e=>e.stopPropagation()}
-              style={{
-                width:'100%',maxWidth:480,
-                background:'linear-gradient(135deg,rgba(16,10,36,0.98),rgba(22,14,48,0.98))',
-                borderRadius:'24px 24px 16px 16px',
-                border:'1px solid rgba(200,160,30,0.25)',
-                padding:'20px 18px 24px',
-                boxShadow:'0 -8px 40px rgba(0,0,0,0.6)',
-                margin:'0 14px',
-              }}
-            >
-              <div style={{width:36,height:4,borderRadius:2,background:'rgba(255,255,255,0.2)',margin:'0 auto 16px'}}/>
-              <div style={{textAlign:'center',marginBottom:12}}>
-                <div style={{fontSize:22,marginBottom:4}}>🧪✨</div>
-                <div style={{fontSize:15,fontWeight:900,color:'#e8d5a0',textShadow:'0 0 12px rgba(200,160,30,0.4)'}}>
-                  すうひもちコレクションを応援する
-                </div>
-                <div style={{fontSize:11,color:'rgba(255,255,255,0.38)',marginTop:2,fontWeight:600}}>
-                  【あなたに寄り添う、言の葉の世界】
-                </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{
+            position: 'fixed', inset: 0, zIndex: 60,
+            background: 'rgba(80,120,80,0.55)',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            padding: '0 0 16px',
+          }} onClick={() => setShowSupportModal(false)}>
+            <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }} transition={{ type: 'spring', damping: 28 }} onClick={(e) => e.stopPropagation()} style={{
+              width: '100%', maxWidth: 480, margin: '0 14px',
+              background: `linear-gradient(180deg, #FDFFF5 0%, #F0FAF0 100%)`,
+              borderRadius: '24px 24px 16px 16px',
+              border: `3px solid ${AC.grassDk}`,
+              boxShadow: `0 -4px 0 ${AC.grassDk}66, 0 -8px 30px rgba(0,0,0,0.15)`,
+              padding: '20px 18px 24px',
+            }}>
+              <div style={{ width: 40, height: 5, borderRadius: 99, background: `${AC.grass}88`, margin: '0 auto 16px' }} />
+              <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                <div style={{ fontSize: 28, marginBottom: 6 }}>🧪✨</div>
+                <div style={{ fontSize: 16, fontWeight: 900, color: AC.textDk }}>すうひもちコレクションを応援する</div>
+                <div style={{ fontSize: 11, color: AC.textLt, marginTop: 3, fontWeight: 600 }}>【あなたに寄り添う、言の葉の世界】</div>
               </div>
               <div style={{
-                fontSize:12.5,color:'rgba(255,255,255,0.5)',lineHeight:1.75,
-                borderTop:'1px solid rgba(255,255,255,0.08)',
-                borderBottom:'1px solid rgba(255,255,255,0.08)',
-                padding:'10px 0',marginBottom:14,
+                fontSize: 12.5, color: AC.textMd, lineHeight: 1.75,
+                borderTop: `1.5px solid ${AC.grass}44`,
+                borderBottom: `1.5px solid ${AC.grass}44`,
+                padding: '10px 0', marginBottom: 14,
               }}>
                 すうひもちコレクションは、失われたことば図書館を少しずつ復興していく学習RPGです。
                 AI利用料や開発費を個人で負担しながら開発・運営しています。
                 「面白い」「続いてほしい」と感じていただけたら、noteからのご支援が大きな力になります。
               </div>
-              <DeveloperSupport/>
-              <button
-                onClick={()=>setShowSupportModal(false)}
-                style={{
-                  display:'block',width:'100%',marginTop:12,
-                  padding:'10px',borderRadius:12,
-                  background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.12)',
-                  color:'rgba(255,255,255,0.5)',fontSize:13,fontWeight:600,
-                  cursor:'pointer',WebkitTapHighlightColor:'transparent',
-                }}
-              >閉じる</button>
+              <DeveloperSupport />
+              <button onClick={() => setShowSupportModal(false)} style={{
+                display: 'block', width: '100%', marginTop: 12,
+                padding: '11px', borderRadius: 999,
+                background: `linear-gradient(180deg, #E8E0D4 0%, #D4C8B8 100%)`,
+                border: `2.5px solid #B0A090`,
+                boxShadow: '0 4px 0 #9A8878',
+                color: AC.textDk, fontSize: 14, fontWeight: 800,
+                cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+              }}>とじる</button>
             </motion.div>
           </motion.div>
         )}

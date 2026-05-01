@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Loader2, Camera, AlertCircle, BookOpen, Sword, ChevronRight, CheckCircle, XCircle, ChevronDown, Coins } from 'lucide-react';
+import { ChevronLeft, CheckCircle, XCircle } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { normalizeReading } from '@/lib/normalizeReading';
 import { addRepairBookFragments } from '@/lib/repairBookFragments';
@@ -25,6 +26,162 @@ const FEEDBACK_EXTRA_MS = 400;
 /** 正解札の animate times[1]。単語割裂はこのタイミングで開始し、視覚的に札が単語へ当たる瞬間と揃える */
 const SEAL_CARD_OK_DURATION_S = 0.48;
 const SEAL_CARD_OK_IMPACT_AT = SEAL_CARD_OK_DURATION_S * 0.78;
+
+/** 漢コレリザルト（Ac*）と FreeQuest と揃える AC 配色 */
+const AC = {
+  sky:'#c8eaf5', green:'#5cb85c', darkGreen:'#3a7a3a',
+  leaf:'#8dc63f', cream:'#fef9ee', tan:'#f0e6c8',
+  sand:'#e8d5a3', brown:'#8b5e3c', text:'#4a3728',
+  muted:'#9b7f6e', teal:'#7dd4c0', yellow:'#ffd966',
+  amber:'#f5a623', red:'#e05555', blue:'#5b9bd5',
+};
+
+function AcBtn({ label, emoji, from, shadow, onClick, disabled, small }:{
+  label:string; emoji?:string; from:string; shadow:string;
+  onClick:()=>void; disabled?:boolean; small?:boolean;
+}) {
+  const [p,setP] = useState(false);
+  return (
+    <button type="button" onClick={onClick} disabled={disabled}
+      onPointerDown={()=>setP(true)} onPointerUp={()=>setP(false)} onPointerLeave={()=>setP(false)}
+      style={{
+        width:'100%', padding: small ? '10px 16px' : '13px 20px', borderRadius:99,
+        background:`linear-gradient(180deg,${from} 0%,${shadow} 100%)`,
+        border:'2px solid rgba(255,255,255,0.28)',
+        borderBottom: p ? `2px solid ${shadow}` : `5px solid ${shadow}`,
+        transform: p ? 'translateY(3px)' : 'translateY(0)',
+        boxShadow: p ? 'none' : `0 5px 14px ${from}66`,
+        color:'#fff', fontSize: small ? 13 : 15, fontWeight:900,
+        display:'flex', alignItems:'center', justifyContent:'center', gap:7,
+        cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.45 : 1,
+        transition:'border-bottom .07s,transform .07s', WebkitTapHighlightColor:'transparent',
+      }}
+    >
+      {emoji && <span style={{fontSize: small ? 16 : 18}}>{emoji}</span>}
+      {label}
+    </button>
+  );
+}
+
+function AcHeader({ title, sub, onBack, backLabel='もどる' }:{
+  title:string; sub?:string; onBack:()=>void; backLabel?:string;
+}) {
+  return (
+    <header style={{
+      display:'flex', alignItems:'center', justifyContent:'space-between',
+      padding:'12px 16px',
+      background:'rgba(255,255,255,0.68)', backdropFilter:'blur(8px)',
+      borderBottom:`3px solid ${AC.darkGreen}`,
+      boxShadow:`0 3px 0 ${AC.leaf}55`,
+      position:'sticky', top:0, zIndex:20,
+    }}>
+      <motion.button type="button" onClick={() => { vibrateLight(); onBack(); }} whileTap={{scale:0.9}}
+        style={{
+          display:'flex', alignItems:'center', gap:4,
+          padding:'5px 12px 5px 8px', borderRadius:99,
+          background:AC.green, color:'#fff',
+          border:`2px solid ${AC.darkGreen}`, boxShadow:`0 3px 0 ${AC.darkGreen}`,
+          fontSize:13, fontWeight:900, cursor:'pointer', WebkitTapHighlightColor:'transparent',
+        }}
+      ><ChevronLeft style={{width:16,height:16}}/>{backLabel}</motion.button>
+      <div style={{textAlign:'center'}}>
+        {sub && <div style={{fontSize:9,fontWeight:900,letterSpacing:'0.18em',color:AC.darkGreen}}>✦ {sub} ✦</div>}
+        <h1 style={{fontSize:18,fontWeight:900,margin:0,color:AC.text}}>{title}</h1>
+      </div>
+      <div style={{width:52}}/>
+    </header>
+  );
+}
+
+function AcPage({ children }: { children: ReactNode }) {
+  return (
+    <div style={{
+      minHeight:'100dvh', display:'flex', flexDirection:'column',
+      background:`linear-gradient(180deg,${AC.sky} 0%,#daf0e8 28%,${AC.cream} 60%,${AC.tan} 100%)`,
+      color:AC.text, position:'relative', overflow:'hidden',
+    }}>
+      {/* 葉っぱ装飾 */}
+      {[
+        { e: '🍃', t: '5%', l: '3%', s: 22, rot: -20, d: 0 },
+        { e: '🌿', t: '9%', r: '4%', s: 18, rot: 15, d: 0.4 },
+        { e: '⭐', t: '6%', l: '45%', s: 13, rot: 5, d: 0.7 },
+      ].map((d, i) => (
+        <motion.span key={i} style={{
+          position:'absolute',fontSize:d.s,opacity:0.38,top:d.t,
+          left:d.l, right:d.r, rotate:d.rot, pointerEvents:'none', zIndex:0,
+        }}
+          animate={{y:[0,-6,0]}}
+          transition={{duration:3.2+i*0.3,delay:d.d,repeat:Infinity,ease:'easeInOut'}}
+        >{d.e}</motion.span>
+      ))}
+      {children}
+    </div>
+  );
+}
+
+/** 拠点2列タイル。ループ内で useState するとビュー切替で KanColeScreen の hooks 数が変わるため子に分離する */
+function HubTwinTile({
+  emoji,
+  label,
+  sub,
+  from,
+  shadow,
+  onClick,
+  delay,
+}: {
+  emoji: string;
+  label: string;
+  sub: string;
+  from: string;
+  shadow: string;
+  onClick: () => void;
+  delay: number;
+}) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+      style={{
+        padding: '16px 10px 14px',
+        borderRadius: 20,
+        background: `linear-gradient(180deg, ${from} 0%, ${shadow} 100%)`,
+        border: '2px solid rgba(255,255,255,0.25)',
+        borderBottom: pressed ? `2px solid ${shadow}` : `5px solid ${shadow}`,
+        transform: pressed ? 'translateY(3px)' : 'translateY(0)',
+        boxShadow: pressed ? 'none' : `0 5px 14px ${from}55`,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 5,
+        cursor: 'pointer',
+        WebkitTapHighlightColor: 'transparent',
+        transition: 'border-bottom .07s, transform .07s',
+      }}
+    >
+      <span style={{ fontSize: 28 }}>{emoji}</span>
+      <span style={{ fontSize: 14, fontWeight: 900, color: '#fff' }}>{label}</span>
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          color: 'rgba(255,255,255,0.7)',
+          background: 'rgba(0,0,0,0.15)',
+          padding: '2px 10px',
+          borderRadius: 99,
+        }}
+      >
+        {sub}
+      </span>
+    </motion.button>
+  );
+}
 
 /** 戦闘エリア（right:8% bottom:12% の札）→ flex 中央の単語へ向かう translate キーフレーム。端末幅に追従 */
 type SealCardKeyframePaths = {
@@ -225,7 +382,8 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
   const SUPPRESS_FILE_PICKER_MS = 8000;
 
   const current = roundItems[idx];
-  const timePct = Math.min(100, Math.max(0, (timeLeft / TIME_LIMIT_SEC) * 100));
+  /** 戦闘画面上部バー: 経過した割合（0→100%、制限時間いっぱいで満タン） */
+  const timeElapsedBarPct = Math.min(100, Math.max(0, ((TIME_LIMIT_SEC - timeLeft) / TIME_LIMIT_SEC) * 100));
   const isTimeWarning = timeLeft <= 2;
   const displayDefeatedCount = useMemo(() => defeatedCount, [defeatedCount]);
 
@@ -254,7 +412,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
   
   const startProgressTicker = useCallback(() => {
     stopProgressTicker();
-    setProgress(3);
+    setProgress(0);
     progressTimerRef.current = window.setInterval(() => {
       setProgress((p) => Math.min(95, p + 4));
     }, 1000);
@@ -458,46 +616,90 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
     return () => clearTimeout(id);
   }, [view, battleState, idx, roundItems.length, selectedScanId, defeatedCount, capturedWords.length, addCoins, getKanColeScanById, saveKanColeAdventureSnapshot, lastSealed]);
 
+  /** スキャン完了後など progress が残ると、アップロード時にバーが100→下がって見える。待機／エラーに戻したらリセットして0から伸ばす */
+  useEffect(() => {
+    if (view !== 'scan') return;
+    if (scanPhase !== 'idle' && scanPhase !== 'error') return;
+    stopProgressTicker();
+    setProgress(0);
+  }, [view, scanPhase, stopProgressTicker]);
+
   // ==========================================
   // Render: Hub / Log / Scan / Result / Dex ...
   // ==========================================
 
   if (view === 'hub') {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 text-white p-4">
-        <div className="max-w-lg mx-auto pt-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <button onClick={() => { vibrateLight(); onBack(); }} className="flex items-center gap-1 text-gray-400 hover:text-white"><ChevronLeft className="w-5 h-5" />戻る</button>
-            <h1 className="text-xl font-bold">漢コレ拠点</h1>
-            <div className="w-16" />
+      <AcPage>
+        <AcHeader title="漢コレ拠点" sub="かんコレ" onBack={()=>{vibrateLight();onBack();}} backLabel="もどる"/>
+        <div style={{flex:1,padding:'16px 14px 40px',maxWidth:480,margin:'0 auto',width:'100%',display:'flex',flexDirection:'column',gap:12,position:'relative',zIndex:1}}>
+  
+          <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}>
+            <AcBtn label="新しい本文をスキャン" emoji="📷"
+              from={AC.amber} shadow="#c07800"
+              onClick={()=>{
+                vibrateLight();
+                setScanPhase('idle');
+                stopProgressTicker();
+                setProgress(0);
+                setView('scan');
+              }}
+            />
+          </motion.div>
+  
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+            {[
+              {emoji:'📖',label:'冒険ログ',sub:`${kanColeScans.length}件`,from:AC.teal,shadow:'#4aaa96',onClick:()=>{vibrateLight();setView('log');}},
+              {emoji:'📚',label:'漢字図鑑',sub:`${kanDexOrder.length}件`,from:AC.blue,shadow:'#3a6fa0',onClick:()=>{vibrateLight();setDexTerm(null);setDexVolIndex(0);setView('dex');}},
+            ].map((btn, i) => (
+              <HubTwinTile
+                key={i}
+                emoji={btn.emoji}
+                label={btn.label}
+                sub={btn.sub}
+                from={btn.from}
+                shadow={btn.shadow}
+                onClick={btn.onClick}
+                delay={0.08 + i * 0.06}
+              />
+            ))}
           </div>
-          <button onClick={() => { vibrateLight(); setScanPhase('idle'); setView('scan'); }} className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2">
-            <Camera className="w-5 h-5" /> 新しい本文をスキャン
-          </button>
-          <button onClick={() => { vibrateLight(); setView('log'); }} className="w-full rounded-xl border border-gray-600/80 bg-gray-800/60 px-4 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3"><BookOpen className="w-5 h-5 text-amber-400" /><div><p className="font-bold">冒険ログ</p><p className="text-xs text-gray-500">{kanColeScans.length}件</p></div></div>
-            <ChevronRight className="w-5 h-5 text-gray-500" />
-          </button>
-          <button
-            onClick={() => {
-              vibrateLight();
-              setDexTerm(null);
-              setDexVolIndex(0);
-              setView('dex');
-            }}
-            className="w-full rounded-xl border border-gray-600/80 bg-gray-800/60 px-4 py-4 flex items-center justify-between"
-          >
-            <div className="flex items-center gap-3">
-              <BookOpen className="w-5 h-5 text-amber-400" />
-              <div>
-                <p className="font-bold">漢字図鑑</p>
-                <p className="text-xs text-gray-500">登録 {kanDexOrder.length}件</p>
+  
+          {/* 最近の冒険プレビュー */}
+          {scansForDisplay.length > 0 && (
+            <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:0.18}}
+              style={{borderRadius:20,overflow:'hidden',background:'rgba(255,255,255,0.78)',border:`2px solid ${AC.sand}`,boxShadow:`0 4px 0 ${AC.sand}`}}
+            >
+              <div style={{padding:'8px 14px 6px',fontSize:9,fontWeight:900,letterSpacing:'0.18em',color:AC.darkGreen,borderBottom:`1px solid ${AC.sand}`,background:`${AC.leaf}18`}}>
+                ✦ さいきんの冒険
               </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-500" />
-          </button>
+              {scansForDisplay.slice(0,2).map((s,i)=>{
+                const pct=Math.round((s.captured/Math.max(1,s.total))*100);
+                return (
+                  <div key={s.id} style={{padding:'10px 14px',borderTop:i>0?`1px solid ${AC.sand}`:undefined}}>
+                    <div style={{fontSize:13,fontWeight:900,color:AC.text,marginBottom:5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.title}</div>
+                    <div style={{height:8,borderRadius:99,background:AC.tan,overflow:'hidden',marginBottom:6}}>
+                      <motion.div
+                        initial={{ width: '0%' }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.9, ease: 'easeOut' }}
+                        style={{ height: '100%', borderRadius: 99, background: `linear-gradient(90deg,${AC.amber},${AC.leaf})` }}
+                      />
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <span style={{fontSize:10,color:AC.muted,fontWeight:700}}>捕獲 {s.captured}/{s.total} ・残り {s.remaining}</span>
+                      <motion.button type="button" whileTap={{scale:0.93}}
+                        onClick={()=>{vibrateLight();startQuest(s.id,'explore');}}
+                        style={{fontSize:11,fontWeight:900,color:'#fff',padding:'4px 14px',borderRadius:99,background:`linear-gradient(180deg,${AC.green},${AC.darkGreen})`,border:`1.5px solid ${AC.darkGreen}`,boxShadow:`0 2px 0 ${AC.darkGreen}`,cursor:'pointer',WebkitTapHighlightColor:'transparent'}}
+                      >続ける ▶</motion.button>
+                    </div>
+                  </div>
+                );
+              })}
+            </motion.div>
+          )}
         </div>
-      </div>
+      </AcPage>
     );
   }
 
@@ -516,160 +718,312 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
 
   if (view === 'log') {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 text-white p-4">
-        <div className="max-w-lg mx-auto pt-4">
-          <button onClick={() => { vibrateLight(); setView('hub'); }} className="flex items-center gap-1 text-gray-400 hover:text-white mb-4"><ChevronLeft className="w-5 h-5" />戻る</button>
+      <AcPage>
+        <AcHeader title="冒険ログ" sub="きろく" onBack={()=>{vibrateLight();setView('hub');}}/>
+        <div style={{flex:1,padding:'16px 14px 40px',maxWidth:480,margin:'0 auto',width:'100%',position:'relative',zIndex:1}}>
           {scansForDisplay.length === 0 ? (
-            <div className="text-center text-gray-500 py-10">まだ冒険ログがありません</div>
+            <motion.div initial={{opacity:0}} animate={{opacity:1}}
+              style={{textAlign:'center',padding:'50px 20px',borderRadius:24,background:'rgba(255,255,255,0.6)',border:`2px dashed ${AC.sand}`,marginTop:16}}
+            >
+              <div style={{fontSize:52,marginBottom:12}}>📭</div>
+              <div style={{fontSize:15,fontWeight:900,color:AC.text}}>まだ冒険ログがないよ</div>
+              <div style={{fontSize:12,color:AC.muted,marginTop:4}}>本文をスキャンして冒険を始めよう！</div>
+            </motion.div>
           ) : (
-            <div className="space-y-3">
-              {scansForDisplay.map((s) => (
-                <div key={s.id} className="rounded-xl border border-gray-600/80 bg-gray-800/70 p-4">
-                  <div className="font-bold mb-2">{s.title}</div>
-                  <div className="text-xs text-gray-300 mb-3">捕獲 {s.captured}/{s.total} ・ 撃破 {s.defeated} ・ 残り {s.remaining}</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button onClick={() => { vibrateLight(); startQuest(s.id, 'explore'); }} className="py-2 rounded-lg bg-amber-600 text-white text-sm font-bold">続きを探索</button>
-                    <button onClick={() => { vibrateLight(); startQuest(s.id, 'retry'); }} className="py-2 rounded-lg border border-gray-500 text-gray-200 text-sm font-bold">再戦する</button>
-                  </div>
-                </div>
-              ))}
+            <div style={{display:'flex',flexDirection:'column',gap:12}}>
+              {scansForDisplay.map((s,i)=>{
+                const pct=Math.round((s.captured/Math.max(1,s.total))*100);
+                return (
+                  <motion.div key={s.id} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:i*0.05}}
+                    style={{borderRadius:20,overflow:'hidden',background:'rgba(255,255,255,0.82)',border:`2px solid ${AC.sand}`,boxShadow:`0 4px 0 ${AC.sand}`}}
+                  >
+                    <div style={{padding:'10px 14px 8px',borderBottom:`1px solid ${AC.sand}`,background:`${AC.leaf}18`}}>
+                      <div style={{fontSize:13,fontWeight:900,color:AC.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.title}</div>
+                    </div>
+                    <div style={{padding:'10px 14px 14px'}}>
+                      <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
+                        {[
+                          {label:`🔮 捕獲 ${s.captured}体`,bg:`${AC.amber}33`,border:AC.amber,color:AC.brown},
+                          {label:`⚔️ 撃破 ${s.defeated}体`,bg:`${AC.teal}33`,border:AC.teal,color:AC.darkGreen},
+                          {label:`📌 残り ${s.remaining}体`,bg:AC.tan,border:AC.sand,color:AC.muted},
+                        ].map((badge,j)=>(
+                          <span key={j} style={{fontSize:10,fontWeight:900,padding:'3px 10px',borderRadius:99,background:badge.bg,border:`1.5px solid ${badge.border}`,color:badge.color}}>{badge.label}</span>
+                        ))}
+                      </div>
+                      <div style={{marginBottom:12}}>
+                        <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                          <span style={{fontSize:9,fontWeight:900,color:AC.muted}}>捕獲進捗</span>
+                          <span style={{fontSize:9,fontWeight:900,color:AC.darkGreen}}>{pct}%</span>
+                        </div>
+                        <div style={{height:10,borderRadius:99,background:AC.tan,border:`1px solid ${AC.sand}`,overflow:'hidden'}}>
+                          <motion.div
+                            initial={{ width: '0%' }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ duration: 0.9, ease: 'easeOut' }}
+                            style={{ height: '100%', borderRadius: 99, background: `linear-gradient(90deg,${AC.amber},${AC.leaf})`, boxShadow: `0 0 6px ${AC.amber}77` }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                        <AcBtn label="続きを探索" emoji="⚔️" from={AC.amber} shadow="#c07800" small
+                          onClick={()=>{vibrateLight();startQuest(s.id,'explore');}}/>
+                        <AcBtn label="再戦する" emoji="🔁" from={AC.teal} shadow="#4aaa96" small
+                          onClick={()=>{vibrateLight();startQuest(s.id,'retry');}}/>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </div>
-      </div>
+      </AcPage>
     );
   }
 
   if (view === 'scan') {
-    const displayProgress = Math.min(100, Math.max(0, Math.round(progress)));
+    const displayProgress = Math.min(100,Math.max(0,Math.round(progress)));
     return (
-      <div className="min-h-screen p-4 relative overflow-hidden bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900">
-        <div className="max-w-md mx-auto pt-4 pb-4">
-          <button onClick={() => { vibrateLight(); setView('hub'); }} className="flex items-center gap-1 text-gray-400 hover:text-white mb-4"><ChevronLeft className="w-5 h-5" />戻る</button>
-          {(scanPhase === 'idle' || scanPhase === 'error') && (
-            <div className="space-y-3">
-              {scanPhase === 'error' ? (
-                <div className="text-center py-8"><div className="text-red-300 mb-4">{error}</div><button onClick={() => setScanPhase('idle')} className="px-6 py-3 rounded-xl bg-gray-700 text-white font-bold">やり直す</button></div>
-              ) : (
-                <div className="relative border-2 border-dashed rounded-2xl p-8 text-center transition-colors border-gray-600 hover:border-slate-300 cursor-pointer"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFileSelect(f); }}
-                  onClick={() => { if (Date.now() < ignoreFilePickerUntilRef.current) return; fileInputRef.current?.click(); }}
+      <AcPage>
+        <AcHeader title="スキャン" sub="ほんぶんをよみこむ" onBack={()=>{vibrateLight();setView('hub');}}/>
+        <div style={{flex:1,padding:'20px 14px 40px',maxWidth:480,margin:'0 auto',width:'100%',position:'relative',zIndex:1,display:'flex',flexDirection:'column',gap:12}}>
+  
+          {(scanPhase==='idle'||scanPhase==='error') && (
+            <>
+              {scanPhase==='error' ? (
+                <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}}
+                  style={{borderRadius:24,padding:'32px 20px',textAlign:'center',background:'rgba(255,255,255,0.82)',border:`2px solid ${AC.red}88`,boxShadow:`0 4px 0 ${AC.red}44`}}
                 >
-                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ''; }} />
-                  <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { ignoreFilePickerUntilRef.current = Date.now() + SUPPRESS_FILE_PICKER_MS; const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ''; }} />
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-200/15 flex items-center justify-center"><Camera className="w-8 h-8 text-slate-200" /></div>
-                  <div className="text-white font-bold mb-2">画像をアップロード</div>
-                  <div className="text-gray-400 text-sm">タップまたはドラッグ＆ドロップ</div>
-                  <div className="mt-4 p-3 bg-slate-200/10 border border-slate-200/20 rounded-lg"><p className="text-slate-200 text-xs font-medium flex items-center justify-center gap-1"><AlertCircle className="w-3.5 h-3.5" />1ページずつスキャンしてください</p></div>
+                  <div style={{fontSize:48,marginBottom:12}}>😢</div>
+                  <div style={{fontSize:14,fontWeight:900,color:AC.red,marginBottom:16}}>{error}</div>
+                  <AcBtn label="もう一度試す" emoji="🔄" from={AC.teal} shadow="#4aaa96" onClick={()=>setScanPhase('idle')}/>
+                </motion.div>
+              ) : (
+                <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}
+                  style={{borderRadius:24,overflow:'hidden',background:'rgba(255,255,255,0.82)',border:`2px dashed ${AC.sand}`,boxShadow:`0 4px 0 ${AC.sand}`}}
+                >
+                  {/* ドロップゾーン */}
+                  <div
+                    style={{padding:'40px 20px',textAlign:'center',cursor:'pointer'}}
+                    onDragOver={e=>e.preventDefault()}
+                    onDrop={e=>{e.preventDefault();const f=e.dataTransfer.files?.[0];if(f)handleFileSelect(f);}}
+                    onClick={()=>{if(Date.now()<ignoreFilePickerUntilRef.current)return;fileInputRef.current?.click();}}
+                  >
+                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                      onChange={e=>{const f=e.target.files?.[0];if(f)handleFileSelect(f);e.target.value='';}}/>
+                    <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={e=>{ignoreFilePickerUntilRef.current=Date.now()+SUPPRESS_FILE_PICKER_MS;const f=e.target.files?.[0];if(f)handleFileSelect(f);e.target.value='';}}/>
+                    <motion.div style={{fontSize:56,marginBottom:12}}
+                      animate={{y:[0,-8,0]}} transition={{duration:2.4,repeat:Infinity,ease:'easeInOut'}}
+                    >📷</motion.div>
+                    <div style={{fontSize:15,fontWeight:900,color:AC.text,marginBottom:4}}>画像をアップロード</div>
+                    <div style={{fontSize:12,color:AC.muted}}>タップまたはドラッグ＆ドロップ</div>
+                  </div>
+  
+                  {/* 注意書き */}
+                  <div style={{margin:'0 16px 16px',padding:'10px 14px',borderRadius:14,background:`${AC.yellow}44`,border:`1.5px solid ${AC.amber}88`,display:'flex',alignItems:'center',gap:8}}>
+                    <span style={{fontSize:18}}>⚠️</span>
+                    <span style={{fontSize:11,fontWeight:700,color:AC.brown}}>1ページずつスキャンしてください</span>
+                  </div>
+  
+                  {/* カメラボタン */}
+                  <div style={{padding:'0 16px 16px'}}>
+                    <AcBtn label="カメラで撮影" emoji="📸" from={AC.green} shadow={AC.darkGreen}
+                      onClick={()=>{ignoreFilePickerUntilRef.current=Date.now()+SUPPRESS_FILE_PICKER_MS;cameraInputRef.current?.click();}}/>
+                  </div>
+                </motion.div>
+              )}
+            </>
+          )}
+  
+          {(scanPhase==='uploading'||scanPhase==='processing') && (
+            <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}}
+              style={{borderRadius:24,padding:'32px 20px',textAlign:'center',background:'rgba(255,255,255,0.82)',border:`2px solid ${AC.sand}`,boxShadow:`0 4px 0 ${AC.sand}`}}
+            >
+              {selectedImage && (
+                <div style={{width:120,height:120,margin:'0 auto 20px',borderRadius:16,overflow:'hidden',border:`3px solid ${AC.sand}`,boxShadow:`0 4px 0 ${AC.sand}`}}>
+                  <img src={selectedImage} alt="Selected" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
                 </div>
               )}
-            </div>
-          )}
-          {(scanPhase === 'uploading' || scanPhase === 'processing') && (
-            <div className="text-center py-12 space-y-6">
-              {selectedImage && <div className="w-48 h-48 mx-auto rounded-xl overflow-hidden border-2 border-slate-200/30"><img src={selectedImage} alt="Selected" className="w-full h-full object-cover" /></div>}
-              <div className="max-w-md mx-auto">
-                <div className="flex items-center justify-between text-sm text-slate-200 mb-2 px-4"><span>{progressLabel}</span><span>{displayProgress}%</span></div>
-                <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden border border-slate-200/20"><div className="h-full bg-gradient-to-r from-slate-200 via-slate-100 to-white transition-[width] duration-300 ease-out" style={{ width: `${displayProgress}%` }} /></div>
+              <motion.div style={{fontSize:42,marginBottom:12}}
+                animate={{rotate:[0,10,-10,0]}} transition={{duration:1.2,repeat:Infinity,ease:'easeInOut'}}
+              >📖</motion.div>
+              <div style={{fontSize:14,fontWeight:900,color:AC.text,marginBottom:16}}>{progressLabel}</div>
+              <div style={{height:12,borderRadius:99,background:AC.tan,border:`1.5px solid ${AC.sand}`,overflow:'hidden',marginBottom:8}}>
+                <motion.div
+                  initial={{ width: '0%' }}
+                  animate={{ width: `${displayProgress}%` }}
+                  transition={{ duration: 0.5, ease: 'easeOut' }}
+                  style={{ height: '100%', borderRadius: 99, background: `linear-gradient(90deg,${AC.amber},${AC.leaf})`, boxShadow: `0 0 8px ${AC.amber}77` }}
+                />
               </div>
-              <Loader2 className="w-12 h-12 text-slate-200 mx-auto animate-spin" />
-            </div>
+              <div style={{fontSize:12,fontWeight:900,color:AC.muted}}>{displayProgress}%</div>
+            </motion.div>
           )}
         </div>
-      </div>
+      </AcPage>
     );
   }
 
   if (view === 'result') {
-    const hasCaptured = capturedWords.length > 0;
+    const hasCaptured=capturedWords.length>0;
+    const perfectRound=misses===0&&defeatedCount>0;
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#0a0e17] via-[#0d1321] to-[#0a0e17] text-white p-4">
-        <div className="max-w-md mx-auto pt-4 space-y-4">
-          <section className="mb-2">
-            <h2 className="text-base font-bold text-amber-400 mb-1">⚔ 戦闘終了！</h2>
-            {hasCaptured && (
-              <p className="text-4xl font-extrabold text-amber-300 mb-1">
-                捕獲 <span className="text-5xl">{capturedWords.length}</span> 体
-              </p>
-            )}
-            <p className="text-2xl font-bold text-gray-100">
-              撃破 <span className="text-3xl text-gray-100">{displayDefeatedCount}</span> 回
-            </p>
-            <p className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-amber-400/40 bg-amber-500/10 px-2.5 py-1 text-sm font-semibold text-amber-300">
-              <Coins className="w-4 h-4" /> 今回獲得 +{earnedCoins} コイン
-            </p>
-            <p className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-emerald-400/40 bg-emerald-500/10 px-2.5 py-1 text-sm font-semibold text-emerald-300 ml-2">
-              今回獲得 +{earnedLeaves} ことの葉
-            </p>
-            {misses > 0 && <p className="text-sm text-gray-200 mt-1">ミス {misses}回</p>}
-          </section>
-
+      <AcPage>
+        <AcHeader title="リザルト" sub="せんとうしゅうりょう" onBack={()=>{setView('hub');setSelectedScanId(null);}}/>
+        <div style={{flex:1,padding:'16px 14px 80px',maxWidth:480,margin:'0 auto',width:'100%',display:'flex',flexDirection:'column',gap:12,position:'relative',zIndex:1,overflowY:'auto'}}>
+  
+          {/* 紙吹雪 */}
+          {perfectRound && [...Array(10)].map((_,i)=>(
+            <motion.div key={i} style={{position:'fixed',top:-20,left:`${8+i*9}%`,width:7+i%3*3,height:7+i%3*3,borderRadius:2,background:[AC.yellow,AC.leaf,AC.teal,AC.amber,AC.blue][i%5],pointerEvents:'none',zIndex:0}}
+              animate={{y:['0vh','110vh'],rotate:[0,360*2],opacity:[1,1,0]}}
+              transition={{duration:2+i*0.25,delay:i*0.12,ease:'easeIn'}}
+            />
+          ))}
+  
+          {/* ヒーローカード */}
+          <motion.div initial={{opacity:0,scale:0.9}} animate={{opacity:1,scale:1}} transition={{type:'spring',stiffness:220,delay:0.1}}
+            style={{
+              borderRadius:24,padding:'20px 20px 16px',textAlign:'center',
+              background:perfectRound?`linear-gradient(135deg,${AC.yellow}55,rgba(255,255,255,0.92))`:'rgba(255,255,255,0.87)',
+              border:`3px solid ${perfectRound?AC.amber:AC.sand}`,
+              boxShadow:perfectRound?`0 6px 0 #c07800aa,0 10px 28px ${AC.amber}44`:`0 5px 0 ${AC.sand}`,
+            }}
+          >
+            <motion.div style={{fontSize:64,lineHeight:1,marginBottom:8}}
+              animate={perfectRound?{rotate:[0,-10,10,-8,8,0]}:{}}
+              transition={{duration:0.7,delay:0.4}}
+            >
+              {perfectRound?'🏆':hasCaptured?'⭐':'⭐'}
+            </motion.div>
+            <div style={{fontSize:22,fontWeight:900,color:perfectRound?AC.brown:AC.text,marginBottom:4}}>
+              {perfectRound?'かんぺき！':hasCaptured?'結果だよ':'結果発表'}
+            </div>
+  
+            {/* スコア3列 */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:12}}>
+              {[
+                {emoji:'🔮',label:'捕獲',val:capturedWords.length,color:AC.amber},
+                {emoji:'⚔️',label:'撃破',val:displayDefeatedCount,color:AC.teal},
+                {emoji:'💧',label:'ミス',val:misses,color:misses===0?AC.green:AC.red},
+              ].map((stat,i)=>(
+                <motion.div key={i} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:0.2+i*0.08}}
+                  style={{borderRadius:14,padding:'10px 6px 8px',background:`${stat.color}22`,border:`2px solid ${stat.color}55`,boxShadow:`0 3px 0 ${stat.color}44`}}
+                >
+                  <div style={{fontSize:20}}>{stat.emoji}</div>
+                  <div style={{fontSize:22,fontWeight:900,color:AC.text,margin:'2px 0'}}>{stat.val}</div>
+                  <div style={{fontSize:9,fontWeight:900,color:AC.muted,letterSpacing:'0.1em'}}>{stat.label}</div>
+                </motion.div>
+              ))}
+            </div>
+  
+            {/* 報酬バッジ */}
+            <div style={{display:'flex',gap:6,justifyContent:'center',marginTop:12,flexWrap:'wrap'}}>
+              <motion.span initial={{scale:0}} animate={{scale:1}} transition={{delay:0.45,type:'spring',stiffness:300}}
+                style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:12,fontWeight:900,padding:'6px 14px',borderRadius:99,background:`${AC.yellow}55`,border:`2px solid ${AC.amber}`,color:AC.brown,boxShadow:`0 2px 0 ${AC.amber}77`}}
+              >🪙 +{earnedCoins} コイン</motion.span>
+              <motion.span initial={{scale:0}} animate={{scale:1}} transition={{delay:0.52,type:'spring',stiffness:300}}
+                style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:12,fontWeight:900,padding:'6px 14px',borderRadius:99,background:`${AC.leaf}33`,border:`2px solid ${AC.leaf}`,color:AC.darkGreen,boxShadow:`0 2px 0 ${AC.darkGreen}55`}}
+              >🍃 +{earnedLeaves} ことの葉</motion.span>
+            </div>
+          </motion.div>
+  
+          {/* 捕獲漢字 */}
           {hasCaptured && (
-            <section className="mb-4">
-              <h3 className="text-lg font-extrabold text-amber-400 mb-3">✨ 新たに捕獲！</h3>
-              <div className="space-y-2">
-                {capturedWords.slice(0, 3).map((w) => (
-                  <div key={w.term} className="relative rounded-xl border-2 border-amber-300/30 bg-gradient-to-b from-amber-200/6 to-amber-700/4 px-5 pt-5 pb-4">
-                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-200/50 via-amber-300/40 to-transparent opacity-90" />
-                    <div className="text-amber-300 text-sm font-bold mb-1">★ GET</div>
-                    <div className="font-mono font-extrabold text-amber-200 text-xl tracking-wider">{w.term}</div>
-                    <div className="text-amber-200/80 text-xs mt-0.5">よみ: {normalizeReading(w.reading) || w.reading}</div>
-                    <div className="text-gray-100 text-sm mt-0.5">— {w.meaning || '—'}</div>
-                  </div>
+            <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:0.3}}
+              style={{borderRadius:20,overflow:'hidden',background:'rgba(255,255,255,0.82)',border:`2px solid ${AC.amber}88`,boxShadow:`0 4px 0 ${AC.amber}44`}}
+            >
+              <div style={{padding:'9px 14px 7px',borderBottom:`1px solid ${AC.sand}`,background:`${AC.amber}22`,display:'flex',alignItems:'center',gap:6}}>
+                <span style={{fontSize:15}}>✨</span>
+                <span style={{fontSize:11,fontWeight:900,color:AC.brown,letterSpacing:'0.1em'}}>新たに捕獲！</span>
+                <span style={{marginLeft:'auto',fontSize:11,fontWeight:900,padding:'2px 10px',borderRadius:99,background:AC.amber,color:'#fff',boxShadow:`0 2px 0 #c07800`}}>{capturedWords.length}体</span>
+              </div>
+              <div style={{padding:'10px 12px',display:'flex',flexDirection:'column',gap:8}}>
+                {capturedWords.slice(0,4).map((w,i)=>(
+                  <motion.div key={w.term} initial={{opacity:0,x:-12}} animate={{opacity:1,x:0}} transition={{delay:0.35+i*0.07}}
+                    style={{borderRadius:14,padding:'10px 12px',background:`linear-gradient(135deg,${AC.yellow}22,rgba(255,255,255,0.7))`,border:`2px solid ${AC.amber}55`,boxShadow:`0 3px 0 ${AC.amber}33`,display:'flex',alignItems:'center',gap:10}}
+                  >
+                    <div style={{width:44,height:44,borderRadius:12,background:`${AC.amber}33`,border:`2px solid ${AC.amber}88`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,fontWeight:900,fontFamily:'serif',color:AC.brown,flexShrink:0}}>
+                      {w.term}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:11,fontWeight:700,color:AC.muted}}>よみ：{normalizeReading(w.reading)||w.reading}</div>
+                      <div style={{fontSize:12,fontWeight:700,color:AC.text,lineHeight:1.4}}>{w.meaning||'—'}</div>
+                    </div>
+                    <motion.div initial={{scale:0,rotate:-20}} animate={{scale:1,rotate:-12}} transition={{delay:0.4+i*0.07,type:'spring',stiffness:400}}
+                      style={{width:26,height:26,borderRadius:'50%',background:AC.amber,border:'2px solid #fff',boxShadow:`0 2px 6px ${AC.amber}88`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}
+                    >⭐</motion.div>
+                  </motion.div>
                 ))}
               </div>
-            </section>
+            </motion.div>
           )}
-
+  
+          {/* 撃破単語 */}
           {defeatedWords.length > 0 && (
-            <section className="mb-4">
-              <p className="text-xs font-medium text-gray-500 mb-2">⚔ 撃破した単語</p>
-              <div className="space-y-2">
-                {defeatedWords.slice(0, 5).map((w) => (
-                  <div key={w.term} className="rounded-xl border border-amber-500/40 bg-gradient-to-b from-gray-800/80 to-gray-900/80 text-center px-3 py-2">
-                    <p className="font-mono font-bold text-amber-200 uppercase tracking-wider text-sm">{w.term}</p>
-                    <p className="text-amber-200/80 mt-0.5 text-[10px]">よみ: {normalizeReading(w.reading) || w.reading}</p>
-                  </div>
+            <div style={{borderRadius:20,background:'rgba(255,255,255,0.72)',border:`2px solid ${AC.sand}`,boxShadow:`0 3px 0 ${AC.sand}`,overflow:'hidden'}}>
+              <div style={{padding:'8px 14px 6px',borderBottom:`1px solid ${AC.sand}`,background:`${AC.teal}22`,display:'flex',alignItems:'center',gap:6}}>
+                <span style={{fontSize:13}}>⚔️</span>
+                <span style={{fontSize:11,fontWeight:900,color:AC.darkGreen,letterSpacing:'0.1em'}}>撃破した単語</span>
+              </div>
+              <div style={{padding:'10px 12px',display:'flex',flexWrap:'wrap',gap:6}}>
+                {defeatedWords.slice(0,8).map(w=>(
+                  <span key={w.term} style={{fontSize:13,fontWeight:900,padding:'5px 12px',borderRadius:99,background:`${AC.teal}33`,border:`1.5px solid ${AC.teal}`,color:AC.darkGreen,boxShadow:`0 2px 0 ${AC.teal}55`}}>
+                    {w.term}
+                    <span style={{fontSize:10,color:AC.muted,marginLeft:4}}>（{normalizeReading(w.reading)||w.reading}）</span>
+                  </span>
                 ))}
               </div>
-            </section>
+            </div>
           )}
-
+  
+          {/* ミス一覧 */}
           {missedWords.length > 0 ? (
-            <section className="mb-5">
-              <button onClick={() => { vibrateLight(); setMissedListOpen((o) => !o); }} className="w-full flex items-center justify-between py-2 text-left text-sm text-gray-100">
-                <span>▼ ミスした単語（{missedWords.length}体）</span>
-                <motion.span animate={{ rotate: missedListOpen ? 180 : 0 }} transition={{ duration: 0.2 }}><ChevronDown className="w-4 h-4" /></motion.span>
+            <div style={{borderRadius:20,background:'rgba(255,255,255,0.72)',border:`2px solid ${AC.sand}`,boxShadow:`0 3px 0 ${AC.sand}`,overflow:'hidden'}}>
+              <button type="button" onClick={()=>{vibrateLight();setMissedListOpen(o=>!o);}}
+                style={{width:'100%',padding:'10px 14px',display:'flex',justifyContent:'space-between',alignItems:'center',background:`rgba(224,85,85,0.1)`,border:'none',cursor:'pointer',WebkitTapHighlightColor:'transparent',borderBottom:missedListOpen?`1px solid ${AC.sand}`:'none'}}
+              >
+                <span style={{fontSize:12,fontWeight:900,color:AC.red,display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{fontSize:14}}>💧</span>ミスした単語（{missedWords.length}体）
+                </span>
+                <motion.span animate={{rotate:missedListOpen?180:0}} style={{color:AC.muted}}>▼</motion.span>
               </button>
               <AnimatePresence>
                 {missedListOpen && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                    <div className="pt-2 space-y-1.5">
-                      {missedWords.map(({ word, missCount }) => (
-                        <div key={word.term} className="rounded-lg border border-gray-700/50 bg-gray-800/30 px-3 py-2 flex items-center justify-between gap-2">
+                  <motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} style={{overflow:'hidden'}}>
+                    <div style={{padding:'10px 12px',display:'flex',flexDirection:'column',gap:6}}>
+                      {missedWords.map(({word,missCount})=>(
+                        <div key={word.term} style={{borderRadius:12,padding:'8px 12px',background:'rgba(224,85,85,0.08)',border:'1.5px solid rgba(224,85,85,0.25)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
                           <div>
-                            <span className="font-mono text-amber-200/80 text-sm uppercase">{word.term}</span>
-                            <span className="text-amber-200/75 text-xs ml-2">（{normalizeReading(word.reading) || word.reading}）</span>
-                            <span className="text-gray-200 text-xs ml-2">— {word.meaning || '—'}</span>
+                            <span style={{fontSize:15,fontWeight:900,color:AC.text}}>{word.term}</span>
+                            <span style={{fontSize:11,color:AC.muted,marginLeft:6}}>（{normalizeReading(word.reading)||word.reading}）</span>
+                            <div style={{fontSize:11,color:AC.text,marginTop:2}}>{word.meaning||'—'}</div>
                           </div>
-                          {missCount > 1 && <span className="text-orange-400/80 text-xs shrink-0">×{missCount}</span>}
+                          {missCount>1&&<span style={{fontSize:12,fontWeight:900,color:AC.red,flexShrink:0}}>×{missCount}</span>}
                         </div>
                       ))}
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
-            </section>
+            </div>
           ) : (
-            <section className="mb-5"><p className="text-center text-amber-500/70 text-sm">取り逃がしなし！</p></section>
+            <div style={{textAlign:'center',fontSize:13,fontWeight:700,color:AC.green,padding:'4px 0'}}>
+              🍀 取り逃がしなし！すごい！
+            </div>
           )}
-
-          <button onClick={() => selectedScanId && startQuest(selectedScanId, 'explore')} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2"><Sword className="w-4 h-4" />続けて探索する</button>
-          <button onClick={() => selectedScanId && startQuest(selectedScanId, 'retry', retryPriorityTerms.length > 0 ? retryPriorityTerms : askedTerms)} className="w-full py-3 rounded-xl border border-gray-600 text-gray-300 font-bold">再戦する</button>
-          <button onClick={() => { setView('hub'); setSelectedScanId(null); }} className="w-full py-2.5 rounded-xl border border-gray-700 text-gray-400">拠点へ戻る</button>
+  
+          {/* アクションボタン */}
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            <AcBtn label="続けて探索する" emoji="⚔️" from={AC.amber} shadow="#c07800"
+              onClick={()=>selectedScanId&&startQuest(selectedScanId,'explore')}/>
+            <AcBtn label="再戦する" emoji="🔁" from={AC.teal} shadow="#4aaa96"
+              onClick={()=>selectedScanId&&startQuest(selectedScanId,'retry',retryPriorityTerms.length>0?retryPriorityTerms:askedTerms)}/>
+            <AcBtn label="拠点へもどる" emoji="🏠" from={AC.muted} shadow={AC.brown}
+              onClick={()=>{setView('hub');setSelectedScanId(null);}}/>
+          </div>
         </div>
-      </div>
+      </AcPage>
     );
   }
 
@@ -720,7 +1074,7 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
           className="relative mx-auto box-border flex aspect-[9/16] h-auto max-h-[calc(100dvh-6rem)] w-[min(400px,calc(100vw-2rem))] max-w-[min(400px,calc(100vw-2rem))] shrink-0 flex-col overflow-hidden rounded-2xl bg-gradient-to-b from-gray-800 to-gray-900 p-2 shadow-[0_0_0_4px_rgba(55,65,81,0.8),0_0_0_8px_rgba(31,41,55,0.6),0_25px_50px_-12px_rgba(0,0,0,0.6)] sm:rounded-[2rem] sm:p-3"
         >
           <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl sm:rounded-[1.25rem] bg-transparent">
-            <div className="absolute top-0 left-0 right-0 h-1 z-10 bg-black/60"><motion.div className={`${isTimeWarning ? 'bg-red-600' : 'bg-amber-500'} h-full`} animate={{ width: `${timePct}%` }} transition={{ duration: 0.2 }} /></div>
+            <div className="absolute top-0 left-0 right-0 h-1 z-10 bg-black/60"><motion.div className={`${isTimeWarning ? 'bg-red-600' : 'bg-amber-500'} h-full`} animate={{ width: `${timeElapsedBarPct}%` }} transition={{ duration: 0.2 }} /></div>
             
             <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
               <div className="absolute inset-0 z-0" style={{ backgroundImage: "url('/images/backgrounds/forest.png')", backgroundSize: 'cover', backgroundPosition: 'center' }} />
