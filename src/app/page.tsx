@@ -1335,11 +1335,11 @@ const HomeScreen = ({
             border: 'none',
             cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
-            height: 'clamp(116px, 16svh, 150px)',
-            maxHeight: '26svh',
+            height: 'clamp(146px, 21svh, 188px)',
+            maxHeight: '34svh',
             flex: '0 0 auto',
             overflow: 'visible',
-            marginBottom: 20,
+            marginBottom: 22,
           }}
         >
           {/* 芝生の丸 */}
@@ -1348,19 +1348,19 @@ const HomeScreen = ({
             bottom: 4,
             left: '50%',
             transform: 'translateX(-50%)',
-            width: 120,
-            height: 18,
+            width: 148,
+            height: 22,
             borderRadius: '50%',
             background: `${AC.grassDk}44`,
             filter: 'blur(8px)',
             pointerEvents: 'none',
           }} />
           <div style={{
-            transform: 'translateY(6px) scale(0.72)',
+            transform: 'translateY(5px) scale(0.86)',
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
-            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={176} ssrEffect={false} />
+            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={210} ssrEffect={false} />
           </div>
           <div style={{
             position: 'absolute',
