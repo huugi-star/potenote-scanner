@@ -1347,7 +1347,7 @@ const HomeScreen = ({
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
-            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={210} ssrEffect={false} />
+            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={210} ssrEffect={false} showShadow={false} />
           </div>
           <div style={{
             position: 'absolute',
@@ -1396,7 +1396,7 @@ const HomeScreen = ({
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
-            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={180} ssrEffect={false} />
+            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={180} ssrEffect={false} showShadow={false} />
           </div>
           <div style={{
             position: 'absolute',
