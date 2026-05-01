@@ -869,7 +869,7 @@ const HomeScreen = ({
       height: homeCompact ? '100dvh' : undefined,
       maxHeight: homeCompact ? '100dvh' : undefined,
       overflowX: 'hidden',
-      overflowY: 'auto',
+      overflowY: homeCompact ? 'hidden' : 'auto',
       display: 'flex',
       flexDirection: 'column',
       background: `linear-gradient(180deg, ${AC.skyDeep} 0%, ${AC.sky} 22%, ${AC.cream} 48%, #F0FAF0 100%)`,
@@ -956,6 +956,7 @@ const HomeScreen = ({
         width: '100%',
         margin: '0 auto',
         gap: homeCompact ? 5 : 10,
+        overflow: homeCompact ? 'hidden' : undefined,
       }}>
 
         {/* 上部ナビ */}
@@ -1309,84 +1310,53 @@ const HomeScreen = ({
             cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
             height: homeCompact
-              ? 'clamp(118px, 19svh, 160px)'
+              ? 'clamp(126px, 20svh, 172px)'
               : 'clamp(160px, 22vh, 200px)',
-            flex: homeCompact ? '1 1 0' : '0 0 auto',
+            flex: '0 0 auto',
+            marginTop: homeCompact ? -2 : 0,
             minHeight: 0,
-            maxHeight: homeCompact ? '34svh' : undefined,
-            overflow: homeCompact ? 'hidden' : 'visible',
+            maxHeight: homeCompact ? '36svh' : undefined,
+            overflow: 'visible',
+            marginBottom: homeCompact ? 16 : 12,
           }}
         >
-          {homeCompact && (
-            <div style={{
-              position: 'absolute',
-              bottom: 28,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: 138,
-              height: 138,
-              borderRadius: '50%',
-              background: 'radial-gradient(circle at 35% 25%, rgba(255,255,255,0.95) 0%, rgba(255,248,232,0.9) 45%, rgba(255,220,170,0.35) 100%)',
-              border: `2px solid ${AC.yellowDk}55`,
-              boxShadow: `0 8px 18px rgba(90,175,138,0.18), inset 0 3px 8px rgba(255,255,255,0.7)`,
-              pointerEvents: 'none',
-            }} />
-          )}
           {/* 芝生の丸 */}
           <div style={{
             position: 'absolute',
             bottom: homeCompact ? 4 : 8,
             left: '50%',
             transform: 'translateX(-50%)',
-            width: homeCompact ? 124 : 140,
-            height: homeCompact ? 20 : 24,
+            width: homeCompact ? 126 : 140,
+            height: homeCompact ? 22 : 24,
             borderRadius: '50%',
             background: `${AC.grassDk}44`,
             filter: 'blur(8px)',
             pointerEvents: 'none',
           }} />
           <div style={{
-            transform: homeCompact ? 'translateY(6px) scale(0.74)' : undefined,
+            transform: homeCompact ? 'translateY(4px) scale(0.78)' : undefined,
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
             <PotatoAvatar
               equipped={equippedDetails}
               emotion="happy"
-              size={homeCompact ? 188 : 180}
+              size={homeCompact ? 194 : 180}
               ssrEffect={false}
             />
           </div>
-          {homeCompact && (
-            <div style={{
-              position: 'absolute',
-              bottom: 44,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              padding: '3px 8px',
-              borderRadius: 999,
-              fontSize: 9.5,
-              fontWeight: 800,
-              color: AC.textMd,
-              background: 'rgba(255,255,255,0.86)',
-              border: `1.5px solid ${AC.yellowDk}44`,
-              letterSpacing: '0.03em',
-              whiteSpace: 'nowrap',
-              pointerEvents: 'none',
-            }}>
-              タップで着せ替え
-            </div>
-          )}
-          {/* 着せ替えボタン（AC風ピンクボタン） */}
+          {/* 着せ替えボタン（AC風ピンクボタン） — 足元より下げて干渉を避ける */}
           <div style={{
             position: 'absolute',
-            bottom: 0,
+            bottom: homeCompact ? -14 : -10,
             left: '50%',
             transform: 'translateX(-50%)',
             background: `linear-gradient(180deg, #FF9EBE 0%, #FF6B9D 100%)`,
             borderRadius: 999,
             padding: homeCompact ? '3px 10px' : '5px 16px',
-            display: 'flex', alignItems: 'center', gap: homeCompact ? 4 : 5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: homeCompact ? 4 : 5,
             fontSize: homeCompact ? 10.5 : 12,
             fontWeight: 900,
             color: '#fff',
@@ -1516,7 +1486,9 @@ const HomeScreen = ({
         border: '3px solid rgba(255,255,255,0.7)',
         boxShadow: `0 5px 0 ${AC.yellowDk}, 0 8px 18px rgba(0,0,0,0.15)`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 22, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+        fontSize: 22,
+        cursor: 'pointer',
+        WebkitTapHighlightColor: 'transparent',
       }}>🧪</button>
 
       {/* サポートモーダル（AC風） */}
