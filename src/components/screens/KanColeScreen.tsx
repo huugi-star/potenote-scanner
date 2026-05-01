@@ -661,15 +661,17 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
         <ChevronLeft className="w-4 h-4" /> やめる
       </button>
 
-      {/* translateYを外し、aspect固定も解除して、柔軟に縦方向に縮むように修正 */}
       <div
-        className="absolute inset-0 flex items-center justify-center p-2 sm:p-4"
+        className="absolute inset-0 flex min-h-0 items-center justify-center p-2 sm:p-4"
         style={{
           paddingBottom: keyboardInset > 0 ? `${keyboardInset + 8}px` : undefined,
         }}
       >
-        <div className="relative w-full h-full max-w-[min(400px,100vw)] sm:h-auto sm:aspect-[9/16] flex flex-col rounded-2xl sm:rounded-[2rem] p-2 sm:p-3 bg-gradient-to-b from-gray-800 to-gray-900 shadow-[0_0_0_4px_rgba(55,65,81,0.8),0_0_0_8px_rgba(31,41,55,0.6),0_25px_50px_-12px_rgba(0,0,0,0.6)]">
-          <div className="relative w-full h-full rounded-xl sm:rounded-[1.25rem] overflow-hidden bg-transparent flex flex-col">
+        {/* PC等の低いビューポートでは縦長9:16がはみ出すため max-h と幅をキャップ */}
+        <div
+          className="relative mx-auto box-border flex aspect-[9/16] max-h-[calc(100dvh-7rem)] w-[min(400px,calc(100vw-16px),(100dvh-7rem)*9/16)] max-w-[min(400px,calc(100vw-16px))] flex-col rounded-2xl p-2 sm:max-h-[calc(100dvh-8rem)] sm:w-[min(400px,calc(100vw-32px),(100dvh-8rem)*9/16)] sm:rounded-[2rem] sm:p-3 bg-gradient-to-b from-gray-800 to-gray-900 shadow-[0_0_0_4px_rgba(55,65,81,0.8),0_0_0_8px_rgba(31,41,55,0.6),0_25px_50px_-12px_rgba(0,0,0,0.6)]"
+        >
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl sm:rounded-[1.25rem] bg-transparent">
             <div className="absolute top-0 left-0 right-0 h-1 z-10 bg-black/60"><motion.div className={`${isTimeWarning ? 'bg-red-600' : 'bg-amber-500'} h-full`} animate={{ width: `${timePct}%` }} transition={{ duration: 0.2 }} /></div>
             
             <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
