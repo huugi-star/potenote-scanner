@@ -1313,7 +1313,7 @@ const HomeScreen = ({
             flex: '0 0 auto',
             width: '100%',
             minHeight: 0,
-            marginTop: 10,
+            marginTop: 20,
             paddingTop: 0,
             display: 'flex',
             flexDirection: 'column',
