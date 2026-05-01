@@ -1310,14 +1310,14 @@ const HomeScreen = ({
         {homeCompact ? (
         <div
           style={{
-            flex: '1 1 0',
+            flex: '0 0 auto',
             width: '100%',
-            minHeight: 56,
-            marginTop: 12,
-            paddingTop: 4,
+            minHeight: 0,
+            marginTop: 6,
+            paddingTop: 0,
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'flex-end',
+            justifyContent: 'flex-start',
             alignItems: 'center',
             boxSizing: 'border-box',
             overflow: 'visible',
@@ -1339,7 +1339,7 @@ const HomeScreen = ({
             maxHeight: '26svh',
             flex: '0 0 auto',
             overflow: 'visible',
-            marginBottom: 18,
+            marginBottom: 20,
           }}
         >
           {/* 芝生の丸 */}
@@ -1356,7 +1356,7 @@ const HomeScreen = ({
             pointerEvents: 'none',
           }} />
           <div style={{
-            transform: 'translateY(10px) scale(0.72)',
+            transform: 'translateY(6px) scale(0.72)',
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
@@ -1364,7 +1364,7 @@ const HomeScreen = ({
           </div>
           <div style={{
             position: 'absolute',
-            bottom: -12,
+            bottom: -16,
             left: '50%',
             transform: 'translateX(-50%)',
             background: `linear-gradient(180deg, #FF9EBE 0%, #FF6B9D 100%)`,
@@ -1453,7 +1453,7 @@ const HomeScreen = ({
           flexDirection: 'column',
           gap: homeCompact ? 6 : 10,
           flexShrink: 0,
-          ...(homeCompact ? { marginTop: 'auto', width: '100%' } : {}),
+          ...(homeCompact ? { width: '100%' } : {}),
         }}>
           {homeCompact ? (
             <>
