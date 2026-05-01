@@ -695,7 +695,7 @@ const RpgButton = ({
         transform: pressed ? 'translateY(3px)' : 'translateY(0)',
         boxShadow: pressed
           ? `0 2px 0 ${shadowColor}`
-          : `0 6px 0 ${shadowColor}, 0 8px 16px rgba(0,0,0,0.12)`,
+          : `0 6px 0 ${shadowColor}, 0 8px 16px rgba(0,0,0,0.12), 0 0 22px ${glowColor}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -797,7 +797,6 @@ const HomeScreen = ({
   const presetCfg = equippedShoulderPresetId
     ? SHOULDER_TITLE_PRESETS[equippedShoulderPresetId]
     : null;
-  const GLOW = presetCfg ? presetCfg.glow : RANK_TIERS[glowTierIndex].glow;
   const bannerTitle = presetCfg ? presetCfg.label : RANK_TIERS[glowTierIndex].name;
   const RANK_TIER_EMOJIS = ['📖', '📚', '🗂️', '🏛️', '👑', '🌟', '⚡', '💎', '🔮', '✨'] as const;
   const bannerIcon = presetCfg
