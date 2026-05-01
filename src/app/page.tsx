@@ -1313,7 +1313,7 @@ const HomeScreen = ({
             flex: '0 0 auto',
             width: '100%',
             minHeight: 0,
-            marginTop: 6,
+            marginTop: 10,
             paddingTop: 0,
             display: 'flex',
             flexDirection: 'column',
@@ -1342,19 +1342,6 @@ const HomeScreen = ({
             marginBottom: 22,
           }}
         >
-          {/* 芝生の丸 */}
-          <div style={{
-            position: 'absolute',
-            bottom: 4,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 148,
-            height: 22,
-            borderRadius: '50%',
-            background: `${AC.grassDk}44`,
-            filter: 'blur(8px)',
-            pointerEvents: 'none',
-          }} />
           <div style={{
             transform: 'translateY(5px) scale(0.86)',
             transformOrigin: '50% 100%',
@@ -1405,18 +1392,6 @@ const HomeScreen = ({
             marginBottom: 12,
           }}
         >
-          <div style={{
-            position: 'absolute',
-            bottom: 8,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 140,
-            height: 24,
-            borderRadius: '50%',
-            background: `${AC.grassDk}44`,
-            filter: 'blur(8px)',
-            pointerEvents: 'none',
-          }} />
           <div style={{
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
