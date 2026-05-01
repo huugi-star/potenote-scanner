@@ -955,10 +955,19 @@ const HomeScreen = ({
         maxWidth: 480,
         width: '100%',
         margin: '0 auto',
-        gap: homeCompact ? 6 : 10,
+        gap: homeCompact ? 8 : 10,
+        ...(homeCompact ? { boxSizing: 'border-box' as const } : {}),
         overflow: homeCompact ? 'hidden' : undefined,
       }}>
 
+        <div style={{
+          display: homeCompact ? 'flex' : undefined,
+          flexDirection: homeCompact ? 'column' : undefined,
+          gap: homeCompact ? 10 : undefined,
+          flexShrink: homeCompact ? 0 : undefined,
+          minHeight: 0,
+          marginBottom: homeCompact ? 0 : undefined,
+        }}>
         {/* 上部ナビ */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: homeCompact ? 6 : 8, flexShrink: 0 }}>
           <button onClick={() => { vibrateLight(); onOpenMyPage(); }} style={{
@@ -1104,7 +1113,7 @@ const HomeScreen = ({
             border: `${homeCompact ? 2 : 3}px solid ${AC.grassDk}`,
             boxShadow: `0 ${homeCompact ? 3 : 5}px 0 ${AC.grassDk}88, 0 8px 20px rgba(0,0,0,0.08)`,
             overflow: 'hidden',
-            flexShrink: homeCompact ? 1 : undefined,
+            flexShrink: 0,
             minHeight: 0,
           }}
         >
@@ -1295,8 +1304,25 @@ const HomeScreen = ({
             )}
           </div>
         </motion.div>
+        </div>
 
-        {/* アバター（AC風フレーム） */}
+        {/* アバター — スマホはランクとの間・上下の余白を取り中段を縦フィル */}
+        {homeCompact ? (
+        <div
+          style={{
+            flex: '1 1 0',
+            width: '100%',
+            minHeight: 56,
+            marginTop: 12,
+            paddingTop: 4,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            boxSizing: 'border-box',
+            overflow: 'visible',
+          }}
+        >
         <motion.button
           onClick={() => { vibrateLight(); onNavigate('dressup'); }}
           whileTap={{ scale: 0.97 }}
@@ -1309,67 +1335,117 @@ const HomeScreen = ({
             border: 'none',
             cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
-            height: homeCompact
-              ? 'clamp(118px, 17svh, 158px)'
-              : 'clamp(160px, 22vh, 200px)',
+            height: 'clamp(116px, 16svh, 150px)',
+            maxHeight: '26svh',
             flex: '0 0 auto',
-            marginTop: homeCompact ? 12 : 0,
-            minHeight: 0,
-            maxHeight: homeCompact ? '30svh' : undefined,
             overflow: 'visible',
-            marginBottom: homeCompact ? 14 : 12,
+            marginBottom: 18,
           }}
         >
           {/* 芝生の丸 */}
           <div style={{
             position: 'absolute',
-            bottom: homeCompact ? 4 : 8,
+            bottom: 4,
             left: '50%',
             transform: 'translateX(-50%)',
-            width: homeCompact ? 126 : 140,
-            height: homeCompact ? 22 : 24,
+            width: 120,
+            height: 18,
             borderRadius: '50%',
             background: `${AC.grassDk}44`,
             filter: 'blur(8px)',
             pointerEvents: 'none',
           }} />
           <div style={{
-            transform: homeCompact ? 'translateY(2px) scale(0.76)' : undefined,
+            transform: 'translateY(10px) scale(0.72)',
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
-            <PotatoAvatar
-              equipped={equippedDetails}
-              emotion="happy"
-              size={homeCompact ? 188 : 180}
-              ssrEffect={false}
-            />
+            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={176} ssrEffect={false} />
           </div>
-          {/* 着せ替えボタン（AC風ピンクボタン） — 足元より下げて干渉を避ける */}
           <div style={{
             position: 'absolute',
-            bottom: homeCompact ? -14 : -10,
+            bottom: -12,
             left: '50%',
             transform: 'translateX(-50%)',
             background: `linear-gradient(180deg, #FF9EBE 0%, #FF6B9D 100%)`,
             borderRadius: 999,
-            padding: homeCompact ? '3px 10px' : '5px 16px',
+            padding: '3px 10px',
             display: 'flex',
             alignItems: 'center',
-            gap: homeCompact ? 4 : 5,
-            fontSize: homeCompact ? 10.5 : 12,
+            gap: 4,
+            fontSize: 10.5,
             fontWeight: 900,
             color: '#fff',
-            border: `${homeCompact ? 2 : 2.5}px solid rgba(255,255,255,0.6)`,
-            boxShadow: homeCompact
-              ? '0 2px 0 #D44A7A, 0 4px 10px rgba(212,74,122,0.3)'
-              : '0 4px 0 #D44A7A, 0 6px 14px rgba(212,74,122,0.35)',
+            border: '2px solid rgba(255,255,255,0.6)',
+            boxShadow: '0 2px 0 #D44A7A, 0 4px 10px rgba(212,74,122,0.3)',
             whiteSpace: 'nowrap',
             textShadow: '0 1px 2px rgba(0,0,0,0.2)',
           }}>
-            <Shirt style={{ width: homeCompact ? 10 : 12, height: homeCompact ? 10 : 12 }} />着せ替え
+            <Shirt style={{ width: 10, height: 10 }} />着せ替え
           </div>
         </motion.button>
+        </div>
+        ) : (
+        <motion.button
+          onClick={() => { vibrateLight(); onNavigate('dressup'); }}
+          whileTap={{ scale: 0.97 }}
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'flex-end',
+            position: 'relative',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            height: 'clamp(160px, 22vh, 200px)',
+            flex: '0 0 auto',
+            minHeight: 0,
+            overflow: 'visible',
+            marginBottom: 12,
+          }}
+        >
+          <div style={{
+            position: 'absolute',
+            bottom: 8,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 140,
+            height: 24,
+            borderRadius: '50%',
+            background: `${AC.grassDk}44`,
+            filter: 'blur(8px)',
+            pointerEvents: 'none',
+          }} />
+          <div style={{
+            transformOrigin: '50% 100%',
+            pointerEvents: 'none',
+          }}>
+            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={180} ssrEffect={false} />
+          </div>
+          <div style={{
+            position: 'absolute',
+            bottom: -10,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: `linear-gradient(180deg, #FF9EBE 0%, #FF6B9D 100%)`,
+            borderRadius: 999,
+            padding: '5px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            fontSize: 12,
+            fontWeight: 900,
+            color: '#fff',
+            border: '2.5px solid rgba(255,255,255,0.6)',
+            boxShadow: '0 4px 0 #D44A7A, 0 6px 14px rgba(212,74,122,0.35)',
+            whiteSpace: 'nowrap',
+            textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+          }}>
+            <Shirt style={{ width: 12, height: 12 }} />着せ替え
+          </div>
+        </motion.button>
+        )}
 
         {/* ボタン群（AC風カラー） */}
         <div style={{
@@ -1377,6 +1453,7 @@ const HomeScreen = ({
           flexDirection: 'column',
           gap: homeCompact ? 6 : 10,
           flexShrink: 0,
+          ...(homeCompact ? { marginTop: 'auto', width: '100%' } : {}),
         }}>
           {homeCompact ? (
             <>
@@ -1391,20 +1468,19 @@ const HomeScreen = ({
                 />
                 <RpgButton
                   compact
-                  onClick={() => { vibrateLight(); onNavigate('academy'); }}
-                  fromColor="#5B8FD4" toColor="#7EB5F0"
-                  glowColor="rgba(91,143,212,0.35)" shadowColor="#3360A8"
-                  icon={<BookOpen style={{ width: 20, height: 20 }} />}
-                  label="図書館を復興"
+                  onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
+                  fromColor="#E6A030" toColor="#FFD060"
+                  glowColor="rgba(230,160,48,0.35)" shadowColor="#B07800"
+                  icon={<Scan style={{ width: 20, height: 20 }} />}
+                  label="ことばを読み取る"
                 />
               </div>
               <RpgButton
-                compact
-                onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
-                fromColor="#E6A030" toColor="#FFD060"
-                glowColor="rgba(230,160,48,0.35)" shadowColor="#B07800"
-                icon={<Scan style={{ width: 20, height: 20 }} />}
-                label="ことばを読み取る"
+                onClick={() => { vibrateLight(); onNavigate('academy'); }}
+                fromColor="#5B8FD4" toColor="#7EB5F0"
+                glowColor="rgba(91,143,212,0.35)" shadowColor="#3360A8"
+                icon={<BookOpen style={{ width: 22, height: 22 }} />}
+                label="図書館を復興する"
               />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                 <RpgButton
