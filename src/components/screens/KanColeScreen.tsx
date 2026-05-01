@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, Loader2, Camera, AlertCircle, BookOpen, Sword, ChevronRight, CheckCircle, XCircle, ChevronDown, Coins } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
@@ -22,6 +22,43 @@ type MissedWord = { word: KanColeEnemy; missCount: number };
 const QUESTIONS_PER_ROUND = 7;
 const TIME_LIMIT_SEC = 10;
 const FEEDBACK_EXTRA_MS = 400;
+
+/** 「ここまで大きく寄せたい」を表すスケール上乗せ（コンテナ計測で実際より小さくなる） */
+const KAN_COLE_APPROACH_SCALE_EXTRA_DESIRED = 0.72;
+/** 下方向への移動(px)。コンテナより大きいと見切れるのでキャップされる */
+const KAN_COLE_APPROACH_TRANSLATE_PX_DESIRED = 112;
+const WORD_ARENA_EDGE_MARGIN_PX = 14;
+
+/** 制限時間の経過を 0〜1。指数を調整すると終盤の伸び/sharp が変わる（滑らか寄りならやや緩める） */
+function kanColeApproachIntensity(timeLeft: number, limitSec: number): number {
+  if (limitSec <= 0) return 1;
+  const linear = Math.max(0, Math.min(1, 1 - timeLeft / limitSec));
+  return linear ** 2.08;
+}
+
+function clampApproachMotion(params: {
+  arenaW: number;
+  arenaH: number;
+  wordW: number;
+  wordH: number;
+}): { translateMaxPx: number; scaleExtraMax: number } {
+  const aw = Math.max(0, params.arenaW);
+  const ah = Math.max(0, params.arenaH);
+  const bw = Math.max(1, params.wordW);
+  const bh = Math.max(1, params.wordH);
+  const m = WORD_ARENA_EDGE_MARGIN_PX;
+  const maxUniformScaleFit = Math.min((aw - 2 * m) / bw, (ah - 2 * m) / bh);
+  const scaleExtraCap = Math.max(0, maxUniformScaleFit - 1);
+  const scaleExtraMax = Math.max(0, Math.min(KAN_COLE_APPROACH_SCALE_EXTRA_DESIRED, scaleExtraCap));
+
+  const maxScaleApplied = 1 + scaleExtraMax;
+  // 親中央に置いた語が、下端で見切れない程度の下移動上限（大きめの語ほど強くキャップされる）
+  const translateCapByArena = ah / 2 - m - (bh * maxScaleApplied) / 2;
+
+  const translateMaxPx = Math.max(0, Math.min(KAN_COLE_APPROACH_TRANSLATE_PX_DESIRED, translateCapByArena));
+
+  return { translateMaxPx, scaleExtraMax };
+}
 
 function selectKanColeQuestions(scan: KanColeScan, mode: QuestMode, retryPriorityTerms: string[] = []): KanColeEnemy[] {
   const activeSet = new Set(scan.activeEnemyTerms ?? scan.words.map((w) => w.term));
@@ -102,6 +139,17 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
 
   const answerInputRef = useRef<HTMLInputElement>(null);
   const scrollLockYRef = useRef(0);
+  /** 語の出没エリア計測用（コンテナより大きく寄せ過ぎない） */
+  const wordArenaRef = useRef<HTMLDivElement>(null);
+  /** 視覚的に非表示でも同一フォント・同一本文でサイズのみ取得する */
+  const wordRulerRef = useRef<HTMLSpanElement>(null);
+  const roundDeadlineMsRef = useRef(0);
+
+  /** 見切れない範囲で「ギリギリまで」寄せるためのアニメ振幅 */
+  const [approachCaps, setApproachCaps] = useState<{ translateMaxPx: number; scaleExtraMax: number }>({
+    translateMaxPx: 88,
+    scaleExtraMax: 0.6,
+  });
 
   const lockScroll = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -180,6 +228,10 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
   const current = roundItems[idx];
   const timePct = Math.min(100, Math.max(0, (timeLeft / TIME_LIMIT_SEC) * 100));
   const isTimeWarning = timeLeft <= 2;
+  /** 入力欄（手前）方向へ語が迫る強さ。終盤ほど増える */
+  const wordApproach = kanColeApproachIntensity(timeLeft, TIME_LIMIT_SEC);
+  const animTranslateY = wordApproach * approachCaps.translateMaxPx;
+  const animScale = 1 + wordApproach * approachCaps.scaleExtraMax;
   const displayDefeatedCount = useMemo(() => defeatedCount, [defeatedCount]);
 
   const scansForDisplay = useMemo(() => {
@@ -196,6 +248,37 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
       return { id: scan.id, title: scan.title, captured, defeated, remaining: Math.max(0, activeTotal - captured - defeated), total: activeTotal > 0 ? activeTotal : 1 };
     });
   }, [kanColeScans]);
+
+  useLayoutEffect(() => {
+    if (view !== 'battle') return;
+
+    const measureApproachCaps = () => {
+      const arenaEl = wordArenaRef.current;
+      const rulerEl = wordRulerRef.current;
+      if (!arenaEl || !rulerEl) return;
+
+      const ar = arenaEl.getBoundingClientRect();
+      const bw = rulerEl.offsetWidth;
+      const bh = rulerEl.offsetHeight;
+      if (ar.width <= 12 || ar.height <= 12) return;
+
+      setApproachCaps(clampApproachMotion({ arenaW: ar.width, arenaH: ar.height, wordW: bw, wordH: bh }));
+    };
+
+    measureApproachCaps();
+
+    const arenaEl = wordArenaRef.current;
+    if (!arenaEl || typeof ResizeObserver === 'undefined') return;
+
+    const ro = new ResizeObserver(() => measureApproachCaps());
+    ro.observe(arenaEl);
+    window.addEventListener('resize', measureApproachCaps);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measureApproachCaps);
+    };
+  }, [view, idx, current?.term]);
 
   const stopProgressTicker = useCallback((finalValue?: number) => {
     if (progressTimerRef.current) {
@@ -332,6 +415,9 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
     setBattleState('feedback');
   }, [answer, battleState, current, selectedScanId, updateKanColeEnemyState, markCorrect, recordWrong]);
 
+  const judgeRef = useRef(judge);
+  judgeRef.current = judge;
+
   // リング演出制御
   useEffect(() => {
     if (view !== 'battle' || battleState !== 'feedback' || hitType !== 'seal' || !cardThrow?.isCorrect) return;
@@ -351,16 +437,25 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
     };
   }, [view, battleState, hitType, cardThrow]);
 
+  /** カウントダウンを requestAnimationFrame で滑らかにし、タイムアウトで judge を 1 回だけ呼ぶ（judge 本体は呼び出し元でロック） */
   useEffect(() => {
     if (view !== 'battle' || battleState !== 'play') return;
-    const t = window.setInterval(() => setTimeLeft((p) => Math.max(0, Number((p - 0.5).toFixed(1)))), 500);
-    return () => clearInterval(t);
-  }, [view, battleState, idx]);
+    roundDeadlineMsRef.current = Date.now() + TIME_LIMIT_SEC * 1000;
+    let frameId = 0;
 
-  useEffect(() => {
-    if (view !== 'battle' || battleState !== 'play' || timeLeft > 0) return;
-    judge();
-  }, [view, battleState, timeLeft, judge]);
+    const tick = () => {
+      const remainingSec = Math.max(0, (roundDeadlineMsRef.current - Date.now()) / 1000);
+      setTimeLeft(remainingSec);
+      if (remainingSec <= 0) {
+        judgeRef.current();
+        return;
+      }
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [view, battleState, idx]);
 
   useEffect(() => {
     if (view !== 'battle' || battleState !== 'feedback') return;
@@ -678,14 +773,30 @@ export function KanColeScreen({ onBack }: { onBack: () => void }) {
               <div className="absolute inset-0 z-0" style={{ backgroundImage: "url('/images/backgrounds/forest.png')", backgroundSize: 'cover', backgroundPosition: 'center' }} />
               <div className="absolute inset-0 z-0 bg-black/30" />
               <div className="absolute top-4 left-3 z-20 rounded-md border-2 border-amber-700/80 bg-black/60 px-3 py-1.5 shadow-lg"><div className="text-amber-200 font-mono text-xs tracking-widest">{current.term}</div></div>
-              <div className="absolute top-4 right-3 z-20 flex items-center gap-2"><span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isTimeWarning ? 'bg-red-900/60 text-red-400' : 'bg-black/40 text-amber-300'}`}>{Math.max(0, Math.round(timeLeft * 2) / 2)}s</span></div>
-              
-              <div className="relative flex-1 flex items-center justify-center pt-8 pb-2 z-10">
+              <div className="absolute top-4 right-3 z-20 flex items-center gap-2"><span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isTimeWarning ? 'bg-red-900/60 text-red-400' : 'bg-black/40 text-amber-300'}`}>{Math.max(0, timeLeft).toFixed(1)}s</span></div>
+
+              <div ref={wordArenaRef} className="relative flex min-h-0 flex-1 items-center justify-center pt-8 pb-2 z-10">
+                <span
+                  ref={wordRulerRef}
+                  aria-hidden
+                  className="pointer-events-none absolute left-1/2 top-1/2 opacity-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-3xl font-bold tracking-wider text-white"
+                >
+                  {current.term}
+                </span>
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={`${idx}-${current.term}`}
-                    animate={{ y: (1 - timeLeft / TIME_LIMIT_SEC) * 20, scale: 1 + (1 - timeLeft / TIME_LIMIT_SEC) * 0.25 }}
-                    transition={{ duration: 0.2 }}
+                    animate={{
+                      y: animTranslateY,
+                      scale: animScale,
+                    }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 420,
+                      damping: 40,
+                      mass: 0.78,
+                    }}
+                    style={{ transformOrigin: 'center center' }}
                     className={`text-3xl font-bold text-white tracking-wider drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] ${hitType === 'shake' ? 'animate-pulse' : ''}`}
                   >
                     {hitType === 'split' ? (
