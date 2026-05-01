@@ -1309,39 +1309,74 @@ const HomeScreen = ({
             cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
             height: homeCompact
-              ? 'clamp(72px, 11svh, 104px)'
+              ? 'clamp(118px, 19svh, 160px)'
               : 'clamp(160px, 22vh, 200px)',
             flex: homeCompact ? '1 1 0' : '0 0 auto',
             minHeight: 0,
-            maxHeight: homeCompact ? '28svh' : undefined,
+            maxHeight: homeCompact ? '34svh' : undefined,
             overflow: homeCompact ? 'hidden' : 'visible',
           }}
         >
+          {homeCompact && (
+            <div style={{
+              position: 'absolute',
+              bottom: 28,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 138,
+              height: 138,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle at 35% 25%, rgba(255,255,255,0.95) 0%, rgba(255,248,232,0.9) 45%, rgba(255,220,170,0.35) 100%)',
+              border: `2px solid ${AC.yellowDk}55`,
+              boxShadow: `0 8px 18px rgba(90,175,138,0.18), inset 0 3px 8px rgba(255,255,255,0.7)`,
+              pointerEvents: 'none',
+            }} />
+          )}
           {/* 芝生の丸 */}
           <div style={{
             position: 'absolute',
             bottom: homeCompact ? 4 : 8,
             left: '50%',
             transform: 'translateX(-50%)',
-            width: homeCompact ? 100 : 140,
-            height: homeCompact ? 16 : 24,
+            width: homeCompact ? 124 : 140,
+            height: homeCompact ? 20 : 24,
             borderRadius: '50%',
             background: `${AC.grassDk}44`,
             filter: 'blur(8px)',
             pointerEvents: 'none',
           }} />
           <div style={{
-            transform: homeCompact ? 'translateY(8px) scale(0.55)' : undefined,
+            transform: homeCompact ? 'translateY(6px) scale(0.74)' : undefined,
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
             <PotatoAvatar
               equipped={equippedDetails}
               emotion="happy"
-              size={homeCompact ? 160 : 180}
+              size={homeCompact ? 188 : 180}
               ssrEffect={false}
             />
           </div>
+          {homeCompact && (
+            <div style={{
+              position: 'absolute',
+              bottom: 44,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              padding: '3px 8px',
+              borderRadius: 999,
+              fontSize: 9.5,
+              fontWeight: 800,
+              color: AC.textMd,
+              background: 'rgba(255,255,255,0.86)',
+              border: `1.5px solid ${AC.yellowDk}44`,
+              letterSpacing: '0.03em',
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+            }}>
+              タップで着せ替え
+            </div>
+          )}
           {/* 着せ替えボタン（AC風ピンクボタン） */}
           <div style={{
             position: 'absolute',
