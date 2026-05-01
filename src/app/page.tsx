@@ -664,6 +664,7 @@ const RpgButton = ({
   icon,
   label,
   small = false,
+  compact = false,
 }: {
   onClick: () => void;
   fromColor: string;
@@ -673,8 +674,19 @@ const RpgButton = ({
   icon: ReactNode;
   label: string;
   small?: boolean;
+  /** ホームなどスマホ1画面向けに余白・文字を詰める */
+  compact?: boolean;
 }) => {
   const [pressed, setPressed] = useState(false);
+  const pad = compact
+    ? small
+      ? '8px 6px'
+      : '10px 12px'
+    : small
+      ? '12px 10px'
+      : '15px 18px';
+  const fs = compact ? (small ? 11.5 : 13) : small ? 14 : 16;
+  const gap = compact ? (small ? 5 : 6.5) : small ? 6 : 9;
   return (
     <button
       onClick={onClick}
@@ -685,7 +697,7 @@ const RpgButton = ({
         width: '100%',
         position: 'relative',
         overflow: 'hidden',
-        padding: small ? '12px 10px' : '15px 18px',
+        padding: pad,
         borderRadius: 999,
         background: pressed
           ? `linear-gradient(180deg, ${fromColor} 0%, ${toColor} 100%)`
@@ -699,10 +711,10 @@ const RpgButton = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: small ? 6 : 9,
+        gap,
         color: '#fff',
         fontWeight: 900,
-        fontSize: small ? 14 : 16,
+        fontSize: fs,
         letterSpacing: '0.03em',
         textShadow: '0 1px 3px rgba(0,0,0,0.25)',
         cursor: 'pointer',
@@ -719,7 +731,7 @@ const RpgButton = ({
         borderRadius: '0 0 50% 50%',
         pointerEvents: 'none',
       }} />
-      <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: small ? 6 : 9 }}>
+      <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap, lineHeight: 1.2, textAlign: 'center' }}>
         {icon}
         {label}
       </span>
@@ -751,6 +763,8 @@ const HomeScreen = ({
   const [kotobaLeafCount,  setKotobaLeafCount]  = useState(0);
   const [repairSpentCount, setRepairSpentCount] = useState(0);
   const [showSupportModal, setShowSupportModal] = useState(false);
+  /** スマホ縦画面でホーム全体を 1 画面に近づける */
+  const [homeCompact, setHomeCompact] = useState(false);
 
   /** 描画前にローカル進捗を読む（初回 spent=0 のまま tierIndex=0 になり装備表示が壊れるのを防ぐ） */
   useLayoutEffect(() => {
@@ -777,6 +791,14 @@ const HomeScreen = ({
       document.removeEventListener('visibilitychange', onVis);
       window.clearInterval(iv);
     };
+  }, []);
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia('(max-width: 560px)');
+    const apply = () => setHomeCompact(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
   }, []);
 
   const libraryRankInfo = useMemo(() => {
@@ -844,12 +866,15 @@ const HomeScreen = ({
       position: 'relative',
       width: '100%',
       minHeight: '100dvh',
+      height: homeCompact ? '100dvh' : undefined,
+      maxHeight: homeCompact ? '100dvh' : undefined,
       overflowX: 'hidden',
       overflowY: 'auto',
       display: 'flex',
       flexDirection: 'column',
       background: `linear-gradient(180deg, ${AC.skyDeep} 0%, ${AC.sky} 22%, ${AC.cream} 48%, #F0FAF0 100%)`,
       fontFamily: "'Rounded Mplus 1c', 'M PLUS Rounded 1c', 'Hiragino Maru Gothic Pro', 'Noto Sans JP', sans-serif",
+      boxSizing: 'border-box',
     }}>
 
       {/* 背景の草原 */}
@@ -863,8 +888,11 @@ const HomeScreen = ({
 
       {/* 地面の丸い丘 */}
       <div style={{
-        position: 'absolute', bottom: -60, left: '-10%', right: '-10%',
-        height: 140,
+        position: 'absolute',
+        bottom: homeCompact ? -40 : -60,
+        left: '-10%',
+        right: '-10%',
+        height: homeCompact ? 100 : 140,
         background: `radial-gradient(ellipse at 50% 100%, ${AC.grassDk}88 0%, ${AC.grass}44 60%, transparent 100%)`,
         borderRadius: '50%',
         pointerEvents: 'none',
@@ -873,22 +901,22 @@ const HomeScreen = ({
 
       {/* 背景の木 */}
       {[
-        { left: '-3%', bottom: 60, scale: 0.9 },
-        { left: '82%', bottom: 55, scale: 0.85 },
-        { left: '92%', bottom: 62, scale: 0.75 },
+        { left: '-3%', bottom: homeCompact ? 44 : 60, scale: homeCompact ? 0.62 : 0.9 },
+        { left: '82%', bottom: homeCompact ? 40 : 55, scale: homeCompact ? 0.58 : 0.85 },
+        { left: '92%', bottom: homeCompact ? 46 : 62, scale: homeCompact ? 0.52 : 0.75 },
       ].map((t, i) => (
         <div key={i} style={{
           position: 'absolute', bottom: t.bottom, left: t.left,
           fontSize: 48 * t.scale, pointerEvents: 'none', zIndex: 1,
-          opacity: 0.75,
+          opacity: homeCompact ? 0.55 : 0.75,
         }}>🌳</div>
       ))}
 
       {/* 浮かぶデコ */}
-      {floaters.map((f, i) => (
+      {(homeCompact ? floaters.slice(0, 3) : floaters).map((f, i) => (
         <motion.span key={i} style={{
           pointerEvents: 'none', position: 'absolute', zIndex: 2,
-          top: f.top, left: f.left, fontSize: f.size,
+          top: f.top, left: f.left, fontSize: homeCompact ? f.size * 0.82 : f.size,
           filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.12))',
         }}
           animate={{ y: [0, -10, 0], rotate: [-5, 5, -5] }}
@@ -898,8 +926,8 @@ const HomeScreen = ({
 
       {/* 雲 */}
       {[
-        { top: '6%', left: '15%', w: 70, delay: 0 },
-        { top: '3%', left: '55%', w: 55, delay: 1.5 },
+        { top: homeCompact ? '4%' : '6%', left: '15%', w: homeCompact ? 48 : 70, delay: 0 },
+        ...(homeCompact ? [] : [{ top: '3%', left: '55%', w: 55, delay: 1.5 }]),
       ].map((c, i) => (
         <motion.div key={i} style={{
           position: 'absolute', top: c.top, left: c.left,
@@ -918,20 +946,25 @@ const HomeScreen = ({
       <div style={{
         position: 'relative', zIndex: 10,
         flex: 1,
+        minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
-        padding: '10px 14px 20px',
+        padding: homeCompact
+          ? 'max(2px, env(safe-area-inset-top, 0px)) 10px max(10px, calc(8px + env(safe-area-inset-bottom, 0px)))'
+          : '10px 14px 20px',
         maxWidth: 480,
         width: '100%',
         margin: '0 auto',
-        gap: 10,
+        gap: homeCompact ? 5 : 10,
       }}>
 
         {/* 上部ナビ */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: homeCompact ? 6 : 8, flexShrink: 0 }}>
           <button onClick={() => { vibrateLight(); onOpenMyPage(); }} style={{
-            padding: '7px 16px', borderRadius: 999,
-            fontSize: 12, fontWeight: 800,
+            padding: homeCompact ? '5px 12px' : '7px 16px',
+            borderRadius: 999,
+            fontSize: homeCompact ? 11 : 12,
+            fontWeight: 800,
             color: AC.textDk,
             background: AC.white,
             border: `2.5px solid ${AC.brown}44`,
@@ -939,14 +972,16 @@ const HomeScreen = ({
             cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
           }}>マイページ</button>
           <button onClick={() => { vibrateLight(); onShowShare(); }} style={{
-            width: 34, height: 34, borderRadius: '50%',
+            width: homeCompact ? 30 : 34,
+            height: homeCompact ? 30 : 34,
+            borderRadius: '50%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: AC.white,
             border: `2.5px solid ${AC.brown}44`,
             boxShadow: `0 3px 0 ${AC.brown}33`,
             color: AC.textDk, cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
-          }}><Share2 style={{ width: 14, height: 14 }} /></button>
+          }}><Share2 style={{ width: homeCompact ? 13 : 14, height: homeCompact ? 13 : 14 }} /></button>
           <AuthButton />
         </div>
 
@@ -957,15 +992,29 @@ const HomeScreen = ({
           transition={{ duration: 0.4 }}
           onClick={() => { vibrateLight(); onNavigate('library_title_select'); }}
           style={{
-            width: '100%', border: 'none', background: 'transparent',
-            padding: 0, cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+            width: '100%',
+            border: 'none',
+            background: 'transparent',
+            padding: 0,
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            flexShrink: 0,
           }}
         >
           {/* 看板の支柱 */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 60, marginBottom: -4, position: 'relative', zIndex: 0 }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: homeCompact ? 44 : 60,
+            marginBottom: homeCompact ? -3 : -4,
+            position: 'relative',
+            zIndex: 0,
+          }}>
             {[0, 1].map(i => (
               <div key={i} style={{
-                width: 10, height: 18, borderRadius: '0 0 4px 4px',
+                width: homeCompact ? 8 : 10,
+                height: homeCompact ? 12 : 18,
+                borderRadius: '0 0 4px 4px',
                 background: `linear-gradient(180deg, ${AC.brownDk} 0%, ${AC.brown} 100%)`,
                 boxShadow: `2px 0 0 rgba(0,0,0,0.15)`,
               }} />
@@ -975,20 +1024,31 @@ const HomeScreen = ({
           <div style={{
             position: 'relative', zIndex: 1,
             background: `linear-gradient(180deg, #FFF9EC 0%, #F5E8C8 100%)`,
-            borderRadius: 16,
-            border: `3px solid ${AC.brown}`,
-            boxShadow: `0 5px 0 ${AC.brownDk}, 0 8px 20px rgba(0,0,0,0.12)`,
-            padding: '10px 14px',
+            borderRadius: homeCompact ? 12 : 16,
+            border: `${homeCompact ? 2 : 3}px solid ${AC.brown}`,
+            boxShadow: `0 ${homeCompact ? 3 : 5}px 0 ${AC.brownDk}, 0 8px 20px rgba(0,0,0,0.12)`,
+            padding: homeCompact ? '7px 10px' : '10px 14px',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: 6,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: homeCompact ? 6 : 10,
+              minWidth: 0,
+              flex: 1,
+            }}>
               {/* アイコン枠 */}
               <div style={{
-                width: 38, height: 38, borderRadius: 12,
+                width: homeCompact ? 30 : 38,
+                height: homeCompact ? 30 : 38,
+                borderRadius: homeCompact ? 9 : 12,
                 background: `linear-gradient(135deg, ${AC.yellow}, #FFA800)`,
                 border: `2px solid ${AC.yellowDk}`,
                 boxShadow: `0 3px 0 ${AC.yellowDk}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: homeCompact ? 16 : 20,
+                flexShrink: 0,
               }}>{bannerIcon}</div>
               {isVIP && (
                 <div style={{
@@ -1001,21 +1061,31 @@ const HomeScreen = ({
                 </div>
               )}
               <span style={{
-                fontSize: 18, fontWeight: 900, letterSpacing: '0.02em',
+                fontSize: homeCompact ? 14 : 18,
+                fontWeight: 900,
+                letterSpacing: '0.02em',
                 color: AC.textDk,
                 textShadow: '0 1px 0 rgba(255,255,255,0.8)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}>{bannerTitle}</span>
             </div>
             {/* コイン */}
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              background: '#FFF8E0', borderRadius: 20, padding: '5px 12px',
+              display: 'flex', alignItems: 'center', gap: homeCompact ? 3 : 5,
+              background: '#FFF8E0',
+              borderRadius: 20,
+              padding: homeCompact ? '4px 8px' : '5px 12px',
               border: `2px solid ${AC.yellowDk}55`,
               boxShadow: `0 2px 0 ${AC.yellowDk}44`,
+              flexShrink: 0,
             }}>
-              <span style={{ fontSize: 15 }}>🪙</span>
+              <span style={{ fontSize: homeCompact ? 13 : 15 }}>🪙</span>
               <span style={{
-                fontSize: 15, fontWeight: 900, color: '#6A4800',
+                fontSize: homeCompact ? 13 : 15,
+                fontWeight: 900,
+                color: '#6A4800',
                 fontVariantNumeric: 'tabular-nums',
               }}>{coins.toLocaleString()}</span>
             </div>
@@ -1029,31 +1099,55 @@ const HomeScreen = ({
           transition={{ duration: 0.4, delay: 0.1 }}
           style={{
             background: `linear-gradient(135deg, #FDFFF5 0%, #F0FAF0 100%)`,
-            borderRadius: 20,
-            border: `3px solid ${AC.grassDk}`,
-            boxShadow: `0 5px 0 ${AC.grassDk}88, 0 8px 20px rgba(0,0,0,0.08)`,
+            borderRadius: homeCompact ? 14 : 20,
+            border: `${homeCompact ? 2 : 3}px solid ${AC.grassDk}`,
+            boxShadow: `0 ${homeCompact ? 3 : 5}px 0 ${AC.grassDk}88, 0 8px 20px rgba(0,0,0,0.08)`,
             overflow: 'hidden',
+            flexShrink: homeCompact ? 1 : undefined,
+            minHeight: 0,
           }}
         >
           {/* カードヘッダー */}
           <div style={{
             background: `linear-gradient(90deg, ${AC.grass} 0%, ${AC.mint} 100%)`,
-            padding: '8px 16px',
+            padding: homeCompact ? '5px 10px' : '8px 16px',
             display: 'flex', alignItems: 'center', gap: 6,
           }}>
-            <span style={{ fontSize: 14 }}>🏡</span>
-            <span style={{ fontSize: 12, fontWeight: 800, color: '#2A5A3A', letterSpacing: '0.06em' }}>
+            <span style={{ fontSize: homeCompact ? 12 : 14 }}>🏡</span>
+            <span style={{
+              fontSize: homeCompact ? 10.5 : 12,
+              fontWeight: 800,
+              color: '#2A5A3A',
+              letterSpacing: '0.06em',
+            }}>
               図書館ランク
             </span>
           </div>
 
-          <div style={{ padding: '12px 14px 14px' }}>
+          <div style={{ padding: homeCompact ? '8px 10px 8px' : '12px 14px 14px' }}>
             {/* ランク名 + 昇級まで */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-              <div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              marginBottom: homeCompact ? 6 : 10,
+              gap: 8,
+            }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{
-                  fontSize: 22, fontWeight: 900, color: AC.textDk, lineHeight: 1.1,
+                  fontSize: homeCompact ? 15 : 22,
+                  fontWeight: 900,
+                  color: AC.textDk,
+                  lineHeight: 1.12,
                   textShadow: '0 1px 0 rgba(255,255,255,0.9)',
+                  ...(homeCompact
+                    ? {
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical' as const,
+                        overflow: 'hidden',
+                      }
+                    : {}),
                 }}>{libraryRankInfo.fullTitle}</div>
               </div>
               {/* 昇級バッジ */}
@@ -1064,32 +1158,50 @@ const HomeScreen = ({
                 } : {}}
                 transition={{ duration: 1.2, repeat: Infinity }}
                 style={{
-                  flexShrink: 0, minWidth: 80, textAlign: 'center',
+                  flexShrink: 0,
+                  minWidth: homeCompact ? 64 : 80,
+                  textAlign: 'center',
                   background: isAlmostRankUp
                     ? `linear-gradient(135deg, ${AC.coral} 0%, #FF6B40 100%)`
                     : `linear-gradient(135deg, #FFF8E0 0%, #FFF0C0 100%)`,
-                  borderRadius: 14, padding: '7px 10px',
-                  border: `2.5px solid ${isAlmostRankUp ? '#D45000' : AC.yellowDk}`,
-                  boxShadow: `0 4px 0 ${isAlmostRankUp ? '#D45000' : AC.yellowDk}88`,
+                  borderRadius: homeCompact ? 10 : 14,
+                  padding: homeCompact ? '5px 6px' : '7px 10px',
+                  border: `${homeCompact ? 2 : 2.5}px solid ${isAlmostRankUp ? '#D45000' : AC.yellowDk}`,
+                  boxShadow: `0 ${homeCompact ? 2 : 4}px 0 ${isAlmostRankUp ? '#D45000' : AC.yellowDk}88`,
                 }}
               >
-                <div style={{ fontSize: 11, fontWeight: 800, color: isAlmostRankUp ? '#fff' : '#6A4800', marginBottom: 2 }}>
+                <div style={{
+                  fontSize: homeCompact ? 9 : 11,
+                  fontWeight: 800,
+                  color: isAlmostRankUp ? '#fff' : '#6A4800',
+                  marginBottom: homeCompact ? 1 : 2,
+                }}>
                   🏆 昇級まで
                 </div>
                 {isMaxRank ? (
-                  <div style={{ fontSize: 14, fontWeight: 900, color: isAlmostRankUp ? '#fff' : '#6A4800' }}>MAX!</div>
+                  <div style={{
+                    fontSize: homeCompact ? 12 : 14,
+                    fontWeight: 900,
+                    color: isAlmostRankUp ? '#fff' : '#6A4800',
+                  }}>MAX!</div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 2 }}>
                     <motion.span
                       key={booksToNext}
                       initial={{ scale: 1.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                       style={{
-                        fontSize: 30, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
+                        fontSize: homeCompact ? 22 : 30,
+                        fontWeight: 900,
+                        fontVariantNumeric: 'tabular-nums',
                         color: isAlmostRankUp ? '#fff' : '#6A4800',
                         letterSpacing: '-0.02em',
                       }}
                     >{booksToNext}</motion.span>
-                    <span style={{ fontSize: 11, color: isAlmostRankUp ? 'rgba(255,255,255,0.7)' : '#A08040', marginBottom: 2 }}>/{nextThreshold}</span>
+                    <span style={{
+                      fontSize: homeCompact ? 9 : 11,
+                      color: isAlmostRankUp ? 'rgba(255,255,255,0.7)' : '#A08040',
+                      marginBottom: 2,
+                    }}>/{nextThreshold}</span>
                   </div>
                 )}
               </motion.div>
@@ -1097,31 +1209,56 @@ const HomeScreen = ({
 
             {/* ことの葉 + プログレス */}
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: homeCompact ? 6 : 10,
               background: 'rgba(126,200,164,0.15)',
-              borderRadius: 12, padding: '8px 12px', marginBottom: 8,
+              borderRadius: homeCompact ? 9 : 12,
+              padding: homeCompact ? '5px 8px' : '8px 12px',
+              marginBottom: homeCompact ? 5 : 8,
               border: `2px solid ${AC.grass}66`,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                <span style={{ fontSize: 18 }}>🍃</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: AC.textMd }}>ことの葉</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: homeCompact ? 4 : 6, flexShrink: 0 }}>
+                <span style={{ fontSize: homeCompact ? 14 : 18 }}>🍃</span>
+                {!homeCompact && (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: AC.textMd }}>ことの葉</span>
+                )}
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-                  <span style={{ fontSize: 22, fontWeight: 900, color: AC.grassDk, fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{
+                    fontSize: homeCompact ? 17 : 22,
+                    fontWeight: 900,
+                    color: AC.grassDk,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
                     {kotobaLeafCount}
                   </span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#5BAF8A88' }}>枚</span>
+                  <span style={{ fontSize: homeCompact ? 9 : 11, fontWeight: 700, color: '#5BAF8A88' }}>枚</span>
                 </div>
               </div>
               {/* プログレスバー */}
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: AC.textLt }}>修繕進捗</span>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: isAlmostRankUp ? AC.coral : AC.textLt }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginBottom: homeCompact ? 2 : 4,
+                }}>
+                  <span style={{
+                    fontSize: homeCompact ? 8 : 9,
+                    fontWeight: 700,
+                    color: AC.textLt,
+                  }}>修繕</span>
+                  <span style={{
+                    fontSize: homeCompact ? 8 : 9,
+                    fontWeight: 700,
+                    color: isAlmostRankUp ? AC.coral : AC.textLt,
+                  }}>
                     {Math.round(progressRatio * 100)}%
                   </span>
                 </div>
                 <div style={{
-                  width: '100%', height: 10, borderRadius: 99,
+                  width: '100%',
+                  height: homeCompact ? 6 : 10,
+                  borderRadius: 99,
                   background: 'rgba(255,255,255,0.7)',
                   border: `1.5px solid ${AC.grass}55`,
                   overflow: 'hidden',
@@ -1142,17 +1279,19 @@ const HomeScreen = ({
               </div>
             </div>
 
-            {/* ひとことリボン */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              background: 'rgba(255,248,220,0.8)',
-              borderRadius: 10, padding: '5px 10px',
-              border: `1.5px solid ${AC.yellowDk}44`,
-            }}>
-              <span style={{ fontSize: 10 }}>🌟</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: AC.textMd }}>修繕してランクアップ</span>
-              <span style={{ fontSize: 10 }}>🌟</span>
-            </div>
+            {/* ひとことリボン（コンパクト時は省略して縦長を抑制） */}
+            {!homeCompact && (
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                background: 'rgba(255,248,220,0.8)',
+                borderRadius: 10, padding: '5px 10px',
+                border: `1.5px solid ${AC.yellowDk}44`,
+              }}>
+                <span style={{ fontSize: 10 }}>🌟</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: AC.textMd }}>修繕してランクアップ</span>
+                <span style={{ fontSize: 10 }}>🌟</span>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -1161,85 +1300,183 @@ const HomeScreen = ({
           onClick={() => { vibrateLight(); onNavigate('dressup'); }}
           whileTap={{ scale: 0.97 }}
           style={{
-            display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
-            position: 'relative', background: 'none', border: 'none',
-            cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-            height: 'clamp(160px, 22vh, 200px)',
-            flex: '0 0 auto', overflow: 'visible',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'flex-end',
+            position: 'relative',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            height: homeCompact
+              ? 'clamp(72px, 11svh, 104px)'
+              : 'clamp(160px, 22vh, 200px)',
+            flex: homeCompact ? '1 1 0' : '0 0 auto',
+            minHeight: 0,
+            maxHeight: homeCompact ? '28svh' : undefined,
+            overflow: homeCompact ? 'hidden' : 'visible',
           }}
         >
           {/* 芝生の丸 */}
           <div style={{
-            position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
-            width: 140, height: 24, borderRadius: '50%',
-            background: `${AC.grassDk}44`, filter: 'blur(8px)',
+            position: 'absolute',
+            bottom: homeCompact ? 4 : 8,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: homeCompact ? 100 : 140,
+            height: homeCompact ? 16 : 24,
+            borderRadius: '50%',
+            background: `${AC.grassDk}44`,
+            filter: 'blur(8px)',
             pointerEvents: 'none',
           }} />
-          <PotatoAvatar equipped={equippedDetails} emotion="happy" size={180} ssrEffect={false} />
+          <div style={{
+            transform: homeCompact ? 'translateY(8px) scale(0.55)' : undefined,
+            transformOrigin: '50% 100%',
+            pointerEvents: 'none',
+          }}>
+            <PotatoAvatar
+              equipped={equippedDetails}
+              emotion="happy"
+              size={homeCompact ? 160 : 180}
+              ssrEffect={false}
+            />
+          </div>
           {/* 着せ替えボタン（AC風ピンクボタン） */}
           <div style={{
-            position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+            position: 'absolute',
+            bottom: 0,
+            left: '50%',
+            transform: 'translateX(-50%)',
             background: `linear-gradient(180deg, #FF9EBE 0%, #FF6B9D 100%)`,
-            borderRadius: 999, padding: '5px 16px',
-            display: 'flex', alignItems: 'center', gap: 5,
-            fontSize: 12, fontWeight: 900, color: '#fff',
-            border: '2.5px solid rgba(255,255,255,0.6)',
-            boxShadow: '0 4px 0 #D44A7A, 0 6px 14px rgba(212,74,122,0.35)',
+            borderRadius: 999,
+            padding: homeCompact ? '3px 10px' : '5px 16px',
+            display: 'flex', alignItems: 'center', gap: homeCompact ? 4 : 5,
+            fontSize: homeCompact ? 10.5 : 12,
+            fontWeight: 900,
+            color: '#fff',
+            border: `${homeCompact ? 2 : 2.5}px solid rgba(255,255,255,0.6)`,
+            boxShadow: homeCompact
+              ? '0 2px 0 #D44A7A, 0 4px 10px rgba(212,74,122,0.3)'
+              : '0 4px 0 #D44A7A, 0 6px 14px rgba(212,74,122,0.35)',
             whiteSpace: 'nowrap',
             textShadow: '0 1px 2px rgba(0,0,0,0.2)',
           }}>
-            <Shirt style={{ width: 12, height: 12 }} />着せ替え
+            <Shirt style={{ width: homeCompact ? 10 : 12, height: homeCompact ? 10 : 12 }} />着せ替え
           </div>
         </motion.button>
 
         {/* ボタン群（AC風カラー） */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <RpgButton
-            onClick={() => { vibrateLight(); onNavigate('suhimochi_room'); }}
-            fromColor="#4CAF82" toColor="#6DD9A8"
-            glowColor="rgba(78,175,130,0.35)" shadowColor="#2E8055"
-            icon={<MessageCircle style={{ width: 22, height: 22 }} />}
-            label="すうひもちのお部屋"
-          />
-          <RpgButton
-            onClick={() => { vibrateLight(); onNavigate('academy'); }}
-            fromColor="#5B8FD4" toColor="#7EB5F0"
-            glowColor="rgba(91,143,212,0.35)" shadowColor="#3360A8"
-            icon={<BookOpen style={{ width: 22, height: 22 }} />}
-            label="図書館を復興する"
-          />
-          <RpgButton
-            onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
-            fromColor="#E6A030" toColor="#FFD060"
-            glowColor="rgba(230,160,48,0.35)" shadowColor="#B07800"
-            icon={<Scan style={{ width: 22, height: 22 }} />}
-            label="ことばを読み取る"
-          />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <RpgButton
-              onClick={() => { vibrateLight(); onNavigate('gacha'); }}
-              fromColor="#B06DD0" toColor="#D095E8"
-              glowColor="rgba(176,109,208,0.35)" shadowColor="#7840A0"
-              icon={<Gem style={{ width: 17, height: 17 }} />}
-              label="ガチャ"
-              small
-            />
-            <RpgButton
-              onClick={() => { vibrateLight(); onNavigate('researcher_dex'); }}
-              fromColor="#E07850" toColor="#F5A07A"
-              glowColor="rgba(224,120,80,0.35)" shadowColor="#B04820"
-              icon={<Users style={{ width: 17, height: 17 }} />}
-              label="研究員図鑑"
-              small
-            />
-          </div>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: homeCompact ? 5 : 10,
+          flexShrink: 0,
+        }}>
+          {homeCompact ? (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+                <RpgButton
+                  compact
+                  onClick={() => { vibrateLight(); onNavigate('suhimochi_room'); }}
+                  fromColor="#4CAF82" toColor="#6DD9A8"
+                  glowColor="rgba(78,175,130,0.35)" shadowColor="#2E8055"
+                  icon={<MessageCircle style={{ width: 18, height: 18 }} />}
+                  label="すうひもちのお部屋"
+                />
+                <RpgButton
+                  compact
+                  onClick={() => { vibrateLight(); onNavigate('academy'); }}
+                  fromColor="#5B8FD4" toColor="#7EB5F0"
+                  glowColor="rgba(91,143,212,0.35)" shadowColor="#3360A8"
+                  icon={<BookOpen style={{ width: 18, height: 18 }} />}
+                  label="図書館を復興"
+                />
+              </div>
+              <RpgButton
+                compact
+                onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
+                fromColor="#E6A030" toColor="#FFD060"
+                glowColor="rgba(230,160,48,0.35)" shadowColor="#B07800"
+                icon={<Scan style={{ width: 18, height: 18 }} />}
+                label="ことばを読み取る"
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+                <RpgButton
+                  compact
+                  onClick={() => { vibrateLight(); onNavigate('gacha'); }}
+                  fromColor="#B06DD0" toColor="#D095E8"
+                  glowColor="rgba(176,109,208,0.35)" shadowColor="#7840A0"
+                  icon={<Gem style={{ width: 15, height: 15 }} />}
+                  label="ガチャ"
+                  small
+                />
+                <RpgButton
+                  compact
+                  onClick={() => { vibrateLight(); onNavigate('researcher_dex'); }}
+                  fromColor="#E07850" toColor="#F5A07A"
+                  glowColor="rgba(224,120,80,0.35)" shadowColor="#B04820"
+                  icon={<Users style={{ width: 15, height: 15 }} />}
+                  label="研究員図鑑"
+                  small
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <RpgButton
+                onClick={() => { vibrateLight(); onNavigate('suhimochi_room'); }}
+                fromColor="#4CAF82" toColor="#6DD9A8"
+                glowColor="rgba(78,175,130,0.35)" shadowColor="#2E8055"
+                icon={<MessageCircle style={{ width: 22, height: 22 }} />}
+                label="すうひもちのお部屋"
+              />
+              <RpgButton
+                onClick={() => { vibrateLight(); onNavigate('academy'); }}
+                fromColor="#5B8FD4" toColor="#7EB5F0"
+                glowColor="rgba(91,143,212,0.35)" shadowColor="#3360A8"
+                icon={<BookOpen style={{ width: 22, height: 22 }} />}
+                label="図書館を復興する"
+              />
+              <RpgButton
+                onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
+                fromColor="#E6A030" toColor="#FFD060"
+                glowColor="rgba(230,160,48,0.35)" shadowColor="#B07800"
+                icon={<Scan style={{ width: 22, height: 22 }} />}
+                label="ことばを読み取る"
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <RpgButton
+                  onClick={() => { vibrateLight(); onNavigate('gacha'); }}
+                  fromColor="#B06DD0" toColor="#D095E8"
+                  glowColor="rgba(176,109,208,0.35)" shadowColor="#7840A0"
+                  icon={<Gem style={{ width: 17, height: 17 }} />}
+                  label="ガチャ"
+                  small
+                />
+                <RpgButton
+                  onClick={() => { vibrateLight(); onNavigate('researcher_dex'); }}
+                  fromColor="#E07850" toColor="#F5A07A"
+                  glowColor="rgba(224,120,80,0.35)" shadowColor="#B04820"
+                  icon={<Users style={{ width: 17, height: 17 }} />}
+                  label="研究員図鑑"
+                  small
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* サポートボタン（AC風） */}
       <button onClick={() => { vibrateLight(); setShowSupportModal(true); }} style={{
-        position: 'fixed', bottom: 20, right: 16, zIndex: 50,
-        width: 48, height: 48, borderRadius: '50%',
+        position: 'fixed',
+        bottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
+        right: 'max(12px, env(safe-area-inset-right, 0px))',
+        zIndex: 50,
+        width: homeCompact ? 44 : 48,
+        height: homeCompact ? 44 : 48,
+        borderRadius: '50%',
         background: `linear-gradient(135deg, ${AC.yellow} 0%, #FFA800 100%)`,
         border: '3px solid rgba(255,255,255,0.7)',
         boxShadow: `0 5px 0 ${AC.yellowDk}, 0 8px 18px rgba(0,0,0,0.15)`,
