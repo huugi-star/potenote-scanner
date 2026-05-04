@@ -1284,10 +1284,10 @@ const HomeScreen = ({
         {homeCompact ? (
         <div
           style={{
-            flex: '1 1 0',
+            flex: '0 0 auto',
             width: '100%',
             minHeight: 0,
-            marginTop: 2,
+            marginTop: 0,
             paddingTop: 0,
             display: 'flex',
             flexDirection: 'column',
