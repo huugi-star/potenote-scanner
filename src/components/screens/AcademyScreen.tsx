@@ -68,6 +68,8 @@ interface DraftMcq {
 
 interface AcademyScreenProps {
   onBack: () => void;
+  /** 遷移直後に開くサブ画面（ホームの図書館ランクから本を修繕する画面へ直行するなど） */
+  initialSubview?: Extract<AcademySubview, 'top' | 'repair_book'>;
 }
 
 // ============================================================
@@ -417,7 +419,7 @@ const CardHeader = ({
 // メインコンポーネント
 // ============================================================
 
-export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
+export const AcademyScreen = ({ onBack, initialSubview = 'top' }: AcademyScreenProps) => {
   const router = useRouter();
   const { addToast } = useToast();
   const quizHistory          = useGameStore((s) => s.quizHistory);
@@ -429,7 +431,7 @@ export const AcademyScreen = ({ onBack }: AcademyScreenProps) => {
   const deleteAcademyUserQuestion = useGameStore((s) => s.deleteAcademyUserQuestion);
   const refreshAcademyQuestions = useGameStore((s) => s.refreshAcademyQuestions);
 
-  const [subview, setSubview] = useState<AcademySubview>('top');
+  const [subview, setSubview] = useState<AcademySubview>(initialSubview);
   /** みんなの問題から戻る先（修繕画面から入ったときは修繕へ戻す） */
   const [quizBackSubview, setQuizBackSubview] = useState<'top' | 'repair_book'>('top');
 

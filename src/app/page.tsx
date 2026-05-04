@@ -880,10 +880,13 @@ const RpgButton = ({
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 const HomeScreen = ({
   onNavigate,
+  onOpenLibraryRepair,
   onShowShare,
   onOpenMyPage,
 }: {
   onNavigate: (phase: GamePhase) => void;
+  /** 図書館ランクパネルから本を修繕する画面へ */
+  onOpenLibraryRepair: () => void;
   onShowShare: () => void;
   onOpenMyPage: () => void;
 }) => {
@@ -1150,11 +1153,15 @@ const HomeScreen = ({
         </motion.button>
 
         {/* 図書館ステータス（級・ことの葉） */}
-        <motion.div
+        <motion.button
+          type="button"
           initial={{ opacity: 0, scale: 0.96, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
+          onClick={() => { vibrateLight(); onOpenLibraryRepair(); }}
           style={{
+            width: '100%',
+            textAlign: 'left',
             background: `linear-gradient(135deg, #FDFFF5 0%, #F0FAF0 100%)`,
             borderRadius: homeCompact ? 12 : 20,
             border: `${homeCompact ? 2 : 3}px solid ${AC.grassDk}`,
@@ -1162,6 +1169,9 @@ const HomeScreen = ({
             overflow: 'hidden',
             flexShrink: 0,
             minHeight: 0,
+            padding: 0,
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
           }}
         >
           <div style={{
@@ -1178,7 +1188,7 @@ const HomeScreen = ({
               color: '#2A5A3A',
               letterSpacing: '0.04em',
             }}>
-              図書館
+              図書館ランク
             </span>
           </div>
 
@@ -1277,7 +1287,7 @@ const HomeScreen = ({
               </div>
             </div>
           </div>
-        </motion.div>
+        </motion.button>
         </div>
 
         {/* アバター — スマホはランクとの間・上下の余白を取り中段を縦フィル */}
@@ -2607,6 +2617,8 @@ const ModeSelectScreen = ({
 const AppContent = () => {
   // State
   const [phase, setPhase] = useState<GamePhase>('home');
+  /** アカデミー画面を開くときの初期サブ画面（図書館ランクから修繕へ直行など） */
+  const [academyInitialSubview, setAcademyInitialSubview] = useState<'top' | 'repair_book'>('top');
   const [wordDexBackPhase, setWordDexBackPhase] = useState<GamePhase>('scanning');
   const [quizSession, setQuizSession] = useState<QuizSession | null>(null);
   const [showLoginBonus, setShowLoginBonus] = useState(false);
@@ -2789,7 +2801,15 @@ const AppContent = () => {
 
   // ナビゲーション
   const handleNavigate = useCallback((newPhase: GamePhase) => {
+    if (newPhase === 'academy') {
+      setAcademyInitialSubview('top');
+    }
     setPhase(newPhase);
+  }, []);
+
+  const handleOpenLibraryRepair = useCallback(() => {
+    setAcademyInitialSubview('repair_book');
+    setPhase('academy');
   }, []);
 
   const handleOpenWordDex = useCallback((backPhase: GamePhase) => {
@@ -2822,6 +2842,7 @@ const AppContent = () => {
           >
             <HomeScreen 
               onNavigate={handleNavigate} 
+              onOpenLibraryRepair={handleOpenLibraryRepair}
               onShowShare={() => setShowShareModal(true)}
               onOpenMyPage={() => handleNavigate('mypage')}
             />
@@ -2931,7 +2952,7 @@ const AppContent = () => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            <AcademyScreen onBack={handleBackToHome} />
+            <AcademyScreen onBack={handleBackToHome} initialSubview={academyInitialSubview} />
           </motion.div>
         )}
 
