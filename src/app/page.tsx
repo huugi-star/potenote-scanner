@@ -1287,11 +1287,11 @@ const HomeScreen = ({
             flex: '1 1 0',
             width: '100%',
             minHeight: 0,
-            marginTop: 4,
-            paddingTop: 0,
+            marginTop: 10,
+            paddingTop: 6,
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'center',
+            justifyContent: 'flex-start',
             alignItems: 'center',
             boxSizing: 'border-box',
             overflow: 'hidden',
@@ -1314,7 +1314,7 @@ const HomeScreen = ({
             width: '100%',
             flex: '0 1 auto',
             overflow: 'visible',
-            marginBottom: 8,
+            marginBottom: 2,
           }}
         >
           <div style={{
