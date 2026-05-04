@@ -52,6 +52,7 @@ import {
   calcBooksFromFragments,
   calcRankInfo,
   RANK_TIERS,
+  TIER_CUMULATIVE_FRAGMENTS,
   UNLOCK_WORD_COLLECTION_MIN_TIER_INDEX,
   UNLOCK_ENGLISH_LEARNING_TRANSLATION_MIN_TIER_INDEX,
 } from '@/constants/rankSystem';
@@ -127,6 +128,127 @@ const TranslationResultScreenWrapper = ({ onBack }: { onBack: () => void }) => {
     </motion.div>
   );
 };
+
+/** どうぶつの森風カラーパレット（トップ画面・冒険メニュー共通） */
+const AC = {
+  sky: '#D4EFF7',
+  skyDeep: '#A8D8EA',
+  grass: '#7EC8A4',
+  grassDk: '#5BAF8A',
+  cream: '#FFF8E8',
+  yellow: '#FFD93D',
+  yellowDk: '#E6B800',
+  brown: '#A0744A',
+  brownDk: '#7A5234',
+  coral: '#FF8C69',
+  mint: '#A8E6CF',
+  lavender: '#D4A8E6',
+  white: '#FFFFFF',
+  textDk: '#5A3E28',
+  textMd: '#7A5A3A',
+  textLt: '#A08060',
+};
+
+/** 空・草原・木・花・雲（ホームと同じ屋外レイヤー） */
+function AcnhOutdoorDecor({ compact }: { compact: boolean }) {
+  const floaters = [
+    { emoji: '🌿', top: '8%', left: '5%', delay: 0, dur: 4.2, size: 18 },
+    { emoji: '🌸', top: '12%', left: '85%', delay: 1.2, dur: 3.8, size: 16 },
+    { emoji: '🍃', top: '5%', left: '65%', delay: 0.6, dur: 4.5, size: 14 },
+    { emoji: '⭐', top: '20%', left: '92%', delay: 2.0, dur: 3.2, size: 13 },
+    { emoji: '🌼', top: '18%', left: '2%', delay: 1.8, dur: 4.0, size: 15 },
+  ];
+
+  return (
+    <>
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '38%',
+          background: `linear-gradient(180deg, transparent 0%, ${AC.mint}55 40%, ${AC.grass}44 100%)`,
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          bottom: compact ? -40 : -60,
+          left: '-10%',
+          right: '-10%',
+          height: compact ? 100 : 140,
+          background: `radial-gradient(ellipse at 50% 100%, ${AC.grassDk}88 0%, ${AC.grass}44 60%, transparent 100%)`,
+          borderRadius: '50%',
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+      />
+      {[
+        { left: '-3%', bottom: compact ? 44 : 60, scale: compact ? 0.62 : 0.9 },
+        { left: '82%', bottom: compact ? 40 : 55, scale: compact ? 0.58 : 0.85 },
+        { left: '92%', bottom: compact ? 46 : 62, scale: compact ? 0.52 : 0.75 },
+      ].map((t, i) => (
+        <div
+          key={i}
+          style={{
+            position: 'absolute',
+            bottom: t.bottom,
+            left: t.left,
+            fontSize: 48 * t.scale,
+            pointerEvents: 'none',
+            zIndex: 1,
+            opacity: compact ? 0.55 : 0.75,
+          }}
+        >
+          🌳
+        </div>
+      ))}
+      {(compact ? floaters.slice(0, 3) : floaters).map((f, i) => (
+        <motion.span
+          key={i}
+          style={{
+            pointerEvents: 'none',
+            position: 'absolute',
+            zIndex: 2,
+            top: f.top,
+            left: f.left,
+            fontSize: compact ? f.size * 0.82 : f.size,
+            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.12))',
+          }}
+          animate={{ y: [0, -10, 0], rotate: [-5, 5, -5] }}
+          transition={{ duration: f.dur, delay: f.delay, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          {f.emoji}
+        </motion.span>
+      ))}
+      {[
+        { top: compact ? '4%' : '6%', left: '15%', w: compact ? 48 : 70, delay: 0 },
+        ...(compact ? [] : [{ top: '3%', left: '55%', w: 55, delay: 1.5 }]),
+      ].map((c, i) => (
+        <motion.div
+          key={i}
+          style={{
+            position: 'absolute',
+            top: c.top,
+            left: c.left,
+            width: c.w,
+            height: c.w * 0.5,
+            borderRadius: 999,
+            background: 'rgba(255,255,255,0.85)',
+            pointerEvents: 'none',
+            zIndex: 1,
+            boxShadow: '0 3px 10px rgba(255,255,255,0.6)',
+          }}
+          animate={{ x: [0, 12, 0] }}
+          transition={{ duration: 8 + i * 2, delay: c.delay, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      ))}
+    </>
+  );
+}
 
 /**
  * 冒険メニュー画面
@@ -345,35 +467,49 @@ const AdventureMenuScreen = ({
 
   return (
     <div
-      className="min-h-screen p-4 pb-24"
       style={{
-        backgroundImage:
-          "linear-gradient(180deg, rgba(10,14,25,0.28) 0%, rgba(10,14,25,0.18) 45%, rgba(10,14,25,0.42) 100%), url('/images/backgrounds/home.png')",
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundColor: '#0b1220',
+        position: 'relative',
+        width: '100%',
+        minHeight: '100dvh',
+        overflowX: 'hidden',
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        background: `linear-gradient(180deg, ${AC.skyDeep} 0%, ${AC.sky} 22%, ${AC.cream} 48%, #F0FAF0 100%)`,
+        fontFamily: "'Rounded Mplus 1c', 'M PLUS Rounded 1c', 'Hiragino Maru Gothic Pro', 'Noto Sans JP', sans-serif",
+        boxSizing: 'border-box',
       }}
     >
-      <div className="max-w-md mx-auto pt-6">
-        <h2 className="text-2xl font-bold text-white mb-2 text-center">ことばを読み取る</h2>
+      <AcnhOutdoorDecor compact={false} />
+      <div
+        className="max-w-md mx-auto w-full flex-1 px-4 pt-6 pb-24"
+        style={{ position: 'relative', zIndex: 10, minHeight: 0 }}
+      >
+        <h2
+          className="text-2xl font-black mb-2 text-center"
+          style={{ color: AC.textDk, textShadow: '0 1px 0 rgba(255,255,255,0.75)' }}
+        >
+          ことばを読み取る
+        </h2>
 
         {/* すぐスキャン（画像を置いたら即クイズ生成） */}
-        <div className="mb-4 rounded-2xl border border-cyan-500/25 bg-gray-800/50 p-4">
+        <div
+          className="mb-4 rounded-2xl border-[3px] border-[#A0744A]/50 bg-white/90 p-4 shadow-[0_4px_0_rgba(122,82,52,0.32),0_10px_26px_rgba(0,0,0,0.07)]"
+        >
           <div className="flex items-center justify-between gap-3 mb-3">
             <div className="min-w-0">
-              <div className="text-white font-bold flex items-center gap-2">
-                <Scan className="w-4 h-4 text-cyan-300" />
+              <div className="font-bold flex items-center gap-2" style={{ color: AC.textDk }}>
+                <Scan className="w-4 h-4 text-emerald-600" />
               </div>
             </div>
             {/* スキャン残り回数（ScanningScreenと同形式） */}
             <div
               className={`px-3 py-2 rounded-xl text-xs font-bold border ${
                 isVIP
-                  ? 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25'
+                  ? 'bg-amber-50 text-amber-900 border-amber-400/45'
                   : remainingScans > 0
-                    ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/25'
-                    : 'bg-red-500/15 text-red-200 border-red-500/25'
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-500/35'
+                    : 'bg-red-50 text-red-800 border-red-300/55'
               }`}
               style={{ lineHeight: 1.15 }}
             >
@@ -392,8 +528,8 @@ const AdventureMenuScreen = ({
               )}
             </div>
             {quickScanState === 'processing' ? (
-              <div className="flex items-center gap-2 text-cyan-200 text-xs font-semibold">
-                <Loader2 className="w-4 h-4 animate-spin" />
+              <div className="flex items-center gap-2 text-emerald-800 text-xs font-semibold">
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
                 処理中…
               </div>
             ) : (
@@ -411,7 +547,7 @@ const AdventureMenuScreen = ({
                   vibrateLight();
                   cameraInputRef.current?.click();
                 }}
-                className="shrink-0 px-3 py-2 rounded-xl bg-cyan-600/20 border border-cyan-500/30 text-cyan-200 text-xs font-bold hover:bg-cyan-600/30"
+                className="shrink-0 px-3 py-2 rounded-xl bg-white border-2 border-[#A0744A]/50 text-[#5A3E28] text-xs font-bold hover:bg-[#FFF9EC] shadow-[0_2px_0_rgba(122,82,52,0.25)]"
               >
                 <span className="inline-flex items-center gap-1">
                   <Camera className="w-3.5 h-3.5" />
@@ -432,8 +568,8 @@ const AdventureMenuScreen = ({
             }}
             className={`rounded-2xl border-2 border-dashed p-4 text-center transition-colors ${
               quickScanState === 'processing'
-                ? 'border-gray-700 bg-gray-900/40 cursor-wait'
-                : 'border-cyan-500/35 bg-gray-900/20 hover:border-cyan-400 cursor-pointer'
+                ? 'border-stone-300 bg-stone-100/90 cursor-wait'
+                : 'border-emerald-500/40 bg-emerald-50/60 hover:border-emerald-500 hover:bg-emerald-50/90 cursor-pointer'
             }`}
           >
             <input
@@ -468,49 +604,51 @@ const AdventureMenuScreen = ({
 
             {quickScanPreview ? (
               <div className="mx-auto w-full max-w-[260px]">
-                <div className="rounded-xl overflow-hidden border border-cyan-500/30">
+                <div className="rounded-xl overflow-hidden border-2 border-emerald-500/35">
                   <img src={quickScanPreview} alt="preview" className="w-full h-40 object-cover" />
                 </div>
                 {quickScanState === 'processing' && (
                   <div className="mt-3">
                     {/* ScanningScreen と同じ進行度表示 */}
                     <div className="max-w-md mx-auto mb-3">
-                      <div className="flex items-center justify-between text-sm text-cyan-100 mb-2 px-1">
+                      <div className="flex items-center justify-between text-sm text-emerald-900 mb-2 px-1">
                         <span className="text-left line-clamp-2">{quickEffectiveProgressLabel}</span>
                         <span className="font-semibold">{quickDisplayProgress}%</span>
                       </div>
-                      <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden border border-cyan-500/30">
+                      <div className="w-full h-3 bg-stone-200 rounded-full overflow-hidden border border-emerald-400/40">
                         <div
-                          className="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-500 transition-[width] duration-300 ease-out"
+                          className="h-full bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-500 transition-[width] duration-300 ease-out"
                           style={{ width: `${quickDisplayProgress}%` }}
                         />
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-center gap-3 text-gray-200">
-                      <Loader2 className="w-5 h-5 text-cyan-300 animate-spin" />
+                    <div className="flex items-center justify-center gap-3 text-emerald-900">
+                      <Loader2 className="w-5 h-5 text-emerald-600 animate-spin" />
                       <span className="text-sm font-semibold">クイズ作成中...</span>
                     </div>
                   </div>
                 )}
                 {quickScanState !== 'processing' && (
-                  <div className="mt-2 text-xs text-gray-300">タップで別の画像に変更</div>
+                  <div className="mt-2 text-xs" style={{ color: AC.textMd }}>
+                    タップで別の画像に変更
+                  </div>
                 )}
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="mx-auto w-12 h-12 rounded-full bg-cyan-500/15 flex items-center justify-center">
+                <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
                   {quickScanState === 'processing' ? (
-                    <Loader2 className="w-6 h-6 text-cyan-300 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
                   ) : (
-                    <Play className="w-6 h-6 text-cyan-300" />
+                    <Play className="w-6 h-6 text-emerald-600" />
                   )}
                 </div>
-                <div className="text-white font-semibold text-sm">
+                <div className="font-semibold text-sm" style={{ color: AC.textDk }}>
                   タップして画像選択
                 </div>
-                <div className="text-gray-400 text-xs flex items-center justify-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
+                <div className="text-xs flex items-center justify-center gap-1" style={{ color: AC.textMd }}>
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                   1ページずつスキャンしてください
                 </div>
               </div>
@@ -518,7 +656,7 @@ const AdventureMenuScreen = ({
           </div>
 
           {quickScanState === 'error' && quickScanError && (
-            <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            <div className="mt-3 rounded-xl border border-red-300/60 bg-red-50 px-3 py-2 text-sm text-red-800">
               {quickScanError}
             </div>
           )}
@@ -539,7 +677,7 @@ const AdventureMenuScreen = ({
           </motion.button>
 
           <div className="pt-2">
-            <div className="h-px w-full bg-gray-700/60" />
+            <div className="h-px w-full bg-[#A0744A]/22" />
           </div>
 
           <motion.button
@@ -568,7 +706,7 @@ const AdventureMenuScreen = ({
               router.push('/word-collection');
             }}
             className={`relative w-full overflow-hidden py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 ${
-              unlockWordCollection ? '' : 'opacity-75 saturate-75 ring-2 ring-gray-700/90'
+              unlockWordCollection ? '' : 'opacity-75 saturate-75 ring-2 ring-[#A0744A]/55'
             }`}
             whileHover={unlockWordCollection ? { scale: 1.02 } : { scale: 1 }}
             whileTap={unlockWordCollection ? { scale: 0.98 } : { scale: 0.995 }}
@@ -598,7 +736,7 @@ const AdventureMenuScreen = ({
               onOpenEnglishReading();
             }}
             className={`relative w-full overflow-hidden py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 ${
-              unlockEnglishLearning ? '' : 'opacity-75 saturate-75 ring-2 ring-gray-700/90'
+              unlockEnglishLearning ? '' : 'opacity-75 saturate-75 ring-2 ring-[#A0744A]/55'
             }`}
             whileHover={unlockEnglishLearning ? { scale: 1.02 } : { scale: 1 }}
             whileTap={unlockEnglishLearning ? { scale: 0.98 } : { scale: 0.995 }}
@@ -617,8 +755,8 @@ const AdventureMenuScreen = ({
           </motion.button>
 
           {/* ことば図鑑は「保留」扱いで普段は隠す */}
-          <details className="rounded-xl border border-gray-700/60 bg-gray-900/20 px-4 py-3">
-            <summary className="cursor-pointer select-none text-sm font-bold text-gray-200">
+          <details className="rounded-xl border-[2px] border-[#A0744A]/40 bg-white/75 px-4 py-3 shadow-[0_2px_0_rgba(122,82,52,0.18)]">
+            <summary className="cursor-pointer select-none text-sm font-bold" style={{ color: AC.textDk }}>
               その他
             </summary>
             <div className="pt-3">
@@ -628,9 +766,9 @@ const AdventureMenuScreen = ({
                   vibrateLight();
                   onOpenWordDex();
                 }}
-                className="w-full rounded-xl border border-orange-500/25 bg-orange-500/10 px-4 py-3 text-left text-sm font-bold text-orange-100 hover:bg-orange-500/15 transition-colors flex items-center gap-2"
+                className="w-full rounded-xl border-2 border-orange-400/45 bg-orange-50/90 px-4 py-3 text-left text-sm font-bold text-orange-900 hover:bg-orange-50 transition-colors flex items-center gap-2"
               >
-                <BookOpen className="w-4 h-4 text-orange-300" />
+                <BookOpen className="w-4 h-4 text-orange-600" />
                 ことば図鑑
               </button>
             </div>
@@ -642,7 +780,7 @@ const AdventureMenuScreen = ({
             vibrateLight();
             onBack();
           }}
-          className="mt-8 w-full py-3 text-gray-400 hover:text-white transition-colors"
+          className="mt-8 w-full py-3 font-bold text-[#7A5A3A] hover:text-[#5A3E28] transition-colors"
         >
           戻る
         </button>
@@ -825,41 +963,14 @@ const HomeScreen = ({
     ? (equippedShoulderPresetId === 'suhimochi_master' ? '🐾' : '🌱')
     : (RANK_TIER_EMOJIS[glowTierIndex] ?? '⚔️');
 
-  const booksToNext: number   = (libraryRankInfo as any).booksToNext   ?? 0;
-  const nextThreshold: number = (libraryRankInfo as any).nextThreshold ?? 20;
-  const isMaxRank             = booksToNext === 0 && nextThreshold === 0;
-  const isAlmostRankUp        = !isMaxRank && booksToNext <= 3;
-  const progressRatio         = nextThreshold > 0
-    ? Math.min(1,(nextThreshold - booksToNext)/nextThreshold) : 1;
-
-  // AC風カラーパレット（どうぶつの森スタイル）
-  const AC = {
-    sky:     '#D4EFF7',
-    skyDeep: '#A8D8EA',
-    grass:   '#7EC8A4',
-    grassDk: '#5BAF8A',
-    cream:   '#FFF8E8',
-    yellow:  '#FFD93D',
-    yellowDk:'#E6B800',
-    brown:   '#A0744A',
-    brownDk: '#7A5234',
-    coral:   '#FF8C69',
-    mint:    '#A8E6CF',
-    lavender:'#D4A8E6',
-    white:   '#FFFFFF',
-    textDk:  '#5A3E28',
-    textMd:  '#7A5A3A',
-    textLt:  '#A08060',
-  };
-
-  // 浮かぶ装飾（葉っぱ・花）
-  const floaters = [
-    { emoji: '🌿', top: '8%',  left: '5%',  delay: 0,   dur: 4.2, size: 18 },
-    { emoji: '🌸', top: '12%', left: '85%', delay: 1.2, dur: 3.8, size: 16 },
-    { emoji: '🍃', top: '5%',  left: '65%', delay: 0.6, dur: 4.5, size: 14 },
-    { emoji: '⭐', top: '20%', left: '92%', delay: 2.0, dur: 3.2, size: 13 },
-    { emoji: '🌼', top: '18%', left: '2%',  delay: 1.8, dur: 4.0, size: 15 },
-  ];
+  /** 次の図書館ランク（ティア）到達までに、あと何枚のことの葉を修繕に使う必要があるか */
+  const leavesToNextTier = useMemo(() => {
+    if (libraryRankInfo.isMaxRank) return 0;
+    const cap = TIER_CUMULATIVE_FRAGMENTS[libraryRankInfo.tierIndex];
+    return Math.max(0, cap - repairSpentCount);
+  }, [libraryRankInfo.isMaxRank, libraryRankInfo.tierIndex, repairSpentCount]);
+  const tierProgressPct = Math.max(0, Math.min(100, libraryRankInfo.progressPct));
+  const currentTierIcon = RANK_TIER_EMOJIS[libraryRankInfo.tierIndex] ?? '📚';
 
   return (
     <div style={{
@@ -876,71 +987,7 @@ const HomeScreen = ({
       fontFamily: "'Rounded Mplus 1c', 'M PLUS Rounded 1c', 'Hiragino Maru Gothic Pro', 'Noto Sans JP', sans-serif",
       boxSizing: 'border-box',
     }}>
-
-      {/* 背景の草原 */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        height: '38%',
-        background: `linear-gradient(180deg, transparent 0%, ${AC.mint}55 40%, ${AC.grass}44 100%)`,
-        pointerEvents: 'none',
-        zIndex: 0,
-      }} />
-
-      {/* 地面の丸い丘 */}
-      <div style={{
-        position: 'absolute',
-        bottom: homeCompact ? -40 : -60,
-        left: '-10%',
-        right: '-10%',
-        height: homeCompact ? 100 : 140,
-        background: `radial-gradient(ellipse at 50% 100%, ${AC.grassDk}88 0%, ${AC.grass}44 60%, transparent 100%)`,
-        borderRadius: '50%',
-        pointerEvents: 'none',
-        zIndex: 0,
-      }} />
-
-      {/* 背景の木 */}
-      {[
-        { left: '-3%', bottom: homeCompact ? 44 : 60, scale: homeCompact ? 0.62 : 0.9 },
-        { left: '82%', bottom: homeCompact ? 40 : 55, scale: homeCompact ? 0.58 : 0.85 },
-        { left: '92%', bottom: homeCompact ? 46 : 62, scale: homeCompact ? 0.52 : 0.75 },
-      ].map((t, i) => (
-        <div key={i} style={{
-          position: 'absolute', bottom: t.bottom, left: t.left,
-          fontSize: 48 * t.scale, pointerEvents: 'none', zIndex: 1,
-          opacity: homeCompact ? 0.55 : 0.75,
-        }}>🌳</div>
-      ))}
-
-      {/* 浮かぶデコ */}
-      {(homeCompact ? floaters.slice(0, 3) : floaters).map((f, i) => (
-        <motion.span key={i} style={{
-          pointerEvents: 'none', position: 'absolute', zIndex: 2,
-          top: f.top, left: f.left, fontSize: homeCompact ? f.size * 0.82 : f.size,
-          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.12))',
-        }}
-          animate={{ y: [0, -10, 0], rotate: [-5, 5, -5] }}
-          transition={{ duration: f.dur, delay: f.delay, repeat: Infinity, ease: 'easeInOut' }}
-        >{f.emoji}</motion.span>
-      ))}
-
-      {/* 雲 */}
-      {[
-        { top: homeCompact ? '4%' : '6%', left: '15%', w: homeCompact ? 48 : 70, delay: 0 },
-        ...(homeCompact ? [] : [{ top: '3%', left: '55%', w: 55, delay: 1.5 }]),
-      ].map((c, i) => (
-        <motion.div key={i} style={{
-          position: 'absolute', top: c.top, left: c.left,
-          width: c.w, height: c.w * 0.5,
-          borderRadius: 999,
-          background: 'rgba(255,255,255,0.85)',
-          pointerEvents: 'none', zIndex: 1,
-          boxShadow: '0 3px 10px rgba(255,255,255,0.6)',
-        }}
-          animate={{ x: [0, 12, 0] }}
-          transition={{ duration: 8 + i * 2, delay: c.delay, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      ))}
+      <AcnhOutdoorDecor compact={homeCompact} />
 
       {/* メインコンテンツ */}
       <div style={{
@@ -1102,7 +1149,7 @@ const HomeScreen = ({
           </div>
         </motion.button>
 
-        {/* ランクカード（AC風ボード） */}
+        {/* 図書館ステータス（級・ことの葉） */}
         <motion.div
           initial={{ opacity: 0, scale: 0.96, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1117,191 +1164,118 @@ const HomeScreen = ({
             minHeight: 0,
           }}
         >
-          {/* カードヘッダー */}
           <div style={{
             background: `linear-gradient(90deg, ${AC.grass} 0%, ${AC.mint} 100%)`,
-            padding: homeCompact ? '4px 10px' : '8px 16px',
-            display: 'flex', alignItems: 'center', gap: 6,
+            padding: homeCompact ? '6px 12px' : '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
           }}>
-            <span style={{ fontSize: homeCompact ? 12 : 14 }}>🏡</span>
+            <span style={{ fontSize: homeCompact ? 14 : 16 }}>🏡</span>
             <span style={{
-              fontSize: homeCompact ? 10.5 : 12,
-              fontWeight: 800,
+              fontSize: homeCompact ? 12 : 14,
+              fontWeight: 900,
               color: '#2A5A3A',
-              letterSpacing: '0.06em',
+              letterSpacing: '0.04em',
             }}>
-              図書館ランク
+              図書館
             </span>
           </div>
 
-          <div style={{ padding: homeCompact ? '6px 10px 6px' : '12px 14px 14px' }}>
-            {/* ランク名 + 昇級まで */}
+          <div style={{
+            padding: homeCompact ? '12px 12px 12px' : '14px 16px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: homeCompact ? 10 : 12,
+          }}>
+            {/* QMA風シンプル表示：単一パネル */}
             <div style={{
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(245,255,240,0.92) 100%)',
+              borderRadius: 14,
+              border: `2px solid ${AC.grass}44`,
+              padding: homeCompact ? '12px' : '14px 16px',
               display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              marginBottom: homeCompact ? 5 : 10,
-              gap: 8,
+              flexDirection: 'column',
+              gap: homeCompact ? 10 : 12,
             }}>
-              <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <div style={{
-                  fontSize: homeCompact ? 15 : 22,
-                  fontWeight: 900,
-                  color: AC.textDk,
-                  lineHeight: 1.12,
-                  textShadow: '0 1px 0 rgba(255,255,255,0.9)',
-                  ...(homeCompact
-                    ? {
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical' as const,
-                        overflow: 'hidden',
-                      }
-                    : {}),
-                }}>{libraryRankInfo.fullTitle}</div>
-              </div>
-              {/* 昇級バッジ */}
-              <motion.div
-                animate={isAlmostRankUp ? {
-                  scale: [1, 1.06, 1],
-                  boxShadow: [`0 3px 0 #D45000`, `0 3px 10px #FF8C6966`, `0 3px 0 #D45000`],
-                } : {}}
-                transition={{ duration: 1.2, repeat: Infinity }}
-                style={{
-                  flexShrink: 0,
-                  minWidth: homeCompact ? 64 : 80,
+                  background: 'linear-gradient(90deg, #EEF9EA 0%, #FFFFFF 100%)',
+                  border: `2px solid ${AC.grassDk}`,
+                  borderRadius: 999,
+                  padding: homeCompact ? '8px 16px' : '10px 20px',
+                  boxShadow: `0 2px 0 ${AC.grassDk}77`,
                   textAlign: 'center',
-                  background: isAlmostRankUp
-                    ? `linear-gradient(135deg, ${AC.coral} 0%, #FF6B40 100%)`
-                    : `linear-gradient(135deg, #FFF8E0 0%, #FFF0C0 100%)`,
-                  borderRadius: homeCompact ? 10 : 14,
-                  padding: homeCompact ? '5px 6px' : '7px 10px',
-                  border: `${homeCompact ? 2 : 2.5}px solid ${isAlmostRankUp ? '#D45000' : AC.yellowDk}`,
-                  boxShadow: `0 ${homeCompact ? 2 : 4}px 0 ${isAlmostRankUp ? '#D45000' : AC.yellowDk}88`,
-                }}
-              >
-                <div style={{
-                  fontSize: homeCompact ? 9 : 11,
-                  fontWeight: 800,
-                  color: isAlmostRankUp ? '#fff' : '#6A4800',
-                  marginBottom: homeCompact ? 1 : 2,
+                  minWidth: homeCompact ? 220 : 260,
                 }}>
-                  🏆 昇級まで
-                </div>
-                {isMaxRank ? (
                   <div style={{
-                    fontSize: homeCompact ? 12 : 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexWrap: 'wrap',
+                    gap: homeCompact ? 6 : 8,
+                    fontSize: homeCompact ? 20 : 24,
                     fontWeight: 900,
-                    color: isAlmostRankUp ? '#fff' : '#6A4800',
-                  }}>MAX!</div>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 2 }}>
-                    <motion.span
-                      key={booksToNext}
-                      initial={{ scale: 1.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                      style={{
-                        fontSize: homeCompact ? 22 : 30,
-                        fontWeight: 900,
-                        fontVariantNumeric: 'tabular-nums',
-                        color: isAlmostRankUp ? '#fff' : '#6A4800',
-                        letterSpacing: '-0.02em',
-                      }}
-                    >{booksToNext}</motion.span>
-                    <span style={{
-                      fontSize: homeCompact ? 9 : 11,
-                      color: isAlmostRankUp ? 'rgba(255,255,255,0.7)' : '#A08040',
-                      marginBottom: 2,
-                    }}>/{nextThreshold}</span>
-                  </div>
-                )}
-              </motion.div>
-            </div>
-
-            {/* ことの葉 + プログレス */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: homeCompact ? 6 : 10,
-              background: 'rgba(126,200,164,0.15)',
-              borderRadius: homeCompact ? 9 : 12,
-              padding: homeCompact ? '4px 8px' : '8px 12px',
-              marginBottom: homeCompact ? 4 : 8,
-              border: `2px solid ${AC.grass}66`,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: homeCompact ? 4 : 6, flexShrink: 0 }}>
-                <span style={{ fontSize: homeCompact ? 14 : 18 }}>🍃</span>
-                {!homeCompact && (
-                  <span style={{ fontSize: 12, fontWeight: 700, color: AC.textMd }}>ことの葉</span>
-                )}
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-                  <span style={{
-                    fontSize: homeCompact ? 17 : 22,
-                    fontWeight: 900,
-                    color: AC.grassDk,
-                    fontVariantNumeric: 'tabular-nums',
+                    lineHeight: 1.2,
+                    letterSpacing: '0.01em',
                   }}>
-                    {kotobaLeafCount}
-                  </span>
-                  <span style={{ fontSize: homeCompact ? 9 : 11, fontWeight: 700, color: '#5BAF8A88' }}>枚</span>
+                    <span style={{ color: AC.textDk }}>
+                      {currentTierIcon} {libraryRankInfo.tier.name}
+                    </span>
+                    <span style={{ color: '#2D734F' }}>
+                      {libraryRankInfo.gradeLabel}
+                    </span>
+                  </div>
                 </div>
               </div>
-              {/* プログレスバー */}
-              <div style={{ flex: 1, minWidth: 0 }}>
+
+              <div>
                 <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  marginBottom: homeCompact ? 2 : 4,
-                }}>
-                  <span style={{
-                    fontSize: homeCompact ? 8 : 9,
-                    fontWeight: 700,
-                    color: AC.textLt,
-                  }}>修繕</span>
-                  <span style={{
-                    fontSize: homeCompact ? 8 : 9,
-                    fontWeight: 700,
-                    color: isAlmostRankUp ? AC.coral : AC.textLt,
-                  }}>
-                    {Math.round(progressRatio * 100)}%
-                  </span>
-                </div>
-                <div style={{
-                  width: '100%',
-                  height: homeCompact ? 6 : 10,
-                  borderRadius: 99,
-                  background: 'rgba(255,255,255,0.7)',
-                  border: `1.5px solid ${AC.grass}55`,
+                  position: 'relative',
+                  height: homeCompact ? 12 : 14,
+                  borderRadius: 999,
+                  background: 'linear-gradient(90deg, #D6F0D9 0%, #E9F8EA 100%)',
+                  border: `1.5px solid ${AC.grass}44`,
                   overflow: 'hidden',
                 }}>
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progressRatio * 100}%` }}
-                    transition={{ duration: 1.1, delay: 0.4, ease: 'easeOut' }}
-                    style={{
-                      height: '100%', borderRadius: 99,
-                      background: isAlmostRankUp
-                        ? `linear-gradient(90deg, ${AC.coral}, #FFB347)`
-                        : `linear-gradient(90deg, ${AC.grassDk}, ${AC.yellow})`,
-                      boxShadow: isAlmostRankUp ? '0 0 8px rgba(255,140,105,0.5)' : '0 0 6px rgba(90,175,138,0.4)',
-                    }}
-                  />
+                  <div style={{
+                    width: `${tierProgressPct}%`,
+                    height: '100%',
+                    borderRadius: 999,
+                    background: 'linear-gradient(90deg, #53B97E 0%, #7BD95E 100%)',
+                    boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.12)',
+                    transition: 'width .35s ease',
+                  }} />
+                </div>
+                <div style={{
+                  marginTop: 6,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 8,
+                }}>
+                  <span style={{ fontSize: homeCompact ? 11 : 12, fontWeight: 900, color: AC.textMd }}>
+                    {Math.round(tierProgressPct)}%
+                  </span>
+                  <span style={{ fontSize: homeCompact ? 11 : 12, fontWeight: 900, color: '#2E7B57' }}>
+                    {libraryRankInfo.isMaxRank ? '🍃 最高ランク達成' : `🍃 あと${leavesToNextTier.toLocaleString()}枚で昇格`}
+                  </span>
                 </div>
               </div>
-            </div>
 
-            {/* ひとことリボン（コンパクト時は省略して縦長を抑制） */}
-            {!homeCompact && (
               <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                background: 'rgba(255,248,220,0.8)',
-                borderRadius: 10, padding: '5px 10px',
+                fontSize: homeCompact ? 12 : 13,
+                fontWeight: 800,
+                color: '#6A4800',
+                textAlign: 'center',
+                background: 'rgba(255,255,255,0.65)',
+                borderRadius: 999,
                 border: `1.5px solid ${AC.yellowDk}44`,
+                padding: homeCompact ? '7px 10px' : '8px 12px',
               }}>
-                <span style={{ fontSize: 10 }}>🌟</span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: AC.textMd }}>修繕してランクアップ</span>
-                <span style={{ fontSize: 10 }}>🌟</span>
+                🍃 所持ことの葉 {kotobaLeafCount.toLocaleString()}枚
               </div>
-            )}
+            </div>
           </div>
         </motion.div>
         </div>
