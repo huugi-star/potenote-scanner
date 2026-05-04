@@ -1287,7 +1287,7 @@ const HomeScreen = ({
             flex: '1 1 0',
             width: '100%',
             minHeight: 0,
-            marginTop: 4,
+            marginTop: 1,
             paddingTop: 0,
             display: 'flex',
             flexDirection: 'column',
@@ -1318,7 +1318,7 @@ const HomeScreen = ({
           }}
         >
           <div style={{
-            transform: 'translateY(8px) scale(0.86)',
+            transform: 'translateY(10px) scale(0.86)',
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
