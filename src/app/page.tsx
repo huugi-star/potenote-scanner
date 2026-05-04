@@ -818,13 +818,13 @@ const RpgButton = ({
   const [pressed, setPressed] = useState(false);
   const pad = compact
     ? small
-      ? '9px 8px'
-      : '12px 14px'
+      ? '11px 10px'
+      : '14px 16px'
     : small
       ? '12px 10px'
       : '15px 18px';
-  const fs = compact ? (small ? 12 : 13.75) : small ? 14 : 16;
-  const gap = compact ? (small ? 6 : 7) : small ? 6 : 9;
+  const fs = compact ? (small ? 13 : 15) : small ? 14 : 16;
+  const gap = compact ? (small ? 7 : 8) : small ? 6 : 9;
   return (
     <button
       onClick={onClick}
@@ -1156,7 +1156,7 @@ const HomeScreen = ({
           transition={{ duration: 0.4, delay: 0.1 }}
           style={{
             background: `linear-gradient(135deg, #FDFFF5 0%, #F0FAF0 100%)`,
-            borderRadius: homeCompact ? 14 : 20,
+            borderRadius: homeCompact ? 12 : 20,
             border: `${homeCompact ? 2 : 3}px solid ${AC.grassDk}`,
             boxShadow: `0 ${homeCompact ? 3 : 5}px 0 ${AC.grassDk}88, 0 8px 20px rgba(0,0,0,0.08)`,
             overflow: 'hidden',
@@ -1166,14 +1166,14 @@ const HomeScreen = ({
         >
           <div style={{
             background: `linear-gradient(90deg, ${AC.grass} 0%, ${AC.mint} 100%)`,
-            padding: homeCompact ? '6px 12px' : '8px 16px',
+            padding: homeCompact ? '5px 10px' : '8px 16px',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
           }}>
-            <span style={{ fontSize: homeCompact ? 14 : 16 }}>🏡</span>
+            <span style={{ fontSize: homeCompact ? 13 : 16 }}>🏡</span>
             <span style={{
-              fontSize: homeCompact ? 12 : 14,
+              fontSize: homeCompact ? 11 : 14,
               fontWeight: 900,
               color: '#2A5A3A',
               letterSpacing: '0.04em',
@@ -1183,30 +1183,30 @@ const HomeScreen = ({
           </div>
 
           <div style={{
-            padding: homeCompact ? '12px 12px 12px' : '14px 16px 16px',
+            padding: homeCompact ? '9px 10px 10px' : '14px 16px 16px',
             display: 'flex',
             flexDirection: 'column',
-            gap: homeCompact ? 10 : 12,
+            gap: homeCompact ? 8 : 12,
           }}>
             {/* QMA風シンプル表示：単一パネル */}
             <div style={{
               background: 'linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(245,255,240,0.92) 100%)',
               borderRadius: 14,
               border: `2px solid ${AC.grass}44`,
-              padding: homeCompact ? '12px' : '14px 16px',
+              padding: homeCompact ? '9px' : '14px 16px',
               display: 'flex',
               flexDirection: 'column',
-              gap: homeCompact ? 10 : 12,
+              gap: homeCompact ? 8 : 12,
             }}>
               <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <div style={{
                   background: 'linear-gradient(90deg, #EEF9EA 0%, #FFFFFF 100%)',
                   border: `2px solid ${AC.grassDk}`,
                   borderRadius: 999,
-                  padding: homeCompact ? '8px 16px' : '10px 20px',
+                  padding: homeCompact ? '6px 12px' : '10px 20px',
                   boxShadow: `0 2px 0 ${AC.grassDk}77`,
                   textAlign: 'center',
-                  minWidth: homeCompact ? 220 : 260,
+                  minWidth: homeCompact ? 188 : 260,
                 }}>
                   <div style={{
                     display: 'flex',
@@ -1214,7 +1214,7 @@ const HomeScreen = ({
                     justifyContent: 'center',
                     flexWrap: 'wrap',
                     gap: homeCompact ? 6 : 8,
-                    fontSize: homeCompact ? 20 : 24,
+                    fontSize: homeCompact ? 16 : 24,
                     fontWeight: 900,
                     lineHeight: 1.2,
                     letterSpacing: '0.01em',
@@ -1232,7 +1232,7 @@ const HomeScreen = ({
               <div>
                 <div style={{
                   position: 'relative',
-                  height: homeCompact ? 12 : 14,
+                  height: homeCompact ? 10 : 14,
                   borderRadius: 999,
                   background: 'linear-gradient(90deg, #D6F0D9 0%, #E9F8EA 100%)',
                   border: `1.5px solid ${AC.grass}44`,
@@ -1254,24 +1254,24 @@ const HomeScreen = ({
                   alignItems: 'center',
                   gap: 8,
                 }}>
-                  <span style={{ fontSize: homeCompact ? 11 : 12, fontWeight: 900, color: AC.textMd }}>
+                  <span style={{ fontSize: homeCompact ? 10 : 12, fontWeight: 900, color: AC.textMd }}>
                     {Math.round(tierProgressPct)}%
                   </span>
-                  <span style={{ fontSize: homeCompact ? 11 : 12, fontWeight: 900, color: '#2E7B57' }}>
+                  <span style={{ fontSize: homeCompact ? 10 : 12, fontWeight: 900, color: '#2E7B57' }}>
                     {libraryRankInfo.isMaxRank ? '🍃 最高ランク達成' : `🍃 あと${leavesToNextTier.toLocaleString()}枚で昇格`}
                   </span>
                 </div>
               </div>
 
               <div style={{
-                fontSize: homeCompact ? 12 : 13,
+                fontSize: homeCompact ? 10.5 : 13,
                 fontWeight: 800,
                 color: '#6A4800',
                 textAlign: 'center',
                 background: 'rgba(255,255,255,0.65)',
                 borderRadius: 999,
                 border: `1.5px solid ${AC.yellowDk}44`,
-                padding: homeCompact ? '7px 10px' : '8px 12px',
+                padding: homeCompact ? '6px 8px' : '8px 12px',
               }}>
                 🍃 所持ことの葉 {kotobaLeafCount.toLocaleString()}枚
               </div>
@@ -1400,13 +1400,27 @@ const HomeScreen = ({
         <div style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: homeCompact ? 6 : 10,
+          gap: homeCompact ? 8 : 10,
           flexShrink: 0,
           ...(homeCompact ? { width: '100%' } : {}),
         }}>
           {homeCompact ? (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              <RpgButton
+                onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
+                fromColor="#E6A030" toColor="#FFD060"
+                glowColor="rgba(230,160,48,0.35)" shadowColor="#B07800"
+                icon={<Scan style={{ width: 24, height: 24 }} />}
+                label="ことばを読み取る"
+              />
+              <RpgButton
+                onClick={() => { vibrateLight(); onNavigate('academy'); }}
+                fromColor="#5B8FD4" toColor="#7EB5F0"
+                glowColor="rgba(91,143,212,0.35)" shadowColor="#3360A8"
+                icon={<BookOpen style={{ width: 24, height: 24 }} />}
+                label="図書館を復興する"
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <RpgButton
                   compact
                   onClick={() => { vibrateLight(); onNavigate('suhimochi_room'); }}
@@ -1417,38 +1431,21 @@ const HomeScreen = ({
                 />
                 <RpgButton
                   compact
-                  onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
-                  fromColor="#E6A030" toColor="#FFD060"
-                  glowColor="rgba(230,160,48,0.35)" shadowColor="#B07800"
-                  icon={<Scan style={{ width: 20, height: 20 }} />}
-                  label="ことばを読み取る"
-                />
-              </div>
-              <RpgButton
-                onClick={() => { vibrateLight(); onNavigate('academy'); }}
-                fromColor="#5B8FD4" toColor="#7EB5F0"
-                glowColor="rgba(91,143,212,0.35)" shadowColor="#3360A8"
-                icon={<BookOpen style={{ width: 22, height: 22 }} />}
-                label="図書館を復興する"
-              />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                <RpgButton
-                  compact
-                  onClick={() => { vibrateLight(); onNavigate('gacha'); }}
-                  fromColor="#B06DD0" toColor="#D095E8"
-                  glowColor="rgba(176,109,208,0.35)" shadowColor="#7840A0"
-                  icon={<Gem style={{ width: 17, height: 17 }} />}
-                  label="ガチャ"
-                  small
-                />
-                <RpgButton
-                  compact
                   onClick={() => { vibrateLight(); onNavigate('researcher_dex'); }}
                   fromColor="#E07850" toColor="#F5A07A"
                   glowColor="rgba(224,120,80,0.35)" shadowColor="#B04820"
-                  icon={<Users style={{ width: 17, height: 17 }} />}
+                  icon={<Users style={{ width: 18, height: 18 }} />}
                   label="研究員図鑑"
                   small
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+                <RpgButton
+                  onClick={() => { vibrateLight(); onNavigate('gacha'); }}
+                  fromColor="#B06DD0" toColor="#D095E8"
+                  glowColor="rgba(176,109,208,0.35)" shadowColor="#7840A0"
+                  icon={<Gem style={{ width: 20, height: 20 }} />}
+                  label="ガチャ"
                 />
               </div>
             </>
