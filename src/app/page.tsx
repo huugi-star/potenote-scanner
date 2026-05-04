@@ -1287,7 +1287,7 @@ const HomeScreen = ({
             flex: '1 1 0',
             width: '100%',
             minHeight: 0,
-            marginTop: 6,
+            marginTop: 4,
             paddingTop: 0,
             display: 'flex',
             flexDirection: 'column',
@@ -1309,16 +1309,16 @@ const HomeScreen = ({
             border: 'none',
             cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
-            height: 'clamp(88px, 14svh, 118px)',
-            maxHeight: '22svh',
+            height: 'clamp(126px, 19svh, 156px)',
+            maxHeight: '26svh',
             width: '100%',
             flex: '0 1 auto',
             overflow: 'visible',
-            marginBottom: 3,
+            marginBottom: 8,
           }}
         >
           <div style={{
-            transform: 'translateY(3px) scale(0.9)',
+            transform: 'translateY(8px) scale(0.86)',
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
