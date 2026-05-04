@@ -997,12 +997,12 @@ const HomeScreen = ({
         display: 'flex',
         flexDirection: 'column',
         padding: homeCompact
-          ? 'max(2px, env(safe-area-inset-top, 0px)) 10px max(10px, calc(8px + env(safe-area-inset-bottom, 0px)))'
+          ? 'max(2px, env(safe-area-inset-top, 0px)) 10px max(6px, calc(4px + env(safe-area-inset-bottom, 0px)))'
           : '10px 14px 20px',
         maxWidth: 480,
         width: '100%',
         margin: '0 auto',
-        gap: homeCompact ? 8 : 10,
+        gap: homeCompact ? 5 : 10,
         ...(homeCompact ? { boxSizing: 'border-box' as const } : {}),
         overflow: homeCompact ? 'hidden' : undefined,
       }}>
@@ -1010,9 +1010,9 @@ const HomeScreen = ({
         <div style={{
           display: homeCompact ? 'flex' : undefined,
           flexDirection: homeCompact ? 'column' : undefined,
-          gap: homeCompact ? 10 : undefined,
-          flexShrink: homeCompact ? 0 : undefined,
-          minHeight: 0,
+          gap: homeCompact ? 6 : undefined,
+          flexShrink: homeCompact ? 1 : undefined,
+          minHeight: homeCompact ? 0 : undefined,
           marginBottom: homeCompact ? 0 : undefined,
         }}>
         {/* 上部ナビ */}
@@ -1063,14 +1063,14 @@ const HomeScreen = ({
             display: 'flex',
             justifyContent: 'center',
             gap: homeCompact ? 44 : 60,
-            marginBottom: homeCompact ? -3 : -4,
+            marginBottom: homeCompact ? -2 : -4,
             position: 'relative',
             zIndex: 0,
           }}>
             {[0, 1].map(i => (
               <div key={i} style={{
                 width: homeCompact ? 8 : 10,
-                height: homeCompact ? 10 : 18,
+                height: homeCompact ? 8 : 18,
                 borderRadius: '0 0 4px 4px',
                 background: `linear-gradient(180deg, ${AC.brownDk} 0%, ${AC.brown} 100%)`,
                 boxShadow: `2px 0 0 rgba(0,0,0,0.15)`,
@@ -1084,7 +1084,7 @@ const HomeScreen = ({
             borderRadius: homeCompact ? 12 : 16,
             border: `${homeCompact ? 2 : 3}px solid ${AC.brown}`,
             boxShadow: `0 ${homeCompact ? 3 : 5}px 0 ${AC.brownDk}, 0 8px 20px rgba(0,0,0,0.12)`,
-            padding: homeCompact ? '6px 10px' : '10px 14px',
+            padding: homeCompact ? '5px 9px' : '10px 14px',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             gap: 6,
           }}>
@@ -1183,20 +1183,20 @@ const HomeScreen = ({
           </div>
 
           <div style={{
-            padding: homeCompact ? '9px 10px 10px' : '14px 16px 16px',
+            padding: homeCompact ? '7px 8px 8px' : '14px 16px 16px',
             display: 'flex',
             flexDirection: 'column',
-            gap: homeCompact ? 8 : 12,
+            gap: homeCompact ? 6 : 12,
           }}>
             {/* QMA風シンプル表示：単一パネル */}
             <div style={{
               background: 'linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(245,255,240,0.92) 100%)',
               borderRadius: 14,
               border: `2px solid ${AC.grass}44`,
-              padding: homeCompact ? '9px' : '14px 16px',
+              padding: homeCompact ? '7px' : '14px 16px',
               display: 'flex',
               flexDirection: 'column',
-              gap: homeCompact ? 8 : 12,
+              gap: homeCompact ? 6 : 12,
             }}>
               <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <div style={{
@@ -1248,7 +1248,7 @@ const HomeScreen = ({
                   }} />
                 </div>
                 <div style={{
-                  marginTop: 6,
+                  marginTop: homeCompact ? 4 : 6,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -1284,17 +1284,17 @@ const HomeScreen = ({
         {homeCompact ? (
         <div
           style={{
-            flex: '0 0 auto',
+            flex: '1 1 0',
             width: '100%',
             minHeight: 0,
-            marginTop: 20,
+            marginTop: 4,
             paddingTop: 0,
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'flex-start',
+            justifyContent: 'center',
             alignItems: 'center',
             boxSizing: 'border-box',
-            overflow: 'visible',
+            overflow: 'hidden',
           }}
         >
         <motion.button
@@ -1309,23 +1309,24 @@ const HomeScreen = ({
             border: 'none',
             cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
-            height: 'clamp(146px, 21svh, 188px)',
-            maxHeight: '34svh',
-            flex: '0 0 auto',
+            height: 'clamp(88px, 14svh, 118px)',
+            maxHeight: '22svh',
+            width: '100%',
+            flex: '0 1 auto',
             overflow: 'visible',
-            marginBottom: 22,
+            marginBottom: 8,
           }}
         >
           <div style={{
-            transform: 'translateY(5px) scale(0.86)',
+            transform: 'translateY(3px) scale(0.72)',
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
-            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={210} ssrEffect={false} showShadow={false} />
+            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={160} ssrEffect={false} showShadow={false} />
           </div>
           <div style={{
             position: 'absolute',
-            bottom: -16,
+            bottom: -12,
             left: '50%',
             transform: 'translateX(-50%)',
             background: `linear-gradient(180deg, #FF9EBE 0%, #FF6B9D 100%)`,
@@ -1400,18 +1401,18 @@ const HomeScreen = ({
         <div style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: homeCompact ? 8 : 10,
+          gap: homeCompact ? 5 : 10,
           flexShrink: 0,
           ...(homeCompact ? { width: '100%' } : {}),
         }}>
           {homeCompact ? (
             <>
               <RpgButton
-                onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
-                fromColor="#E6A030" toColor="#FFD060"
-                glowColor="rgba(230,160,48,0.35)" shadowColor="#B07800"
-                icon={<Scan style={{ width: 24, height: 24 }} />}
-                label="ことばを読み取る"
+                onClick={() => { vibrateLight(); onNavigate('suhimochi_room'); }}
+                fromColor="#4CAF82" toColor="#6DD9A8"
+                glowColor="rgba(78,175,130,0.35)" shadowColor="#2E8055"
+                icon={<MessageCircle style={{ width: 24, height: 24 }} />}
+                label="すうひもちのお部屋"
               />
               <RpgButton
                 onClick={() => { vibrateLight(); onNavigate('academy'); }}
@@ -1420,14 +1421,14 @@ const HomeScreen = ({
                 icon={<BookOpen style={{ width: 24, height: 24 }} />}
                 label="図書館を復興する"
               />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                 <RpgButton
                   compact
-                  onClick={() => { vibrateLight(); onNavigate('suhimochi_room'); }}
-                  fromColor="#4CAF82" toColor="#6DD9A8"
-                  glowColor="rgba(78,175,130,0.35)" shadowColor="#2E8055"
-                  icon={<MessageCircle style={{ width: 20, height: 20 }} />}
-                  label="すうひもちのお部屋"
+                  onClick={() => { vibrateLight(); onNavigate('adventure_menu'); }}
+                  fromColor="#E6A030" toColor="#FFD060"
+                  glowColor="rgba(230,160,48,0.35)" shadowColor="#B07800"
+                  icon={<Scan style={{ width: 20, height: 20 }} />}
+                  label="ことばを読み取る"
                 />
                 <RpgButton
                   compact
@@ -1439,13 +1440,15 @@ const HomeScreen = ({
                   small
                 />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
                 <RpgButton
+                  compact
                   onClick={() => { vibrateLight(); onNavigate('gacha'); }}
                   fromColor="#B06DD0" toColor="#D095E8"
                   glowColor="rgba(176,109,208,0.35)" shadowColor="#7840A0"
-                  icon={<Gem style={{ width: 20, height: 20 }} />}
+                  icon={<Gem style={{ width: 18, height: 18 }} />}
                   label="ガチャ"
+                  small
                 />
               </div>
             </>
