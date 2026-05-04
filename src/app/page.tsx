@@ -1318,11 +1318,11 @@ const HomeScreen = ({
           }}
         >
           <div style={{
-            transform: 'translateY(3px) scale(0.72)',
+            transform: 'translateY(3px) scale(0.9)',
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
-            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={160} ssrEffect={false} showShadow={false} />
+            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={200} ssrEffect={false} showShadow={false} />
           </div>
           <div style={{
             position: 'absolute',
