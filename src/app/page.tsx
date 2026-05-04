@@ -1314,7 +1314,7 @@ const HomeScreen = ({
             width: '100%',
             flex: '0 1 auto',
             overflow: 'visible',
-            marginBottom: 6,
+            marginBottom: 3,
           }}
         >
           <div style={{
