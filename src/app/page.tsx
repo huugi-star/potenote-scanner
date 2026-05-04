@@ -1309,8 +1309,8 @@ const HomeScreen = ({
             border: 'none',
             cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
-            height: 'clamp(126px, 19svh, 156px)',
-            maxHeight: '26svh',
+            height: 'clamp(96px, 15svh, 128px)',
+            maxHeight: '20svh',
             width: '100%',
             flex: '0 1 auto',
             overflow: 'visible',
@@ -1318,11 +1318,11 @@ const HomeScreen = ({
           }}
         >
           <div style={{
-            transform: 'translateY(10px) scale(0.86)',
+            transform: 'translateY(6px) scale(0.76)',
             transformOrigin: '50% 100%',
             pointerEvents: 'none',
           }}>
-            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={200} ssrEffect={false} showShadow={false} />
+            <PotatoAvatar equipped={equippedDetails} emotion="happy" size={160} ssrEffect={false} showShadow={false} />
           </div>
           <div style={{
             position: 'absolute',
