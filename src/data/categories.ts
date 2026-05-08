@@ -327,6 +327,51 @@ export const EXAM_CATEGORIES = [
 }));
 
 // ============================================================
+// 作問「公務員試験」（みんなの問題・資格タブと整合）
+// ============================================================
+
+const CREATION_PUBLIC_SERVICE_FIELDS: Record<string, readonly string[]> = {
+  国家公務員: [
+    '総合職',
+    '一般職',
+    '国税専門官',
+    '財務専門官',
+    '労働基準監督官',
+    '外務専門職',
+    '法務省専門職（矯正・保護）',
+  ],
+  地方公務員: [
+    '上級（大卒程度）',
+    '中級（短大・専門）',
+    '初級（高卒程度）',
+    '一般行政',
+    '技術職（土木・建築・電気など）',
+  ],
+  公安系: ['警察官', '消防士', '自衛官', '海上保安官', '刑務官'],
+  教員採用試験: ['教養試験', '専門試験'],
+  専門職: ['裁判所職員', '国立大学法人職員', '独立行政法人'],
+};
+
+/** 「大分類・分野」ラベル（例: 国家公務員・総合職） */
+export const CREATION_PUBLIC_SERVICE_SUBCATEGORIES: string[] = Object.entries(
+  CREATION_PUBLIC_SERVICE_FIELDS
+).flatMap(([major, fields]) => fields.map((f) => `${major}・${f}`));
+
+/**
+ * 作問フローでFirestore等に保存する bigCategory / subCategory を決定する。
+ * UIでは「公務員試験」を選ばせ、データ上は資格＋分野ラベルとしてみんなの問題側の判定と整合させる。
+ */
+export function resolveCreationAcademyStoredCategories(params: {
+  bigCategory: string | null | undefined;
+  subCategory: string | null | undefined;
+}): { bigCategory: string; subCategory: string } {
+  const big = String(params.bigCategory ?? '').trim();
+  const sub = String(params.subCategory ?? '').trim();
+  if (big === '公務員試験' && sub) return { bigCategory: '資格', subCategory: sub };
+  return { bigCategory: big, subCategory: sub };
+}
+
+// ============================================================
 // 題材候補
 // ============================================================
 
@@ -376,6 +421,21 @@ export const SUBCATEGORY_SUGGESTIONS: Record<string, string[]> = {
   'ユーザー創作問題': ['自由テーマ', 'オリジナル設定', 'コラボ企画', '期間限定問題'],
 };
 
+const CREATION_PUBLIC_SERVICE_SUBJECT_HINTS = [
+  '一般教養',
+  '専門科目',
+  '過去問',
+  '試験概要',
+  '時事問題',
+  '数的処理',
+  '論理的推理',
+];
+for (const psSub of CREATION_PUBLIC_SERVICE_SUBCATEGORIES) {
+  if (!SUBCATEGORY_SUGGESTIONS[psSub]) {
+    SUBCATEGORY_SUGGESTIONS[psSub] = [...CREATION_PUBLIC_SERVICE_SUBJECT_HINTS];
+  }
+}
+
 /**
  * 作問画面向け（旧 CATEGORIES 互換）
  * - 文系学問 / 理系学問は先頭に固定表示（受験区分→科目の2段階選択に使う）
@@ -385,6 +445,7 @@ export const CREATION_CATEGORIES: { label: string; sub: string[] }[] = [
   { label: '文系学問', sub: [] },
   { label: '理系学問', sub: [] },
   { label: '資格', sub: ['法律・不動産', 'IT・情報', '設備・技術', '医療・福祉', 'ビジネス・金融', '食品・環境'] },
+  { label: '公務員試験', sub: CREATION_PUBLIC_SERVICE_SUBCATEGORIES },
   {
     label: '語学',
     sub: ['英単語', '英文法', '英熟語', '英会話', '韓国語', '中国語', 'フランス語', 'スペイン語', 'ドイツ語'],

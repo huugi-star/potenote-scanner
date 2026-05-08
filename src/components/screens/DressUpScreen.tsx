@@ -91,7 +91,20 @@ export const DressUpScreen = ({ onBack }: DressUpScreenProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-purple-900/20 to-gray-900 p-4">
+    <div
+      className="min-h-screen p-4 relative overflow-hidden"
+      style={{
+        backgroundImage: "url('/images/backgrounds/forest.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: '#0a0e17',
+      }}
+    >
+      {/* 漢コレ風：背景写真 + 薄い暗幕 */}
+      <div className="absolute inset-0 bg-black/30" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0a0e17]/25 via-transparent to-[#0d1321]/35" />
+      <div className="relative">
       {/* ヘッダー */}
       <div className="max-w-md mx-auto">
         <div className="flex items-center justify-between py-4 mb-4">
@@ -284,6 +297,7 @@ export const DressUpScreen = ({ onBack }: DressUpScreenProps) => {
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 };

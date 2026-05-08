@@ -22,4 +22,8 @@ export {
   TIER_UP_MESSAGES,
   getTierUpMessage,
   debugRankTable,
+  SUHIMOCHI_INTIMACY_POINTS_BASE_CAP,
+  SUHIMOCHI_INTIMACY_EXTRA_CAP_PER_TIER,
+  getSuhimochiIntimacyPointsCapForTierIndex,
+  calcSuhimochiIntimacyLevelFromPoints,
 } from '@/lib/repairBookRankSystem';

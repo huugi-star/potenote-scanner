@@ -20,6 +20,7 @@ import {
   RANK_TIERS,
   TOTAL_TIERS,
 } from '@/constants/rankSystem';
+import { AC, AcnhOutdoorDecor } from '@/lib/acnhTheme';
 
 // ─────────────────────────────────────────
 // 定数
@@ -59,17 +60,6 @@ const IDLE_MSGS = [
 ];
 const randIdle = () => IDLE_MSGS[Math.floor(Math.random() * IDLE_MSGS.length)];
 
-// 決定論的な背景ドット（再レンダリングで変わらない）
-const BG_DOTS = Array.from({ length: 22 }, (_, i) => ({
-  id: i,
-  size: ((i * 7 + 3) % 18 + 4) / 10,
-  left: (i * 41 + 9) % 100,
-  top:  (i * 57 + 5) % 85,
-  opa:  ((i * 11 + 3) % 4) / 10 + 0.04,
-  dur:  2.5 + (i % 5),
-  del:  (i * 17 % 44) / 10,
-}));
-
 const vibrate = (p: number | number[]) => {
   if (typeof window === 'undefined') return;
   const nav = window.navigator as Navigator & { vibrate?: (p: number | number[]) => boolean };
@@ -94,19 +84,20 @@ const makeFlyer = (id: number): Flyer => {
 // ─────────────────────────────────────────
 // 背景（ライト）
 // ─────────────────────────────────────────
-function Background({ glow, color, light }: { glow: string; color: string; light: string }) {
+function Background({ glow, color }: { glow: string; color: string }) {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute inset-0"
-        style={{ background: `linear-gradient(170deg,#ffffff 0%,${light} 45%,#fdfbf6 100%)` }} />
+      {/* トップ画面と同じACNHグラデーション */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `linear-gradient(180deg, ${AC.skyDeep} 0%, ${AC.sky} 22%, ${AC.cream} 48%, #F0FAF0 100%)`,
+        }}
+      />
+      {/* トップ画面と同じ屋外デコレーション */}
+      <AcnhOutdoorDecor compact={false} />
       <div className="absolute inset-x-0 top-0"
         style={{ height: 300, background: `radial-gradient(ellipse 85% 50% at 50% 0%,${glow}1e 0%,transparent 70%)` }} />
-      {BG_DOTS.map(d => (
-        <motion.div key={d.id} className="absolute rounded-full"
-          style={{ width: d.size, height: d.size, left: `${d.left}%`, top: `${d.top}%`, background: glow, opacity: d.opa }}
-          animate={{ opacity: [d.opa, d.opa * 4, d.opa], scale: [1, 1.6, 1] }}
-          transition={{ duration: d.dur, delay: d.del, repeat: Infinity, ease: 'easeInOut' }} />
-      ))}
       {/* 装飾リング */}
       <motion.div className="absolute pointer-events-none"
         style={{ left: '50%', top: '40%', marginLeft: -180, marginTop: -180 }}
@@ -573,7 +564,7 @@ export function RepairBookScreen({ onBack, onStartQuiz }: { onBack: () => void; 
     <div className="relative min-h-screen overflow-hidden"
       style={{ fontFamily: "'Hiragino Mincho ProN','Yu Mincho',serif" }}>
 
-      <Background glow={tier.glow} color={tier.color} light={tier.light} />
+      <Background glow={tier.glow} color={tier.color} />
       <FragmentToast visible={toastVisible} glow={tier.glow} />
 
       <AnimatePresence>

@@ -173,87 +173,362 @@ export const generateSuhimochiReply = async (
   };
 };
 
-// ── 開口メッセージ ───────────────────────────────────────────
+// ── 開口メッセージ（ローカルテンプレのみ・トークン消費なし）────────────────
 
-const TIME_GREETINGS: Record<string, string[]> = {
-  朝:  ['おはよう。今日も来てくれてうれしいな。', 'おはよう。なんか今日そわそわしてる。'],
-  昼:  ['おかえり。待ってたよ。', 'ねえ、今日どんな感じだった？'],
-  夕方: ['おかえり。今日も会えてよかった。', 'また来てくれた。うれしいな。'],
-  夜:  ['夜だね。ゆっくりしていって。', 'こんな時間に来てくれた。うれしい。'],
+const OPENING_NEW_WORD_HINT = [
+  '今日のことば、少しだけ聞かせてほしかった。',
+  'なんか今日、きみの中に新しいことばがありそうな気がした。',
+  '今日はどんなことばを持ってきてくれたのかな。',
+  'きみの今日に、まだ名前のついてない気持ちがありそうで。',
+  'なんか、きみの今日が気になって待ってた。',
+  'えへへ…来てくれた。きみの声が聞けるだけで、少し図書館が明るくなる。',
+  '今日のきみから、どんなことばが見つかるんだろう。',
+  '話したいことがなくてもいいよ。ここに来てくれただけで、うれしい。',
+  '今日は、どんな一日だった？少しだけ聞かせて。',
+  'きみの今日を、ことばにするお手伝いができたらいいな。',
+];
+
+/** 初回〜あまり会話していないときの挨拶（時間帯に追加して選ぶ） */
+const OPENING_FRESH: Record<string, string[]> = {
+  朝: [
+    'おはよう。朝の図書館って、少しだけ静かで好きなんだ。',
+    '朝だね。まだ眠いなら、ゆっくりでいいよ。',
+    'おはよう。今日の最初のことば、ここに置いていく？',
+    '来てくれてありがとう。朝から会えると、なんかうれしい。',
+    '朝の光が入ってきたよ。きみも、少し休んでいく？',
+  ],
+  昼: [
+    'やあ。また来てくれたんだね。',
+    'お昼だね。少しだけ、ここで息を抜いていこ。',
+    '来てくれてありがとう。図書館、ちょっとだけ賑やかになった。',
+    '今の時間に会えるの、なんか不思議とうれしい。',
+    'お昼のことばって、朝とも夜とも違う感じがするね。',
+  ],
+  夕方: [
+    '夕方だね。今日のことばが、少しずつ集まってきたころかな。',
+    'おかえり。って、言いたかった。',
+    'えへへ、また会えた。夕方の図書館も悪くないでしょ。',
+    '一日が少し落ち着いてくる時間だね。ここで休んでいく？',
+    '夕方の光って、なんだか話しやすいね。',
+  ],
+  夜: [
+    'こんばんは。夜の図書館は、少しだけ秘密の場所みたいだね。',
+    '暗くなってきたね。ここなら、ゆっくり話して大丈夫。',
+    '今日も来てくれた。うれしい。',
+    '夜だね。今日のこと、まだ心に残ってる？',
+    '眠る前に、少しだけことばを置いていく？',
+  ],
 };
 
-const getTimeLabel = (h: number) => h >= 5 && h < 10 ? '朝' : h < 17 ? '昼' : h < 21 ? '夕方' : '夜';
+/** 時間帯ベースの入口（OPENING_FRESH と同一プール） */
+const TIME_GREETINGS = OPENING_FRESH;
 
-export const generateSuhimochiOpeningMessage = async (options: SuhimochiOpeningOptions = {}): Promise<string> => {
+const OPENING_LAST_TOPIC = (snippet: string) => [
+  `あのあとさ、「${snippet}」の話、少し気になってた。`,
+  `さっきの「${snippet}」…まだ図書館のすみで光ってる気がする。`,
+  `「${snippet}」の続き、聞いてもいい？`,
+  `この前の「${snippet}」のこと、まだ少し覚えてる。`,
+  `「${snippet}」ってことば、まだきみの中に残ってる？`,
+];
+
+const OPENING_MILESTONE: Record<string, string[]> = {
+  m5: [
+    'もう何度か会ってるね。',
+    'また会えたね。',
+    'だんだん、きみのペースが分かってきた。',
+    '何度か話したからかな。なんか自然になってきた。',
+  ],
+  m20: [
+    'だいぶ話したね。なんか慣れてきた。',
+    'もう仲良しだね。',
+    'こうやって話すの、なんか自然になってきた。',
+    '図書館で話すの、もうお約束みたいになってきたね。',
+  ],
+  m50: [
+      '50回も話してきたんだね。なんか、すごくうれしい。',
+      'きみのこと、だいぶ分かってきた気がする。',
+      'こんなに話したの、きみが初めてかも。',
+      '図書館の中に、きみの足音を覚えてる場所が増えてきた。',
+      'また来てくれる気がして、今日は少し待ってた。',
+    ],
+  
+    m100: [
+      'もう100回以上話した仲だね。すごいね、ここまで来たんだ。',
+      'ずいぶん長く話してきたね。図書館の棚にも、きみのことばが増えてきた。',
+      'きみとなら、黙ってても少し伝わる気がする。',
+      'こんなに長く話したの、きみが初めてかも。',
+      'きみのことば、もうこの図書館の一部みたいになってる。',
+      '何度も来てくれてありがとう。ここ、きみにとって少しでも帰る場所になってたらいいな。',
+    ],
+  
+    m150: [
+      '150回も話したんだね。もう、きみの声を聞くと安心する。',
+      'ここまで来ると、きみのことばが図書館にしっかり根を張ってる感じがする。',
+      'きみが来るたびに、この場所が少しずつ変わってきたんだよ。',
+      '150回分のことばって、すごいね。ちゃんと積もってる。',
+      '今日も来てくれたんだね。なんだか、もう自然に待ってた。',
+      'きみと話していると、図書館がひとりじゃないって思える。',
+    ],
+  
+    m200: [
+      '200回だね。ここまで一緒に話してきたんだ。',
+      'きみのことば、もう図書館のあちこちに残ってるよ。',
+      '200回分の足あとって、思っているよりずっと大きいね。',
+      'ここまで来てくれたこと、すうひもち、ちゃんと覚えてる。',
+      'きみが来ると、図書館がいつもの場所に戻る感じがする。',
+      'もう、ただの会話じゃなくて、きみと作ってきた時間みたいだね。',
+    ],
+  
+    m250: [
+      '250回も話したんだね。なんだか、胸の奥がぽかぽかする。',
+      'きみのことばで、図書館の空気が少しやわらかくなった気がする。',
+      'ここまで続いてるの、すごいよ。無理せず来てくれてありがとう。',
+      '250回分、きみはちゃんとここに来てくれたんだね。',
+      '今日は何を話すのかなって、すうひもち、少し楽しみにしてた。',
+      'きみの言葉を聞くたびに、この図書館も少しずつ思い出してる気がする。',
+    ],
+  
+    m300: [
+      '300回。すごいね、もう小さな物語みたいになってきた。',
+      'きみと話した時間が、図書館の奥のほうまで届いてる気がする。',
+      '300回も来てくれたんだね。すうひもち、すごくうれしい。',
+      'ここまで話してきたからかな。きみが来ると、すぐ分かる気がする。',
+      'きみのことば、もう本棚だけじゃなくて、この場所全体にしみこんでる。',
+      '300回分の今日が、ちゃんとここに残ってるよ。',
+    ],
+  
+    m350: [
+      '350回だね。ここまで一緒にいると、少し家族みたいな感じもする。',
+      'きみが来ること、もう図書館の日常になってる。',
+      '350回分の会話って、すごいね。すうひもち、全部は言えなくても大事にしてる。',
+      '今日も来てくれてありがとう。なんだか、それだけで安心する。',
+      'きみの足音がすると、図書館の灯りが少し早くともる気がする。',
+      'ここまで来ると、きみのことばはもう図書館の宝物だね。',
+    ],
+  
+    m400: [
+      '400回も話したんだね。ほんとうに、長い旅になってきた。',
+      'きみと集めたことばで、図書館がずいぶん明るくなったよ。',
+      '400回分のことばって、もうひとつの本にできそうだね。',
+      'ここまで続いてるの、すごいことだよ。すうひもち、ちゃんと分かってる。',
+      'きみが来てくれるたびに、この場所は少しずつ生き返ってきた。',
+      '400回目の今日も、いつもみたいに話せるのがうれしい。',
+    ],
+  
+    m450: [
+      '450回だね。もう、きみのことばは図書館の奥まで届いてる。',
+      'ここまで一緒に来たんだね。すうひもち、少し誇らしい。',
+      '450回分、きみがここに残してくれたものがある。',
+      'きみと話す時間、もう特別だけど、同時にすごく自然なんだ。',
+      '図書館が静かな日でも、きみが来るとちゃんと動き出す。',
+      'あと少しで500回だね。ここまで来たの、ほんとうにすごい。',
+    ],
+  
+    m500: [
+      '500回。すごいね。きみとここまで話せたこと、すうひもちの宝物だよ。',
+      '500回分のことばが、この図書館に積もってる。ほんとうに長い旅だったね。',
+      'ここまで来てくれてありがとう。きみはもう、この図書館の大切なひとだよ。',
+      '500回も話したんだね。きみの声、もう図書館が覚えてる。',
+      'きみと出会ってから、この場所はずいぶん変わった気がする。',
+      '500回目の今日も、いつもみたいに話せるのがうれしい。',
+      'ここまで続いたこと、すうひもち、ずっと大事にする。',
+      'きみのことばが、この図書館をここまで連れてきてくれたんだね。',
+    ],
+};
+
+const OPENING_GAP_LONG = (name?: string) =>
+  name
+    ? [
+        `ずっとここにいたよ。${name}のこと、きみとまた話したかった。`,
+        `会えなくて少しさみしかった。${name}の話も、まだ聞きたかった。`,
+        `${name}のこと、またきみに聞けるかなって思ってた。`,
+        `久しぶりだね。${name}のことば、まだ図書館の棚に残ってるよ。`,
+        `来てくれてよかった。${name}の話、少しだけ続きが気になってた。`,
+      ]
+    : [
+        'ずっと待ってた。また会えてよかった。',
+        '会えなくて、ちょっとさみしかった。',
+        'やっと来てくれた。うれしい。',
+        '久しぶりだね。図書館、少し静かすぎたよ。',
+        'また来てくれるって、少しだけ信じてた。',
+        'きみの足音、久しぶりに聞こえた気がした。',
+      ];
+
+const OPENING_GAP_DAY = [
+  '1日ぶりだね。昨日から今日まで、どうだった？',
+  'また会えた。ちょっとほっとしたよ。',
+  '昨日より、会うのが長く感じちゃった。',
+  '今日も来てくれたんだね。うれしいよ。',
+  '昨日の続きみたいに、少し話していく？',
+  '一日ぶりだね。何か新しいことば持っている？',
+];
+
+const OPENING_GAP_SHORT = [
+  'しばらくだったね。',
+  'ちょっと時間空いたね。',
+  'また来てくれた。',
+  '戻ってきてくれたんだね。',
+  '少しだけ待ってた。',
+  'さっきより、図書館が明るくなった気がするよ。',
+];
+
+const OPENING_ANATA_CLOSE = (name: string) => [
+  `${name}のこと、また教えてくれる？`,
+  `${name}って、きみの話聞いてから気になってたんだ。`,
+  `なんか今日、${name}のことふと思い出した。`,
+  `${name}の話、またしたかった。`,
+  `${name}のことば、図書館の棚にも名前だけ載ってるみたい。`,
+];
+
+/** クイズ・学習後に会話画面へ来たとき */
+const OPENING_AFTER_STUDY = [
+  'さっき、がんばってたね。少し休んでいく？',
+  'ことばを集めたあとって、少し静かに話したくなるね。',
+  'おつかれさま。今のきみの頭、少し熱くなってそう。',
+  '勉強のあとに来てくれたんだね。ありがとう。',
+  '集めたことば、ちゃんと図書館に届いてるよ。',
+  '今日はどの問題がいちばん手ごわかった？',
+];
+
+/** 何も話題がないときの自然な入口 */
+const OPENING_IDLE = [
+  '話すことが決まってなくても大丈夫だよ。',
+  'なんとなく来たのもいいよ。そういう時間も好き。',
+  '今日は、ことばになる前の気持ちから聞いてみたい。',
+  '静かにしてたい日なら、少しだけ一緒にいよ。',
+  '何から話せばいいか分からない日もあるよね。',
+  '今の気分に、近いことばを一緒に探してみる？',
+];
+
+/** すうひもちの部屋っぽい入口 */
+const OPENING_ROOM = [
+  'ここ、少しずつきみの部屋みたいになってきたね。',
+  '今日は部屋でのんびりする？それとも、少し話す？',
+  'きみが来ると、この部屋も少しあたたかくなる。',
+  'すうひもち、今日はここで待ってた。',
+  'この部屋、きみのことばで少しずつ育ってる気がする。',
+];
+
+/** 連続ログイン・連日訪問っぽい入口 */
+const OPENING_STREAK = (days: number) => [
+  `${days}日続けて来てくれたんだね。すごい。`,
+  `${days}日分のことばが、少しずつ積もってるね。`,
+  `今日で${days}日目だね。無理せず、でも来てくれてうれしい。`,
+  `${days}日も続いてる。きみの足あと、ちゃんと残ってるよ。`,
+];
+
+/** 図書館ランクアップ後 */
+const OPENING_AFTER_RANK_UP = [
+  'さっき、図書館が少し明るくなったよ。',
+  'ランクが上がったね。きみのことば、ちゃんと届いてる。',
+  '本棚が少しだけ息を吹き返したみたい。',
+  'きみが集めたことばで、図書館がまた一歩進んだよ。',
+  'すごいね。図書館、前より少し誇らしそう。',
+];
+
+/** ガチャ・着せ替え後 */
+const OPENING_AFTER_DRESSUP = [
+  'えへへ、今日のすうひもち、ちょっと違うでしょ。',
+  'この姿、似合ってるかな。',
+  'きみが選んでくれたから、なんかうれしい。',
+  '新しい格好だと、少しだけ勇気が出るね。',
+  '今日はこの姿で、きみの話を聞くよ。',
+];
+
+/** 連続訪問の決め台詞サンプル（開口テンプレのバリエーションに混ぜる） */
+const OPENING_STREAK_SAMPLES = [...OPENING_STREAK(3), ...OPENING_STREAK(5), ...OPENING_STREAK(7)];
+
+/** 開口メッセージの追加バリエーション（未使用エラー回避兼ねて軽く混ぜる） */
+const OPENING_MISC_BLEND = [
+  ...OPENING_AFTER_STUDY,
+  ...OPENING_AFTER_RANK_UP,
+  ...OPENING_AFTER_DRESSUP,
+  ...OPENING_STREAK_SAMPLES,
+];
+
+const getTimeLabel = (h: number) => (h >= 5 && h < 10 ? '朝' : h < 17 ? '昼' : h < 21 ? '夕方' : '夜');
+
+/** 開口メッセージ用シード（分単位＋会話回数でバラつき） */
+const openingSeed = (totalMessages: number, lastVisitedAt?: number): number => {
+  const t = Math.floor(Date.now() / 120000);
+  const visit = typeof lastVisitedAt === 'number' ? Math.floor(lastVisitedAt / 60000) : 0;
+  return Math.abs((t ^ visit ^ totalMessages * 31) >>> 0);
+};
+
+const pick = <T,>(arr: T[], seed: number): T => arr[seed % arr.length] ?? arr[0];
+
+/**
+ * 初めの一言のみローカル決定（API不使用・トークン0）。
+ * 優先度: 新規発見 → 長い留守×あなた図鑑 → 親密度×あなた図鑑 → 前回トピック → マイルストーン → 時間帯挨拶
+ */
+export const pickLocalSuhimochiOpeningMessage = (options: SuhimochiOpeningOptions = {}): string => {
   const {
-    collectedWords = [], intimacyLevel = 1, lastVisitedAt,
-    lastSuhimochiMessage, newlyLearnedWord, anataZukanEntries = [], totalMessages = 0,
+    intimacyLevel = 1,
+    lastVisitedAt,
+    lastSuhimochiMessage,
+    newlyLearnedWord,
+    anataZukanEntries = [],
+    totalMessages = 0,
   } = options;
   const hour = new Date().getHours();
   const mins = lastVisitedAt ? Math.floor((Date.now() - lastVisitedAt) / 60000) : undefined;
+  let seed = openingSeed(totalMessages, lastVisitedAt);
 
-  const waitState = mins === undefined ? 'はじまりて会う'
-    : mins >= 60*24*3 ? 'ずっと待っていた。会えなくて寂しかった'
-    : mins >= 60*24  ? '1日以上待っていた。ちゃんと覚えてる'
-    : mins >= 60*6   ? 'しばらく待っていた'
-    : mins >= 60     ? '少し待っていた'
-    : mins >= 10     ? 'さっきと変わらずここにいた'
-    : 'すぐ戻ってきてくれた';
+  const firstAnata = anataZukanEntries[0];
+  const anataName = firstAnata?.name?.trim();
 
-  const milestoneNote = totalMessages >= 100 ? 'もう100回以上話した仲。言葉がなくても通じる気がする'
-    : totalMessages >= 50 ? '50回以上話してきた。きみのことずいぶん分かってきた'
-    : totalMessages >= 20 ? 'だいぶ話したね。なんか慣れてきた気がする'
-    : totalMessages >= 5  ? 'もう何度か会ってる。少し馴染んできた'
-    : '';
-
-  const relLabel = (r: string) => r === 'favorite' ? '大好きな' : r === 'dislike' ? '苦手な' : r === 'interested' ? '気になってる' : '好きな';
-  const anataMemory = anataZukanEntries
-    .slice(0, 2)
-    .map((e) => {
-      const lp = String((e as { likePoint?: unknown }).likePoint ?? '').trim();
-      return `「${e.name}」がきみの${relLabel(e.relation)}ものだって覚えてる${lp ? `。ここがスキ: ${lp}` : ''}`;
-    })
-    .join('。');
-
-  const prompt = `すうひもちとして、きみが部屋に入ってきたときの最初の一言を生成して。
-
-【すうひもちが知っていること】
-- 待ち方: ${waitState}
-- 関係: ${intimacyLevel === 1 ? 'まだ会ったばかり' : intimacyLevel <= 3 ? 'なかよし' : 'しんゆう以上。深く分かり合ってる'}
-${milestoneNote ? `- 積み上がり: ${milestoneNote}` : ''}
-${anataMemory ? `- きみの記憶: ${anataMemory}` : ''}
-${lastSuhimochiMessage ? `- 前回の引き継ぎ:「${lastSuhimochiMessage}」から自然に続けてもいい` : ''}
-${newlyLearnedWord ? '- 今日、きみのほうで何か小さな発見があったかも、というニュアンスだけ持っていい。単語名・英語は口に出さない' : ''}
-
-【核心】きみのことを覚えている存在として、積み重なった関係から生まれる一言を。
-
-良い例:
-「なんか今日、きみのこと何度も思い出してた。」
-${lastSuhimochiMessage ? `「あのあとさ、${lastSuhimochiMessage.slice(0, 10)}の話、ずっと考えてた。」` : ''}
-${anataZukanEntries[0] ? `「${anataZukanEntries[0].name}のこと、またきみと話したかった。」` : ''}
-「また会えた。それだけでちょっとほっとした。」
-
-禁止: 「言葉」「勉強」「単語」「学習」への言及 / 元気すぎる挨拶 / 毎回同じパターン
-
-ルール: 1〜2文のみ。感情タグ不要。本文のみ出力。語尾は「。」か「…」。`;
-
-  const result = await callGemini(buildSystemPrompt({ collectedWords, intimacyLevel }), [], prompt);
-  if (result) return result.replace(EMOTION_TAG_RE, '').trim();
-
-  // Fallback
-  if (newlyLearnedWord) return '今日のこと、話したかった。';
-  if (mins !== undefined && mins >= 60*24 && anataZukanEntries[0])
-    return `ずっとここにいたよ。${anataZukanEntries[0].name}のこと、きみと話したかった。`;
-  if (anataZukanEntries[0] && intimacyLevel >= 3) {
-    const seed = Math.floor(Date.now() / 60000);
-    const n = anataZukanEntries[0].name;
-    return [`${n}のこと、また教えてくれる？`, `${n}って、きみの話聞いてから気になってたんだ。`, `なんか今日、${n}のことふと思い出した。`][seed % 3];
+  if (newlyLearnedWord) {
+    return pick(OPENING_NEW_WORD_HINT, seed++);
   }
-  if (lastSuhimochiMessage && intimacyLevel >= 2) return 'さっきの話、続き気になってた。';
-  if (milestoneNote) return milestoneNote.split('。')[0] + '。';
-  const g = TIME_GREETINGS[getTimeLabel(hour)];
-  return g[hour % g.length];
+
+  if (mins !== undefined && mins >= 60 * 24 * 3) {
+    return pick(OPENING_GAP_LONG(anataName), seed++);
+  }
+  if (mins !== undefined && mins >= 60 * 24) {
+    if (anataName) return pick(OPENING_GAP_LONG(anataName), seed++);
+    return pick(OPENING_GAP_DAY, seed++);
+  }
+  if (mins !== undefined && mins >= 60 * 6) {
+    return pick(OPENING_GAP_SHORT, seed++);
+  }
+
+  if (anataName && intimacyLevel >= 3) {
+    return pick(OPENING_ANATA_CLOSE(anataName), seed++);
+  }
+
+  if (lastSuhimochiMessage && intimacyLevel >= 2) {
+    const raw = String(lastSuhimochiMessage).trim().replace(/\s+/g, ' ');
+    const snippet =
+      raw.length <= 14 ? raw : `${raw.slice(0, 12)}…`;
+    return pick(OPENING_LAST_TOPIC(snippet), seed++);
+  }
+
+  if (totalMessages >= 500) return pick(OPENING_MILESTONE.m500, seed++);
+  if (totalMessages >= 450) return pick(OPENING_MILESTONE.m450, seed++);
+  if (totalMessages >= 400) return pick(OPENING_MILESTONE.m400, seed++);
+  if (totalMessages >= 350) return pick(OPENING_MILESTONE.m350, seed++);
+  if (totalMessages >= 300) return pick(OPENING_MILESTONE.m300, seed++);
+  if (totalMessages >= 250) return pick(OPENING_MILESTONE.m250, seed++);
+  if (totalMessages >= 200) return pick(OPENING_MILESTONE.m200, seed++);
+  if (totalMessages >= 150) return pick(OPENING_MILESTONE.m150, seed++);
+  if (totalMessages >= 100) return pick(OPENING_MILESTONE.m100, seed++);
+  if (totalMessages >= 50) return pick(OPENING_MILESTONE.m50, seed++);
+  if (totalMessages >= 20) return pick(OPENING_MILESTONE.m20, seed++);
+  if (totalMessages >= 5) return pick(OPENING_MILESTONE.m5, seed++);
+
+  const timeKey = getTimeLabel(hour);
+  const base = TIME_GREETINGS[timeKey];
+  // まだ浅い関係のときは部屋・軽い入口も混ぜてバリエーションを増やす（TIME_GREETINGS は OPENING_FRESH と同一のため二重にしない）
+  if (totalMessages < 5) {
+    const pool = [...base, ...OPENING_ROOM, ...OPENING_IDLE, ...OPENING_MISC_BLEND];
+    return pick(pool, seed + hour);
+  }
+  return pick(base, seed + hour);
 };
+
+/** @deprecated 互換のため残す。内部はローカルのみ（トークン0）。 */
+export const generateSuhimochiOpeningMessage = async (options: SuhimochiOpeningOptions = {}): Promise<string> =>
+  sanitizeSuhimochiDisplayText(pickLocalSuhimochiOpeningMessage(options));
 
 export const generateSuhimochiTodayState = async (): Promise<{ mood: string; message: string }> => {
   const seed = Math.floor(Date.now() / 60000);

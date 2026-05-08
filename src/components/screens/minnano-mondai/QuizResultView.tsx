@@ -229,7 +229,7 @@ const BgFx = ({ ambient }: { ambient: string }) => (
           height: p.w,
           left: `${p.left}%`,
           top: `${p.top}%`,
-          opacity: 0.07,
+          opacity: 0.09,
           animation: `qrv-tw ${p.dur}s ease-in-out ${p.del}s infinite`,
         }}
       />
@@ -482,50 +482,50 @@ const ReportModal = ({
 // ============================================================
 
 const REVIEW_SURFACE = {
-  panelBg: 'rgba(15, 23, 42, 0.92)',
-  panelBorder: '1px solid rgba(148, 163, 184, 0.16)',
-  panelShadow: '0 14px 40px rgba(0,0,0,0.36)',
+  panelBg: 'rgba(244, 241, 252, 0.94)',
+  panelBorder: '1px solid rgba(120, 110, 160, 0.28)',
+  panelShadow: '0 16px 48px rgba(15, 12, 28, 0.28)',
 
-  headerBorder: '1px solid rgba(255,255,255,0.08)',
-  title: '#f8fafc',
-  text: '#e2e8f0',
-  textSoft: '#94a3b8',
-  textMuted: '#64748b',
+  headerBorder: '1px solid rgba(120, 110, 160, 0.22)',
+  title: '#1e1b2e',
+  text: '#2d2a3d',
+  textSoft: '#4b4763',
+  textMuted: '#6b6685',
 
-  slot: 'rgba(51,65,85,0.58)',
-  slotBorder: '1.5px solid rgba(148,163,184,0.15)',
-  slotText: '#cbd5e1',
+  slot: 'rgba(232, 228, 246, 0.92)',
+  slotBorder: '1.5px solid rgba(120,110,160,0.28)',
+  slotText: '#3d3954',
 
-  correctBg: 'rgba(34,197,94,0.14)',
-  correctBorder: '1.5px solid rgba(74,222,128,0.38)',
-  correctText: '#86efac',
+  correctBg: 'rgba(209, 250, 229, 0.88)',
+  correctBorder: '1.5px solid rgba(74,222,128,0.42)',
+  correctText: '#14532d',
   correctBar: 'linear-gradient(90deg,#4ade80,#16a34a)',
 
-  wrongBg: 'rgba(244,63,94,0.14)',
-  wrongBorder: '1.5px solid rgba(251,113,133,0.38)',
-  wrongText: '#fda4af',
+  wrongBg: 'rgba(255, 228, 230, 0.9)',
+  wrongBorder: '1.5px solid rgba(251,113,133,0.42)',
+  wrongText: '#9f1239',
   wrongBar: 'linear-gradient(90deg,#fb7185,#e11d48)',
 
-  selectedBg: 'rgba(168,85,247,0.16)',
-  selectedBorder: '1.5px solid rgba(192,132,252,0.36)',
-  selectedText: '#d8b4fe',
+  selectedBg: 'rgba(233, 228, 254, 0.92)',
+  selectedBorder: '1.5px solid rgba(167,139,250,0.45)',
+  selectedText: '#5b21b6',
   selectedBar: 'linear-gradient(90deg,#a78bfa,#7c3aed)',
 
-  statGreenBg: 'rgba(34,197,94,0.12)',
-  statGreenBorder: '1.5px solid rgba(74,222,128,0.28)',
-  statGreenText: '#86efac',
+  statGreenBg: 'rgba(209, 250, 229, 0.72)',
+  statGreenBorder: '1.5px solid rgba(74,222,128,0.32)',
+  statGreenText: '#166534',
 
-  statGoldBg: 'rgba(250,204,21,0.12)',
-  statGoldBorder: '1.5px solid rgba(250,204,21,0.26)',
-  statGoldText: '#fcd34d',
+  statGoldBg: 'rgba(254, 243, 199, 0.78)',
+  statGoldBorder: '1.5px solid rgba(250,204,21,0.35)',
+  statGoldText: '#92400e',
 
-  explanationBg: 'rgba(30, 41, 59, 0.78)',
-  explanationBorder: '1.5px solid rgba(148, 163, 184, 0.18)',
-  explanationLabel: '#94a3b8',
-  explanationText: '#e2e8f0',
+  explanationBg: 'rgba(237, 233, 248, 0.92)',
+  explanationBorder: '1.5px solid rgba(120, 110, 160, 0.22)',
+  explanationLabel: '#5b5770',
+  explanationText: '#2d2a3d',
 
-  buttonBg: 'rgba(255,255,255,0.05)',
-  buttonBorder: '1px solid rgba(148,163,184,0.2)',
+  buttonBg: 'rgba(228, 224, 242, 0.92)',
+  buttonBorder: '1px solid rgba(120,110,160,0.30)',
 };
 
 // ============================================================
@@ -551,6 +551,7 @@ export const QuizResultView = ({
   const [phase, setPhase] = useState<0 | 1 | 2>(0);
   const [reportTarget, setReportTarget] = useState<string | null>(null);
   const uid = useGameStore((s) => s.uid);
+  const claimDailyMission = useGameStore((s) => s.claimDailyMission);
 
   const correctCount = results.filter((r) => r.isCorrect).length;
   const basePoint = results.reduce((s, r) => s + r.basePoint, 0);
@@ -574,6 +575,11 @@ export const QuizResultView = ({
       clearTimeout(t2);
     };
   }, []);
+
+  // デイリーミッション：みんなの問題を解く（リザルト画面到達で付与）
+  useEffect(() => {
+    claimDailyMission('everyone');
+  }, [claimDailyMission]);
 
   useEffect(() => {
     const next: Record<string, ReactionCounter> = {};
@@ -709,11 +715,24 @@ export const QuizResultView = ({
         style={{ filter: 'blur(1px)' }}
         alt=""
       />
-      <div className="absolute inset-0" style={{ background: 'rgba(6,10,20,0.84)' }} />
       <div
         className="absolute inset-0"
         style={{
-          background: `radial-gradient(ellipse at 50% 0%, ${cfg.border}22 0%, transparent 55%)`,
+          background:
+            'linear-gradient(165deg, rgba(42,38,58,0.78) 0%, rgba(34,31,48,0.82) 38%, rgba(28,26,40,0.86) 100%)',
+        }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 120% 70% at 50% -10%, rgba(245,242,255,0.12) 0%, transparent 45%)',
+        }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `radial-gradient(ellipse at 50% 28%, ${cfg.border}22 0%, transparent 58%)`,
         }}
       />
 
@@ -725,7 +744,7 @@ export const QuizResultView = ({
 
       <BgFx ambient={cfg.ambient} />
 
-      <div className="relative z-10 max-w-md mx-auto px-4 pt-10 space-y-6">
+      <div className="relative z-10 max-w-md mx-auto px-4 pt-10 pb-2 space-y-5">
         <motion.div
           initial={{ opacity: 0, y: -24, scale: 0.92 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -803,30 +822,40 @@ export const QuizResultView = ({
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.38 }}
-              className="px-1"
+              className="rounded-2xl border px-4 py-5 shadow-xl"
+              style={{
+                background: 'rgba(244, 241, 252, 0.94)',
+                borderColor: 'rgba(120, 110, 160, 0.28)',
+                boxShadow: '0 12px 40px rgba(8, 6, 18, 0.35)',
+              }}
             >
+              <p
+                className="text-center text-[11px] font-black tracking-[0.18em] mb-4"
+                style={{ color: '#5b5770' }}
+              >
+                スコア概要
+              </p>
               <div className="flex items-stretch justify-center">
                 <div className="flex-1 min-w-0 text-center px-2 sm:px-3">
                   <p
                     className="text-[10px] font-bold tracking-widest mb-1.5"
-                    style={{ color: 'rgba(226,232,240,0.78)' }}
+                    style={{ color: '#6b6685' }}
                   >
                     正解数
                   </p>
                   <p
                     className="font-black tabular-nums leading-none text-[1.65rem] sm:text-[1.85rem]"
                     style={{
-                      color: 'rgba(248,250,252,0.9)',
-                      textShadow:
-                        '0 1px 2px rgba(0,0,0,0.65), 0 0 12px rgba(0,0,0,0.35)',
+                      color: '#1e1b2e',
+                      textShadow: 'none',
                     }}
                   >
                     {dispCorrect}
                     <span
                       className="font-bold text-[1.05rem] sm:text-[1.15rem]"
                       style={{
-                        color: 'rgba(226,232,240,0.55)',
-                        textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                        color: '#6b6685',
+                        textShadow: 'none',
                       }}
                     >
                       /{questions.length}
@@ -834,29 +863,28 @@ export const QuizResultView = ({
                   </p>
                 </div>
 
-                <div className="w-px shrink-0 bg-white/12 self-stretch my-1" aria-hidden />
+                <div className="w-px shrink-0 self-stretch my-1 bg-[rgba(120,110,160,0.25)]" aria-hidden />
 
                 <div className="flex-1 min-w-0 text-center px-2 sm:px-3">
                   <p
                     className="text-[10px] font-bold tracking-widest mb-1.5"
-                    style={{ color: 'rgba(226,232,240,0.78)' }}
+                    style={{ color: '#6b6685' }}
                   >
                     正答率
                   </p>
                   <p
                     className="font-black tabular-nums leading-none text-[1.65rem] sm:text-[1.85rem]"
                     style={{
-                      color: 'rgba(248,250,252,0.9)',
-                      textShadow:
-                        '0 1px 2px rgba(0,0,0,0.65), 0 0 12px rgba(0,0,0,0.35)',
+                      color: '#1e1b2e',
+                      textShadow: 'none',
                     }}
                   >
                     {dispAcc}
                     <span
                       className="font-bold text-lg"
                       style={{
-                        color: 'rgba(226,232,240,0.6)',
-                        textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                        color: '#6b6685',
+                        textShadow: 'none',
                       }}
                     >
                       %
@@ -864,12 +892,12 @@ export const QuizResultView = ({
                   </p>
                 </div>
 
-                <div className="w-px shrink-0 bg-white/12 self-stretch my-1" aria-hidden />
+                <div className="w-px shrink-0 self-stretch my-1 bg-[rgba(120,110,160,0.25)]" aria-hidden />
 
                 <div className="flex-1 min-w-0 text-center px-2 sm:px-3">
                   <p
                     className="text-[10px] font-bold tracking-widest mb-1.5"
-                    style={{ color: 'rgba(226,232,240,0.78)' }}
+                    style={{ color: '#6b6685' }}
                   >
                     合計スコア
                   </p>
@@ -877,17 +905,16 @@ export const QuizResultView = ({
                     className="font-black tabular-nums leading-none"
                     style={{
                       fontSize: 36,
-                      color: '#f5d78a',
-                      textShadow:
-                        '0 1px 3px rgba(0,0,0,0.75), 0 0 18px rgba(251,191,36,0.28), 0 2px 10px rgba(0,0,0,0.45)',
+                      color: '#b45309',
+                      textShadow: 'none',
                     }}
                   >
                     {dispTotal}
                     <span
                       className="text-sm font-bold ml-0.5"
                       style={{
-                        color: 'rgba(253,230,138,0.82)',
-                        textShadow: '0 1px 2px rgba(0,0,0,0.6)',
+                        color: '#92400e',
+                        textShadow: 'none',
                       }}
                     >
                       点
@@ -896,44 +923,44 @@ export const QuizResultView = ({
                 </div>
               </div>
 
-              <div className="text-center mt-3 space-y-2">
+              <div className="text-center mt-4 space-y-3 pt-3 border-t" style={{ borderColor: 'rgba(120,110,160,0.18)' }}>
                 <p
-                  className="text-xs"
+                  className="text-xs font-semibold"
                   style={{
-                    color: 'rgba(226,232,240,0.82)',
-                    background: 'rgba(2,6,23,0.72)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '8px',
-                    padding: '6px 12px',
+                    color: '#3d3954',
+                    background: 'rgba(228, 224, 242, 0.85)',
+                    border: '1px solid rgba(120,110,160,0.22)',
+                    borderRadius: '10px',
+                    padding: '8px 14px',
                     display: 'inline-block',
-                    textShadow: '0 1px 2px rgba(0,0,0,0.45)',
+                    textShadow: 'none',
                   }}
                 >
                   正解点{' '}
-                  <span className="font-semibold" style={{ color: 'rgba(248,250,252,0.92)' }}>
+                  <span className="font-black tabular-nums" style={{ color: '#1e1b2e' }}>
                     {basePoint}pt
                   </span>
-                  <span className="mx-1.5" style={{ color: 'rgba(148,163,184,0.45)' }}>
+                  <span className="mx-2 font-normal" style={{ color: '#8b87a8' }}>
                     |
                   </span>
                   時間ボーナス{' '}
-                  <span className="font-semibold" style={{ color: 'rgba(253,224,71,0.9)' }}>
+                  <span className="font-black tabular-nums" style={{ color: '#b45309' }}>
                     {dispBonus}pt
                   </span>
                 </p>
                 <p
-                  className="text-[11px] leading-relaxed max-w-md mx-auto px-1"
-                  style={{ color: 'rgba(203,213,225,0.88)', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}
+                  className="text-[11px] leading-relaxed max-w-md mx-auto px-1 text-left sm:text-center"
+                  style={{ color: '#4b4763', textShadow: 'none' }}
                 >
-                  合計スコアは<strong style={{ color: 'rgba(253,230,138,0.95)' }}>{SCORE_PER_KOTOBA_LEAF}点ごと</strong>
+                  合計スコアは<strong style={{ color: '#92400e' }}>{SCORE_PER_KOTOBA_LEAF}点ごと</strong>
                   に「ことの葉」が1枚手に入ります。ことの葉は蔵書の「本を修繕する」で本を修繕し、ランクアップするために使えます。
                 </p>
                 {kotobaLeavesThisPlay > 0 && (
                   <p
                     className="text-xs font-bold"
                     style={{
-                      color: 'rgba(253,224,71,0.92)',
-                      textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                      color: '#a16207',
+                      textShadow: 'none',
                     }}
                   >
                     このプレイ：ことの葉 +{kotobaLeavesThisPlay}枚
@@ -970,7 +997,7 @@ export const QuizResultView = ({
                 type="button"
                 onClick={onBackToCategories}
                 className="self-center flex items-center gap-1.5 py-1 text-sm font-semibold transition-opacity hover:opacity-90"
-                style={{ color: 'rgba(200,190,255,0.65)' }}
+                style={{ color: 'rgba(224, 219, 252, 0.92)' }}
               >
                 <ArrowLeft className="w-3.5 h-3.5 opacity-70" />
                 カテゴリへ戻る
@@ -1019,10 +1046,10 @@ export const QuizResultView = ({
                         background: isActive
                           ? `linear-gradient(135deg,${cat.ribbonColor},${cat.glow})`
                           : ok === true
-                            ? 'rgba(34,197,94,0.14)'
+                            ? 'rgba(220,252,231,0.85)'
                             : ok === false
-                              ? 'rgba(244,63,94,0.14)'
-                              : 'rgba(51,65,85,0.58)',
+                              ? 'rgba(255,241,242,0.9)'
+                              : 'rgba(241,245,249,0.95)',
                         border: isActive
                           ? `2px solid ${cat.ribbonColor}`
                           : ok === true
@@ -1035,7 +1062,7 @@ export const QuizResultView = ({
                     >
                       <span
                         className="text-[10px]"
-                        style={{ color: isActive ? '#fff' : REVIEW_SURFACE.textSoft }}
+                        style={{ color: isActive ? '#fff' : REVIEW_SURFACE.textMuted }}
                       >
                         {idx + 1}
                       </span>
@@ -1232,7 +1259,7 @@ export const QuizResultView = ({
                           <div className="mt-2">
                             <div
                               className="h-2.5 rounded-full overflow-hidden"
-                              style={{ background: 'rgba(255,255,255,0.08)' }}
+                              style={{ background: 'rgba(15,23,42,0.08)' }}
                             >
                               <div
                                 className="h-full rounded-full"
@@ -1299,7 +1326,7 @@ export const QuizResultView = ({
                           activeBd: 'rgba(74,222,128,0.38)',
                           activeTx: '#86efac',
                           inactiveBd: 'rgba(148,163,184,0.2)',
-                          inactiveTx: '#cbd5e1',
+                          inactiveTx: '#475569',
                         },
                         {
                           key: 'bad' as QuestionReaction,
@@ -1308,7 +1335,7 @@ export const QuizResultView = ({
                           activeBd: 'rgba(251,113,133,0.38)',
                           activeTx: '#fda4af',
                           inactiveBd: 'rgba(148,163,184,0.2)',
-                          inactiveTx: '#cbd5e1',
+                          inactiveTx: '#475569',
                         },
                       ] as const).map((btn) => {
                         const on = activeReaction === btn.key;

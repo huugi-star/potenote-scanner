@@ -609,7 +609,7 @@ export default function TournamentPage() {
   const timerSec  = Math.max(0, Math.ceil(timeLeftMs / 1000));
   const timerPct  = Math.max(0, Math.min(100, (timeLeftMs / TIME_LIMIT_MS) * 100));
   const isUrgent  = timerSec <= 3 && !playerAnswered && !isResolvingAnswer && !answerFeedback && phase === 'quiz';
-  const playerEmotion: PotatoEmotion = playerResult === 'correct' ? 'happy' : playerResult === 'wrong' ? 'confused' : 'smart';
+  const playerEmotion: PotatoEmotion = playerResult === 'correct' ? 'happy' : playerResult === 'wrong' ? 'confused' : 'normal';
   const playerRank = ranking.findIndex(e => e.isPlayer);
   const rankInfo   = playerRank >= 0 ? getRankText(playerRank, round, qualificationSlots) : null;
 
@@ -706,7 +706,7 @@ export default function TournamentPage() {
                       display: 'flex', alignItems: 'center', gap: 8,
                     }}
                   >
-                    <PotatoAvatar equipped={cpu.equipped} emotion="smart" size={60} ssrEffect={false} />
+                    <PotatoAvatar equipped={cpu.equipped} emotion="smart" size={60} ssrEffect={false} showEmotionEffect={false} />
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 800, color: '#e0d7ff' }}>{cpu.name}</div>
                       <div style={{ fontSize: 10, color: 'rgba(160,130,255,0.6)', marginTop: 1 }}>正答率 {Math.round(cpu.accuracy * 100)}%</div>
@@ -904,7 +904,7 @@ export default function TournamentPage() {
                       style={{ textAlign: 'center', borderRadius: 10, padding: '7px 4px 5px', background: 'rgba(255,255,255,0.04)', border: `1.5px solid ${borderColor}` }}
                     >
                       <div style={{ position: 'relative', display: 'inline-block' }}>
-                        <PotatoAvatar equipped={cpu.equipped} emotion={emotion} size={54} ssrEffect={false} />
+                        <PotatoAvatar equipped={cpu.equipped} emotion={emotion} size={54} ssrEffect={false} showEmotionEffect={false} />
                         {revealCpu && cpu.status === 'correct' && (
                           <motion.span className="pointer-events-none absolute -right-1 -top-1" style={{ fontSize: 14 }}
                             initial={{ opacity: 0, y: 4 }} animate={{ opacity: [0,1,0], y: [4,-10,-18] }}
@@ -1134,6 +1134,7 @@ export default function TournamentPage() {
                         emotion={entry.isPlayer ? (rankInfo.advance ? 'happy' : 'confused') : 'smart'}
                         size={38}
                         ssrEffect={false}
+                        showEmotionEffect={entry.isPlayer}
                       />
                     </div>
 
@@ -1532,6 +1533,7 @@ export default function TournamentPage() {
                       emotion={emotion}
                       size={isWinner ? 70 : 58}
                       ssrEffect={false}
+                      showEmotionEffect={entry.isPlayer}
                     />
                   </motion.div>
 

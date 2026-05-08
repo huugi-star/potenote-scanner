@@ -1,15 +1,16 @@
-import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
+import { useMemo, useRef, useEffect, useLayoutEffect, useState, useCallback } from 'react';
 import { motion, useAnimation, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, ScrollText,
   Paintbrush, Check, X, Box, Heart, MoreHorizontal,
   ChevronDown, ChevronUp, MessageCircle,
+  ChevronRight, Trash2,
 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { useRoomStore } from '@/store/useRoomStore';
 import {
   generateSuhimochiReply,
-  generateSuhimochiOpeningMessage,
+  pickLocalSuhimochiOpeningMessage,
   extractKeywords,
   extractKeywordsForAnataZukan,
   isValidAnataZukanEntryName,
@@ -24,6 +25,8 @@ import type {
   SuhimochiCollectedWord,
   SuhimochiInterest,
 } from '@/lib/suhimochiConversationTypes';
+import { useLibraryRankSnapshot } from '@/hooks/useLibraryRankSnapshot';
+import { RANK_TIERS, getSuhimochiIntimacyPointsCapForTierIndex } from '@/constants/rankSystem';
 
 const ANATA_RELATIONS: readonly AnataRelation[] = ['favorite', 'like', 'interested', 'dislike'];
 const isAnataRelation = (s: string): s is AnataRelation =>
@@ -32,6 +35,7 @@ import { getItemById } from '@/data/items';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
 import { useToast } from '@/components/ui/Toast';
 import { vibrateLight } from '@/lib/haptics';
+import { getJstDateString } from '@/lib/dateUtils';
 
 // ============================================================
 // 型・定数
@@ -40,6 +44,9 @@ import { vibrateLight } from '@/lib/haptics';
 interface SuhimochiRoomScreenProps {
   onBack: () => void;
   newlyLearnedWord?: SuhimochiCollectedWord;
+  onGoScan?: () => void;
+  onGoMinnanoMondai?: () => void;
+  onGoCreateQuestion?: () => void;
 }
 
 type IntimacyLevel = 1 | 2 | 3 | 4 | 5;
@@ -79,6 +86,17 @@ const INTIMACY_POINTS = {
   answeredSuhimochiRequest: 3,
 } as const;
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const toYmd = (year: number, month0: number, day: number) => `${year}-${pad2(month0 + 1)}-${pad2(day)}`;
+const toYearMonthLabel = (year: number, month0: number) => `${year}年${month0 + 1}月`;
+const getMonthGridMeta = (year: number, month0: number) => {
+  const first = new Date(year, month0, 1);
+  const last = new Date(year, month0 + 1, 0);
+  const startDow = first.getDay(); // 0=Sun
+  const daysInMonth = last.getDate();
+  return { startDow, daysInMonth };
+};
+
 // 無効語フィルタ
 const INVALID_WORDS = new Set([
   'none', 'null', 'undefined', 'true', 'false', 'nan',
@@ -101,6 +119,12 @@ const BUBBLE_PAGE_HOLD_MS = 3200;
 
 /** 吹き出し1ページあたりの最大文字数（約2行×21文字相当） */
 const BUBBLE_PAGE_CHARS = 60;
+
+/** 吹き出しパネル幅（壁掛けカレンダーとかぶりにくいよう細めに） */
+const SUHIMOCHI_BUBBLE_WIDTH = 248;
+
+/** 部屋内レイアウトの論理解像度（表示時はviewportに合わせて縮小） */
+const ROOM_CANVAS_PX = { w: 800, h: 420 } as const;
 
 /**
  * 句点・感嘆符・疑問符で文に分け、BUBBLE_PAGE_CHARS まで同じページにまとめる。
@@ -151,8 +175,22 @@ const calcIntimacyGain = (
 // コンポーネント
 // ============================================================
 
-export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomScreenProps) => {
+export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMinnanoMondai, onGoCreateQuestion }: SuhimochiRoomScreenProps) => {
   const { addToast } = useToast();
+
+  const dailyMissionState = useGameStore((s) => s.dailyMissionState);
+  const today = getJstDateString();
+  const daily =
+    dailyMissionState?.date === today
+      ? dailyMissionState
+      : { date: today, scan: false, everyone: false, create: false };
+
+  const calendarTodosByDate = useGameStore((s) => s.calendarTodosByDate);
+  const addCalendarTodo = useGameStore((s) => s.addCalendarTodo);
+  const toggleCalendarTodo = useGameStore((s) => s.toggleCalendarTodo);
+  const deleteCalendarTodo = useGameStore((s) => s.deleteCalendarTodo);
+  const suhimochiLastTodoNudgeAtMs = useGameStore((s) => s.suhimochiLastTodoNudgeAtMs);
+  const setSuhimochiLastTodoNudgeAtMs = useGameStore((s) => s.setSuhimochiLastTodoNudgeAtMs);
 
   const equipment           = useGameStore((s) => s.equipment);
   const wordCollectionScans = useGameStore((s) => s.wordCollectionScans);
@@ -168,6 +206,9 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const suhimochiLastMessage   = useGameStore((s) => s.suhimochiLastMessage);
   const suhimochiLastVisitedAt = useGameStore((s) => s.suhimochiLastVisitedAt);
   const updateSuhimochiIntimacy      = useGameStore((s) => s.updateSuhimochiIntimacy);
+  const reconcileSuhimochiIntimacyWithLibraryRank = useGameStore(
+    (s) => s.reconcileSuhimochiIntimacyWithLibraryRank,
+  );
   const appendSuhimochiGeminiHistory = useGameStore((s) => s.appendSuhimochiGeminiHistory);
   const appendSuhimochiGeminiLetterReplyHistory = useGameStore(
     (s) => s.appendSuhimochiGeminiLetterReplyHistory,
@@ -184,6 +225,9 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const decaySuhimochiKeywords   = useGameStore((s) => s.decaySuhimochiKeywords);
 
   const scrollRef      = useRef<HTMLDivElement>(null);
+  const roomOuterRef   = useRef<HTMLElement>(null);
+  const [roomCanvasScale, setRoomCanvasScale] = useState(1);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLTextAreaElement>(null);
   const openingInitRef = useRef(false);
@@ -194,6 +238,14 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const [isEditMode, setIsEditMode] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLogOpen,  setIsLogOpen]  = useState(false);
+  const [isDailyOpen, setIsDailyOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month0: now.getMonth() };
+  });
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState<string>(() => getJstDateString());
+  const [calendarTodoDraft, setCalendarTodoDraft] = useState('');
   const [talkInput,  setTalkInput]  = useState('');
   const [isReplying, setIsReplying] = useState(false);
   const [replyTargetPost, setReplyTargetPost] = useState<{ id: string; text: string } | null>(null);
@@ -210,8 +262,20 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const [intimacyVisible, setIntimacyVisible] = useState(
     suhimochiIntimacy.totalMessages > 0
   );
+  const [isRoomMenuOpen, setIsRoomMenuOpen] = useState(false);
   const [bubblePageIndex, setBubblePageIndex] = useState(0);
   const [bubbleTypedChars, setBubbleTypedChars] = useState(0);
+
+  const runDailyMission = useCallback(
+    (_id: 'scan' | 'everyone' | 'create', go?: () => void, fallbackMessage?: string) => {
+      // 報酬の付与は「達成イベント側」で行う（ここでは遷移のみ）
+      vibrateLight();
+      setIsDailyOpen(false);
+      if (go) go();
+      else if (fallbackMessage) addToast('info', fallbackMessage);
+    },
+    [addToast]
+  );
 
   // セッションをまたいだ会話ログ復元（ログ表示用）
   const [talkMessages, setTalkMessages] = useState<ConversationChatMessage[]>(() => {
@@ -330,11 +394,11 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
       totalMessages: suhimochiIntimacy.totalMessages,
     };
 
-    generateSuhimochiOpeningMessage(opts).then((text) => {
-      setTalkMessages((prev) => {
-        if (prev.some((m) => m.id === 'init-suhimochi')) return prev;
-        return [...prev, { id: 'init-suhimochi', role: 'suhimochi', text }];
-      });
+    // 開口一言はローカルテンプレのみ（API・トークン消費なし）
+    const text = sanitizeSuhimochiDisplayText(pickLocalSuhimochiOpeningMessage(opts));
+    setTalkMessages((prev) => {
+      if (prev.some((m) => m.id === 'init-suhimochi')) return prev;
+      return [...prev, { id: 'init-suhimochi', role: 'suhimochi', text }];
     });
 
     decaySuhimochiKeywords();
@@ -407,9 +471,29 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
         anataZukanEntries,
       );
 
+      // たまに：今日のTODOを話題に出す（押し付けない程度に）
+      let finalReply = reply;
+      try {
+        const todayYmd = getJstDateString();
+        const todosToday = (calendarTodosByDate?.[todayYmd] ?? []).filter((t) => !t.done);
+        const hasTodo = todosToday.length > 0;
+        const lastAt = Number(suhimochiLastTodoNudgeAtMs ?? 0) || 0;
+        const cooldownOk = Date.now() - lastAt > 2 * 60 * 60 * 1000; // 2時間
+        const chance = Math.random() < 0.18;
+        if (hasTodo && cooldownOk && chance) {
+          const pick = String(todosToday[0]?.text ?? '').trim();
+          if (pick) {
+            finalReply = `そういえば今日「${pick}」のTODOがあるよ。\n\n${reply}`;
+            setSuhimochiLastTodoNudgeAtMs(Date.now());
+          }
+        }
+      } catch {
+        // ignore
+      }
+
       setTalkMessages((prev) => [
         ...prev,
-        { id: `suhimochi-${Date.now()}`, role: 'suhimochi', text: reply },
+        { id: `suhimochi-${Date.now()}`, role: 'suhimochi', text: finalReply },
       ]);
 
       setCurrentEmotion(emotion);
@@ -418,11 +502,11 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
 
       try {
         if (replyingToLetterText) {
-          appendSuhimochiGeminiLetterReplyHistory(replyingToLetterText, userText, reply);
+          appendSuhimochiGeminiLetterReplyHistory(replyingToLetterText, userText, finalReply);
         } else {
-          appendSuhimochiGeminiHistory(userText, reply);
+          appendSuhimochiGeminiHistory(userText, finalReply);
         }
-        updateSuhimochiLastVisit(reply);
+        updateSuhimochiLastVisit(finalReply);
 
         const kws = extractKeywords(userText);
         if (kws.length > 0) addSuhimochiKeywords(kws, 'user');
@@ -499,7 +583,14 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const bubbleVisibleText = activeBubblePage.slice(0, bubbleTypedChars);
   const hasBubbleMorePages = bubblePageIndex < bubblePages.length - 1;
 
-  const bubbleLeft    = Math.max(16, Math.min(charPosition - 170, 800 - 340));
+  /** アバター付近を基準にしつつ、800pxキャンバス内に収める */
+  const bubbleLeft = useMemo(() => {
+    const PAD = 16;
+    const CANVAS_W = 800;
+    const raw = charPosition - 152;
+    return Math.max(PAD, Math.min(raw, CANVAS_W - SUHIMOCHI_BUBBLE_WIDTH - PAD));
+  }, [charPosition]);
+
   const logMessages   = useMemo(() => talkMessages, [talkMessages]);
   const sortedAnataZukanEntries = useMemo<AnataZukanEntry[]>(
     () => [...anataZukanEntries].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
@@ -526,6 +617,18 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   const intimacyPoints = suhimochiIntimacy.points;
   const totalMessages  = suhimochiIntimacy.totalMessages;
 
+  // 司書ランクスナップショット（修復本の進捗に応じた図書館ランク）
+  const libraryRank = useLibraryRankSnapshot();
+  const rankTier = RANK_TIERS[libraryRank.tierIndex] ?? RANK_TIERS[0];
+  const suhimochiIntimacyPointsCap = useMemo(
+    () => getSuhimochiIntimacyPointsCapForTierIndex(libraryRank.tierIndex),
+    [libraryRank.tierIndex],
+  );
+
+  useEffect(() => {
+    reconcileSuhimochiIntimacyWithLibraryRank();
+  }, [libraryRank.tierIndex, reconcileSuhimochiIntimacyWithLibraryRank]);
+
   useEffect(() => {
     setBubblePageIndex(0);
     setBubbleTypedChars(0);
@@ -549,6 +652,37 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
     }, BUBBLE_PAGE_HOLD_MS);
     return () => window.clearTimeout(t);
   }, [activeBubblePage, bubbleTypedChars, hasBubbleMorePages]);
+
+  useLayoutEffect(() => {
+    const el = roomOuterRef.current;
+    if (!el || typeof window === 'undefined') return;
+
+    const measure = () => {
+      const cw = Math.max(1, el.clientWidth);
+      const vvh = window.visualViewport?.height ?? window.innerHeight;
+      const compact = vvh <= 760;
+      setIsCompactViewport((prev) => (prev === compact ? prev : compact));
+      const maxRoomH = compact
+        ? Math.max(188, Math.min(332, Math.round(vvh * 0.34)))
+        : Math.max(200, Math.min(368, Math.round(vvh * 0.4)));
+      let s = Math.min(1, cw / ROOM_CANVAS_PX.w, maxRoomH / ROOM_CANVAS_PX.h);
+      s = Math.max(compact ? 0.5 : 0.52, Math.min(1, s));
+      const next = Number(s.toFixed(3));
+      setRoomCanvasScale((prev) => (Math.abs(prev - next) < 0.004 ? prev : next));
+    };
+
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', measure);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro?.disconnect();
+      vv?.removeEventListener('resize', measure);
+      window.removeEventListener('resize', measure);
+    };
+  }, [intimacyVisible, isRoomMenuOpen]);
 
   // ============================================================
   // 時間帯による窓の背景
@@ -588,7 +722,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
   // ============================================================
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50 via-orange-50 to-emerald-50">
+    <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-gradient-to-b from-amber-50 via-orange-50 to-emerald-50">
 
       {/* ジャンル選択モーダル（初回のみ） */}
       <AnimatePresence>
@@ -624,17 +758,17 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
         )}
       </AnimatePresence>
 
-      <div className="max-w-md mx-auto px-4 pt-4 pb-8 flex flex-col gap-3">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 flex-col px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-4 sm:pt-3">
 
         {/* ヘッダー */}
-        <div className="flex items-center justify-between">
-          <button onClick={() => { vibrateLight(); onBack(); }} className="flex items-center gap-1 text-amber-800/80 hover:text-amber-900">
-            <ChevronLeft className="h-5 w-5" />戻る
+        <div className="flex shrink-0 items-center justify-between">
+          <button onClick={() => { vibrateLight(); onBack(); }} className="flex items-center gap-1 text-[13px] text-amber-800/80 hover:text-amber-900 sm:text-base">
+            <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />戻る
           </button>
-          <h1 className="text-xl font-bold text-amber-900">すうひもちの部屋</h1>
+          <h1 className="text-[15px] font-bold text-amber-900 sm:text-xl">すうひもちの部屋</h1>
           <div className="relative">
             <button onClick={() => { vibrateLight(); setIsMenuOpen((p) => !p); }}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200 active:scale-95"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200 active:scale-95 sm:h-9 sm:w-9"
             >
               <MoreHorizontal className="h-5 w-5" />
             </button>
@@ -873,32 +1007,78 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
           )}
         </AnimatePresence>
 
-        {/* 親密度バー */}
+        <div className={`flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain pb-1 [-webkit-overflow-scrolling:touch] ${isCompactViewport ? 'gap-1.5' : 'gap-2'}`}>
+
+        {/* 親密度バー（司書ランクに合わせた色味） */}
         <AnimatePresence>
           {intimacyVisible && (
-            <motion.div initial={{ opacity: 0, y: -8, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }}
-              transition={{ duration: 0.4 }} className="overflow-hidden">
-              <div className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3">
-                <div className="flex items-center justify-between mb-2">
+            <motion.div
+              initial={{ opacity: 0, y: -8, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: 'auto' }}
+              transition={{ duration: 0.4 }}
+              className="overflow-hidden"
+            >
+              <div
+                className="rounded-xl border px-3 py-2 sm:rounded-2xl sm:px-4 sm:py-3"
+                style={{
+                  borderColor: `${rankTier.color}40`,
+                  background: `linear-gradient(135deg, ${rankTier.light} 0%, #ffffff 42%, #fffaf4 100%)`,
+                  boxShadow: `0 6px 18px -12px ${rankTier.color}80`,
+                }}
+              >
+                <div className="mb-1.5 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Heart className="h-4 w-4 text-rose-400" />
-                    <span className="text-sm font-bold text-amber-900">{INTIMACY_LEVEL_LABELS[intimacyLevel]}</span>
+                    <span
+                      className="inline-flex h-6 items-center rounded-full px-2 text-[10px] font-black tracking-[0.12em]"
+                      style={{
+                        backgroundColor: `${rankTier.color}1a`,
+                        color: rankTier.color,
+                        borderRadius: 999,
+                      }}
+                    >
+                      {rankTier.name}
+                    </span>
+                    <span className="text-xs font-semibold text-amber-800/80">
+                      すうひもちとの親密度
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {([1,2,3,4,5] as IntimacyLevel[]).map((lv) => (
-                      <motion.div key={lv}
-                        className={`rounded-full transition-all duration-500 ${lv <= intimacyLevel ? 'h-2.5 w-2.5 bg-rose-400' : 'h-2 w-2 bg-amber-200'}`}
-                        animate={lv === intimacyLevel ? { scale: [1, 1.3, 1] } : {}} transition={{ duration: 0.4 }} />
+                    {([1, 2, 3, 4, 5] as IntimacyLevel[]).map((lv) => (
+                      <motion.div
+                        key={lv}
+                        className={`rounded-full transition-all duration-500 ${
+                          lv <= intimacyLevel
+                            ? 'h-2.5 w-2.5'
+                            : 'h-2 w-2 bg-amber-200/80'
+                        }`}
+                        style={lv <= intimacyLevel ? { backgroundColor: rankTier.color } : undefined}
+                        animate={lv === intimacyLevel ? { scale: [1, 1.25, 1] } : {}}
+                        transition={{ duration: 0.4 }}
+                      />
                     ))}
                   </div>
                 </div>
-                <div className="h-3 w-full overflow-hidden rounded-full bg-amber-100 shadow-inner">
-                  <motion.div className={`h-full rounded-full bg-gradient-to-r ${INTIMACY_LEVEL_COLORS[intimacyLevel]} shadow-sm`}
-                    animate={{ width: `${Math.min(100, (intimacyPoints / 1000) * 100)}%` }} transition={{ duration: 0.7, ease: [0.34, 1.56, 0.64, 1] }} />
+                <div className="h-3 w-full overflow-hidden rounded-full bg-amber-100/80 shadow-inner">
+                  <motion.div
+                    className="h-full rounded-full shadow-sm"
+                    style={{
+                      backgroundImage: `linear-gradient(90deg, ${rankTier.color}, ${INTIMACY_LEVEL_COLORS[intimacyLevel]
+                        .split(' ')
+                        .at(-1) ?? '#fb7185'})`,
+                    }}
+                    animate={{
+                      width: `${Math.min(100, suhimochiIntimacyPointsCap > 0 ? (intimacyPoints / suhimochiIntimacyPointsCap) * 100 : 0)}%`,
+                    }}
+                    transition={{ duration: 0.7, ease: [0.34, 1.56, 0.64, 1] }}
+                  />
                 </div>
-                <div className="mt-1.5 flex justify-between text-xs text-amber-600/60">
+                <div className="mt-1.5 flex justify-between gap-2 text-[11px] text-amber-700/70">
                   <span>{totalMessages}回会話した</span>
-                  <span>Lv.{intimacyLevel} / 5</span>
+                  <span className="shrink-0 text-right tabular-nums">
+                    <span>{intimacyPoints}</span>/<span>{suhimochiIntimacyPointsCap}</span> Pt
+                    <span className="mx-1 text-amber-600/55">｜</span>
+                    <span>Lv.{intimacyLevel} / 5</span>
+                  </span>
                 </div>
               </div>
             </motion.div>
@@ -906,11 +1086,74 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
         </AnimatePresence>
 
         {/* 部屋セクション */}
-        <section className={`relative h-[420px] shrink-0 overflow-hidden rounded-3xl border-2 shadow-lg transition-colors ${isEditMode ? 'border-amber-400 bg-[#f0ebd9]' : 'border-amber-900/10 bg-[#e8e4d9]'}`}>
-          <div ref={scrollRef} className="absolute inset-0 overflow-x-auto overflow-y-hidden overscroll-x-contain [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            <div className="relative h-full w-[800px]">
+        <section
+          ref={roomOuterRef}
+          className={`relative w-full shrink-0 overflow-hidden rounded-2xl border-2 shadow-lg transition-colors sm:rounded-3xl ${isEditMode ? 'border-amber-400 bg-[#f0ebd9]' : 'border-amber-900/10 bg-[#e8e4d9]'}`}
+          style={{ height: `${Math.round(ROOM_CANVAS_PX.h * roomCanvasScale)}px` }}
+        >
+          <div
+            ref={scrollRef}
+            className="absolute inset-0 overflow-x-auto overflow-y-hidden overscroll-x-contain [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          >
+            <div
+              className="relative h-[420px] w-[800px]"
+              style={{ transform: `scale(${roomCanvasScale})`, transformOrigin: '0 0' }}
+            >
               <div className="absolute inset-0 z-0 pointer-events-none">
                 <div className="absolute top-6 left-1/2 -translate-x-1/2 h-32 w-32 overflow-hidden rounded-full border-4 border-[#7a5c43] shadow-inner">{windowBg}</div>
+                {(() => {
+                  const ymd = getJstDateString(); // YYYY-MM-DD
+                  const [y, m, d] = ymd.split('-').map((x) => parseInt(x, 10));
+                  const w = ['日', '月', '火', '水', '木', '金', '土'][new Date(y, (m || 1) - 1, d || 1).getDay()];
+                  const todosToday = (calendarTodosByDate?.[ymd] ?? [])
+                    .slice()
+                    .sort((a, b) => Number(a.done) - Number(b.done))
+                    .slice(0, 3);
+                  return (
+                    <div className="absolute top-9 left-1/2 z-30 w-[100px] -translate-x-1/2 translate-x-[100px]">
+                      {/* 紐 */}
+                      <div className="mx-auto h-2 w-0.5 bg-[#7a5c43]/70" />
+                      {/* 壁掛け（スリム化して一画面内の見切れを抑える） */}
+                      <div className="relative w-full rounded-xl border border-[#7a5c43]/30 bg-white shadow-lg">
+                        <div className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border border-[#7a5c43]/30 bg-white shadow-sm" />
+                        <div className="rounded-t-xl bg-gradient-to-r from-sky-600 to-indigo-600 px-1.5 py-1">
+                          <p className="text-[8px] font-black tracking-[0.1em] text-white/90">
+                            {m}月
+                          </p>
+                        </div>
+                        <div className="px-1.5 py-1.5">
+                          <div className="flex items-end justify-between gap-0.5">
+                            <p className="text-[22px] font-black leading-none text-slate-900">{d}</p>
+                            <p className="text-[9px] font-black text-slate-500">({w})</p>
+                          </div>
+                        </div>
+                        <div className="border-t border-slate-200/80 px-1.5 py-2">
+                          <p className="text-[8px] font-black tracking-[0.14em] text-slate-400">TODO</p>
+                          {todosToday.length === 0 ? (
+                            <p className="mt-0.5 text-[9px] font-semibold leading-snug text-slate-500">
+                              今日は予定なし
+                            </p>
+                          ) : (
+                            <div className="mt-0.5 space-y-0.5">
+                              {todosToday.map((t) => (
+                                <p
+                                  key={t.id}
+                                  className={`truncate text-[9px] font-black leading-tight ${
+                                    t.done
+                                      ? 'text-slate-400 line-through decoration-rose-500 decoration-[1.5px]'
+                                      : 'text-slate-800'
+                                  }`}
+                                >
+                                  ・{t.text}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="absolute top-48 left-0 right-0 h-3 bg-[#7a5c43] shadow-sm" />
                 <div className="absolute bottom-0 top-0 left-4 w-3 bg-[#7a5c43]" />
                 <div className="absolute bottom-0 top-0 left-[260px] w-2 bg-[#7a5c43] opacity-50" />
@@ -954,16 +1197,27 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                 </motion.div>
               </motion.div>
               {latestSuhimochiMessage && (
-                <div className="absolute bottom-[258px] z-40 w-[300px] pointer-events-none" style={{ left: bubbleLeft }}>
-                  <div className="rounded-2xl border-2 border-amber-800/10 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-sm">
-                    <AnimatePresence mode="wait">
+                <div
+                  className="absolute bottom-[280px] z-40 pointer-events-none"
+                  style={{
+                    left: bubbleLeft,
+                    width: `min(${SUHIMOCHI_BUBBLE_WIDTH}px, calc(100vw - 24px))`,
+                  }}
+                >
+                  <div className="relative">
+                    <div
+                      className="rounded-[1rem] border border-[#7a5c43]/35 bg-white px-3 py-2.5"
+                      style={{ boxShadow: '0 2px 0 rgba(122,92,67,0.06), 0 8px 24px -12px rgba(62,42,28,0.22)' }}
+                    >
+                      <AnimatePresence mode="wait">
                       <motion.p key={`${latestSuhimochiMessage.id}-${bubblePageIndex}`}
                         initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                        transition={{ duration: 0.25 }} className="text-sm font-medium leading-relaxed text-amber-900 whitespace-pre-wrap">
+                        transition={{ duration: 0.25 }}
+                        className="text-sm font-medium leading-relaxed whitespace-pre-wrap text-[#352a21] tracking-[0.01em]">
   {bubbleVisibleText.replace(/([。！？!?])/g, '$1\n').replace(/\n+/g, '\n').trim()}
                       </motion.p>
                     </AnimatePresence>
-                    <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-amber-500/80">
+                    <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-[#85663d]/95">
                       {hasBubbleMorePages && bubbleTypedChars >= activeBubblePage.length && (
                         <motion.span
                           animate={{ y: [0, 2, 0], opacity: [0.5, 1, 0.5] }}
@@ -975,7 +1229,12 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                       {bubblePages.length > 1 && (
                         <span>{bubblePageIndex + 1}/{bubblePages.length}</span>
                       )}
+                      </div>
                     </div>
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute left-[40%] -bottom-2 h-3 w-3 -translate-x-1/2 rotate-45 border-b border-r border-[#7a5c43]/35 bg-white"
+                    />
                   </div>
                 </div>
               )}
@@ -1008,77 +1267,455 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
           </div>
         </section>
 
-        {/* お部屋メニュー */}
-        <section className="rounded-3xl border border-amber-200 bg-white/75 p-3 shadow-sm shadow-amber-100/70">
-          <div className="mb-2 flex items-center justify-between px-1">
-            <div>
-              <p className="text-[10px] font-black tracking-[0.18em] text-amber-500">ROOM MENU</p>
+        {/* お部屋メニュー（タップで開閉） */}
+        <section className="rounded-2xl border border-amber-200 bg-white/75 p-1.5 shadow-sm shadow-amber-100/70 sm:rounded-3xl sm:p-3">
+          <button
+            type="button"
+            onClick={() => {
+              vibrateLight();
+              setIsRoomMenuOpen((v) => !v);
+            }}
+            className="mb-1.5 flex w-full items-center justify-between px-1"
+          >
+            <div className="text-left">
+              <p className="text-[10px] font-black tracking-[0.18em] text-amber-500">
+                ROOM MENU
+              </p>
               <h2 className="text-sm font-black text-amber-950">お部屋メニュー</h2>
             </div>
-            <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-700">
-              タップして開く
+            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-700">
+              タップして{isRoomMenuOpen ? '閉じる' : '開く'}
+              <ChevronDown
+                className={`h-3 w-3 transition-transform ${
+                  isRoomMenuOpen ? 'rotate-180' : 'rotate-0'
+                }`}
+              />
             </span>
-          </div>
+          </button>
 
-          <div className="grid grid-cols-3 gap-2">
-            <motion.button
-              type="button"
-              onClick={() => {
-                vibrateLight();
-                addToast('info', 'デイリーミッションは準備中です');
-              }}
-              whileTap={{ scale: 0.96 }}
-              className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-rose-400 to-orange-400 px-2 py-3 text-left text-white shadow-md shadow-rose-200"
-            >
-              <div className="absolute -right-3 -top-4 h-12 w-12 rounded-full bg-white/20" />
-              <div className="text-2xl">🎯</div>
-              <p className="mt-2 text-xs font-black leading-tight">デイリー<br />ミッション</p>
-              <p className="mt-1 text-[10px] font-bold text-white/75">今日の目標</p>
-            </motion.button>
+          <AnimatePresence initial={false}>
+            {isRoomMenuOpen && (
+              <motion.div
+                key="room-menu-body"
+                initial={{ opacity: 0, y: -4, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: -4, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                  <motion.button
+                    type="button"
+                    onClick={() => {
+                      vibrateLight();
+                      setIsDailyOpen(true);
+                    }}
+                    whileTap={{ scale: 0.96 }}
+                    className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-rose-400 to-orange-400 px-2 py-3 text-left text-white shadow-md shadow-rose-200"
+                  >
+                    <div className="absolute -right-3 -top-4 h-12 w-12 rounded-full bg-white/20" />
+                    <div className="text-2xl">🎯</div>
+                    <p className="mt-2 text-xs font-black leading-tight">
+                      デイリー
+                      <br />
+                      ミッション
+                    </p>
+                    <p className="mt-1 text-[10px] font-bold text-white/75">今日の目標</p>
+                  </motion.button>
 
-            <motion.button
-              type="button"
-              onClick={() => {
-                vibrateLight();
-                addToast('info', 'ノートの本棚は準備中です');
-              }}
-              whileTap={{ scale: 0.96 }}
-              className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 px-2 py-3 text-left text-white shadow-md shadow-emerald-200"
-            >
-              <div className="absolute -right-3 -top-4 h-12 w-12 rounded-full bg-white/20" />
-              <div className="text-2xl">📚</div>
-              <p className="mt-2 text-xs font-black leading-tight">ノートの<br />本棚</p>
-              <p className="mt-1 text-[10px] font-bold text-white/75">準備中</p>
-            </motion.button>
+                  <motion.button
+                    type="button"
+                    onClick={() => {
+                      vibrateLight();
+                      setIsEditMode(true);
+                    }}
+                    whileTap={{ scale: 0.96 }}
+                    className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 px-2 py-3 text-left text-white shadow-md shadow-amber-200"
+                  >
+                    <div className="absolute -right-3 -top-4 h-12 w-12 rounded-full bg-white/20" />
+                    <div className="text-2xl">🛋️</div>
+                    <p className="mt-2 text-xs font-black leading-tight">模様替え</p>
+                    <p className="mt-1 text-[10px] font-bold text-white/75">家具や模様を整える</p>
+                  </motion.button>
 
-            <motion.button
-              type="button"
-              onClick={() => {
-                vibrateLight();
-                addToast('info', 'カレンダーは準備中です');
-              }}
-              whileTap={{ scale: 0.96 }}
-              className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-500 px-2 py-3 text-left text-white shadow-md shadow-sky-200"
-            >
-              <div className="absolute -right-3 -top-4 h-12 w-12 rounded-full bg-white/20" />
-              <div className="text-2xl">📅</div>
-              <p className="mt-2 text-xs font-black leading-tight">カレンダー</p>
-              <p className="mt-1 text-[10px] font-bold text-white/75">記録を見る</p>
-            </motion.button>
-          </div>
+                  <motion.button
+                    type="button"
+                    onClick={() => {
+                      vibrateLight();
+                      setIsCalendarOpen(true);
+                    }}
+                    whileTap={{ scale: 0.96 }}
+                    className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-500 px-2 py-3 text-left text-white shadow-md shadow-sky-200"
+                  >
+                    <div className="absolute -right-3 -top-4 h-12 w-12 rounded-full bg-white/20" />
+                    <div className="text-2xl">📅</div>
+                    <p className="mt-2 text-xs font-black leading-tight">カレンダー（ToDo）</p>
+                    <p className="mt-1 text-[10px] font-bold text-white/75">記録を見る</p>
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
+
+        </div>
+
+        {/* デイリーミッション */}
+        <AnimatePresence>
+          {isDailyOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/45 p-4"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setIsDailyOpen(false);
+              }}
+            >
+              <motion.div
+                initial={{ y: 24, opacity: 0, scale: 0.98 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: 24, opacity: 0, scale: 0.98 }}
+                transition={{ type: 'spring', stiffness: 340, damping: 26 }}
+                className="w-full max-w-md rounded-3xl border border-amber-200 bg-white p-4 shadow-2xl"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black tracking-[0.18em] text-amber-500">DAILY MISSION</p>
+                    <h2 className="text-base font-black text-amber-950">今日の目標</h2>
+                  </div>
+                  <button
+                    onClick={() => setIsDailyOpen(false)}
+                    className="rounded-xl px-3 py-2 text-sm font-bold text-amber-700 hover:bg-amber-50"
+                  >
+                    閉じる
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      runDailyMission(
+                        'scan',
+                        onGoScan,
+                        '「スキャンする」はホームの「ことばを読み取る」からできます'
+                      );
+                    }}
+                    className={`w-full rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-left hover:bg-amber-50 ${
+                      daily.scan ? 'opacity-80' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 text-2xl">📷</div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-black text-amber-950">スキャンする</p>
+                        <p className="mt-0.5 text-xs font-semibold text-amber-800/70">
+                          タップして画像選択 → 問題生成
+                        </p>
+                        <p className="mt-1 text-[11px] font-black text-emerald-700">
+                          ことの葉+5 / コイン+10
+                        </p>
+                      </div>
+                      {daily.scan ? (
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-2 py-1 text-[10px] font-black text-rose-700">
+                          ✅ STAMP
+                        </span>
+                      ) : (
+                        <span className="mt-1 text-xs font-bold text-amber-500">GO</span>
+                      )}
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      runDailyMission(
+                        'everyone',
+                        onGoMinnanoMondai,
+                        '「みんなの問題を解く」は「ことば図書館 → みんなの問題」からできます'
+                      );
+                    }}
+                    className={`w-full rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-left hover:bg-amber-50 ${
+                      daily.everyone ? 'opacity-80' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 text-2xl">🧩</div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-black text-amber-950">みんなの問題を解く</p>
+                        <p className="mt-0.5 text-xs font-semibold text-amber-800/70">
+                          みんなが作った問題に挑戦
+                        </p>
+                        <p className="mt-1 text-[11px] font-black text-emerald-700">
+                          ことの葉+5 / コイン+10
+                        </p>
+                      </div>
+                      {daily.everyone ? (
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-2 py-1 text-[10px] font-black text-rose-700">
+                          ✅ STAMP
+                        </span>
+                      ) : (
+                        <span className="mt-1 text-xs font-bold text-amber-500">GO</span>
+                      )}
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      runDailyMission(
+                        'create',
+                        onGoCreateQuestion,
+                        '「問題を作る」は「ことば図書館 → 問題を作る」からできます'
+                      );
+                    }}
+                    className={`w-full rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-left hover:bg-amber-50 ${
+                      daily.create ? 'opacity-80' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 text-2xl">📝</div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-black text-amber-950">問題を作る</p>
+                        <p className="mt-0.5 text-xs font-semibold text-amber-800/70">
+                          キーワードから4択を作って投稿
+                        </p>
+                        <p className="mt-1 text-[11px] font-black text-emerald-700">
+                          ことの葉+5 / コイン+10
+                        </p>
+                      </div>
+                      {daily.create ? (
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-2 py-1 text-[10px] font-black text-rose-700">
+                          ✅ STAMP
+                        </span>
+                      ) : (
+                        <span className="mt-1 text-xs font-bold text-amber-500">GO</span>
+                      )}
+                    </div>
+                  </button>
+                </div>
+
+                <p className="mt-3 text-[11px] text-amber-800/60 leading-relaxed">
+                  ミッションは毎日更新予定です。
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* カレンダー */}
+        <AnimatePresence>
+          {isCalendarOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/45 p-4"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setIsCalendarOpen(false);
+              }}
+            >
+              <motion.div
+                initial={{ y: 24, opacity: 0, scale: 0.98 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: 24, opacity: 0, scale: 0.98 }}
+                transition={{ type: 'spring', stiffness: 340, damping: 26 }}
+                className="w-full max-w-md rounded-3xl border border-sky-200 bg-white p-4 shadow-2xl"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black tracking-[0.18em] text-sky-500">CALENDAR</p>
+                    <h2 className="text-base font-black text-slate-900">カレンダー / TODO</h2>
+                  </div>
+                  <button
+                    onClick={() => setIsCalendarOpen(false)}
+                    className="rounded-xl px-3 py-2 text-sm font-bold text-sky-700 hover:bg-sky-50"
+                  >
+                    閉じる
+                  </button>
+                </div>
+
+                {/* 月移動 */}
+                <div className="mb-2 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      vibrateLight();
+                      setCalendarMonth((m) => {
+                        const prevMonth0 = m.month0 - 1;
+                        if (prevMonth0 >= 0) return { year: m.year, month0: prevMonth0 };
+                        return { year: m.year - 1, month0: 11 };
+                      });
+                    }}
+                    className="inline-flex items-center gap-1 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs font-black text-sky-800 hover:bg-sky-100"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    前の月
+                  </button>
+                  <div className="text-sm font-black text-slate-900">{toYearMonthLabel(calendarMonth.year, calendarMonth.month0)}</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      vibrateLight();
+                      setCalendarMonth((m) => {
+                        const nextMonth0 = m.month0 + 1;
+                        if (nextMonth0 <= 11) return { year: m.year, month0: nextMonth0 };
+                        return { year: m.year + 1, month0: 0 };
+                      });
+                    }}
+                    className="inline-flex items-center gap-1 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs font-black text-sky-800 hover:bg-sky-100"
+                  >
+                    次の月
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* 曜日 */}
+                <div className="grid grid-cols-7 gap-1 px-1">
+                  {['日','月','火','水','木','金','土'].map((d, i) => (
+                    <div key={d} className={`py-1 text-center text-[10px] font-black ${i===0?'text-rose-600':i===6?'text-indigo-600':'text-slate-500'}`}>
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                {/* 日付グリッド */}
+                {(() => {
+                  const { startDow, daysInMonth } = getMonthGridMeta(calendarMonth.year, calendarMonth.month0);
+                  const blanks = Array.from({ length: startDow }, (_, i) => ({ key: `b-${i}` }));
+                  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+                  const todayYmd = getJstDateString();
+
+                  return (
+                    <div className="mt-1 grid grid-cols-7 gap-1 rounded-2xl border border-sky-100 bg-sky-50/60 p-2">
+                      {blanks.map((b) => (
+                        <div key={b.key} className="h-10" />
+                      ))}
+                      {days.map((day) => {
+                        const ymd = toYmd(calendarMonth.year, calendarMonth.month0, day);
+                        const isSelected = ymd === calendarSelectedDate;
+                        const isToday = ymd === todayYmd;
+                        const hasTodos = ((calendarTodosByDate ?? {})[ymd] ?? []).length > 0;
+                        return (
+                          <button
+                            key={ymd}
+                            type="button"
+                            onClick={() => {
+                              vibrateLight();
+                              setCalendarSelectedDate(ymd);
+                            }}
+                            className={[
+                              'relative h-10 rounded-xl text-sm font-black transition',
+                              isSelected ? 'bg-white border-2 border-sky-400 text-slate-900 shadow-sm' : 'bg-white/70 border border-sky-100 text-slate-800 hover:bg-white',
+                              isToday && !isSelected ? 'ring-2 ring-amber-300/60' : '',
+                            ].join(' ')}
+                          >
+                            {day}
+                            {hasTodos && (
+                              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-emerald-500" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
+                {/* 選択日とTODO */}
+                <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black tracking-[0.18em] text-slate-400">SELECTED</p>
+                      <p className="text-sm font-black text-slate-900">{calendarSelectedDate}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        vibrateLight();
+                        const now = new Date();
+                        setCalendarMonth({ year: now.getFullYear(), month0: now.getMonth() });
+                        setCalendarSelectedDate(getJstDateString());
+                      }}
+                      className="rounded-xl bg-slate-100 px-3 py-2 text-[11px] font-black text-slate-700 hover:bg-slate-200"
+                    >
+                      今日へ
+                    </button>
+                  </div>
+
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={calendarTodoDraft}
+                      onChange={(e) => setCalendarTodoDraft(e.target.value)}
+                      placeholder="TODOを追加（例：英単語10個）"
+                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-sky-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        vibrateLight();
+                        const text = calendarTodoDraft.trim();
+                        if (!text) return;
+                        addCalendarTodo(calendarSelectedDate, text);
+                        setCalendarTodoDraft('');
+                      }}
+                      className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-black text-white hover:bg-sky-500"
+                    >
+                      追加
+                    </button>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    {(((calendarTodosByDate ?? {})[calendarSelectedDate] ?? []).length === 0) ? (
+                      <p className="text-xs font-semibold text-slate-500">この日のTODOはまだありません。</p>
+                    ) : (
+                      (calendarTodosByDate?.[calendarSelectedDate] ?? []).map((t) => (
+                        <div key={t.id} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => { vibrateLight(); toggleCalendarTodo(calendarSelectedDate, t.id); }}
+                            className={`h-6 w-6 rounded-lg border text-xs font-black ${t.done ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-300 text-slate-500'}`}
+                          >
+                            {t.done ? '✓' : ''}
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-sm font-black ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                              {t.text}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { vibrateLight(); deleteCalendarTodo(calendarSelectedDate, t.id); }}
+                            className="rounded-xl p-2 text-slate-500 hover:bg-white"
+                            aria-label="削除"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
+                  日付をタップすると、その日のTODOを追加できます。
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* 会話ログ */}
         {logMessages.length > 0 && (
           <div className="rounded-2xl border border-amber-200 bg-white/60 overflow-hidden">
             <button onClick={() => { vibrateLight(); setIsLogOpen((p) => !p); }}
-              className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-amber-50/60">
+              className="flex w-full items-center justify-between px-4 py-2 hover:bg-amber-50/60">
               <div className="flex items-center gap-2 text-amber-800">
                 <MessageCircle className="h-4 w-4 text-amber-500" />
                 <span className="text-xs font-semibold">会話ログ</span>
                 <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-bold text-amber-800">{logMessages.length}</span>
                 {suhimochiGeminiHistory.length > 0 && (
-                  <span className="text-xs text-amber-500/70">（前回の続き含む）</span>
+                  <span className="hidden text-xs text-amber-500/70 sm:inline">（前回の続き含む）</span>
                 )}
               </div>
               {isLogOpen ? <ChevronUp className="h-4 w-4 text-amber-500" /> : <ChevronDown className="h-4 w-4 text-amber-500" />}
@@ -1087,7 +1724,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
               {isLogOpen && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.25, ease: 'easeInOut' }} className="overflow-hidden">
-                  <div className="max-h-52 overflow-y-auto px-4 pt-1 pb-3 space-y-2 border-t border-amber-100">
+                  <div className="max-h-44 overflow-y-auto space-y-2 border-t border-amber-100 px-4 pt-1 pb-3">
                     {logMessages.map((msg) => (
                       <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-2`}>
                         {msg.role === 'suhimochi' && (
@@ -1110,14 +1747,14 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
 
         {/* 入力欄 */}
         {!isEditMode && (
-          <div className="rounded-2xl border border-amber-300 bg-white/90 shadow-md shadow-amber-100 overflow-hidden">
+          <div className="sticky bottom-0 z-20 overflow-hidden rounded-2xl border border-amber-300 bg-white/90 shadow-md shadow-amber-100 backdrop-blur-[1px]">
             {replyTargetPost && (
               <div className="flex items-center justify-between gap-2 border-b border-amber-100 bg-amber-50 px-3 py-2">
                 <p className="truncate text-xs text-amber-700">返信先: {replyTargetPost.text}</p>
                 <button onClick={() => setReplyTargetPost(null)} className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-100">解除</button>
               </div>
             )}
-            <div className="flex gap-2 items-end p-2">
+            <div className="flex items-end gap-2 p-1.5">
               <textarea
                 ref={inputRef}
                 value={talkInput}
@@ -1130,11 +1767,11 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
                 }}
                 placeholder={isReplying ? 'すうひもちが考えてる…' : 'すうひもちに話しかける'}
                 disabled={isReplying}
-                rows={3}
-                className="flex-1 bg-transparent px-3 py-2 text-sm text-amber-900 placeholder:text-amber-400 outline-none disabled:opacity-50 resize-none leading-relaxed min-h-[3.5rem] max-h-32 overflow-y-auto"
+                rows={2}
+                className="flex-1 bg-transparent px-3 py-2 text-sm text-amber-900 placeholder:text-amber-400 outline-none disabled:opacity-50 resize-none leading-relaxed min-h-[2.75rem] sm:min-h-[3.25rem] max-h-28 sm:max-h-32 overflow-y-auto"
               />
               <motion.button onClick={handleSendTalk} disabled={isReplying || !talkInput.trim()}
-                className="shrink-0 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-orange-200 disabled:opacity-40"
+                className="shrink-0 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 px-4 py-2 text-sm font-bold text-white shadow-md shadow-orange-200 disabled:opacity-40"
                 whileHover={{ scale: isReplying ? 1 : 1.04 }} whileTap={{ scale: isReplying ? 1 : 0.96 }}>
                 {isReplying
                   ? <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.2, repeat: Infinity }} className="text-xs tracking-widest">···</motion.span>
@@ -1142,7 +1779,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord }: SuhimochiRoomS
               </motion.button>
             </div>
             {totalMessages > 0 && (
-              <div className="pb-2 text-center text-xs text-amber-400">{totalMessages}回話した</div>
+              <div className="pb-1.5 text-center text-xs text-amber-400">{totalMessages}回話した</div>
             )}
           </div>
         )}

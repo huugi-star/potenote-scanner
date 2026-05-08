@@ -17,7 +17,14 @@ import type { GeminiMessage, SuhimochiRequest } from '@/lib/suhimochiConversatio
 import { ALL_ITEMS, getItemById } from '@/data/items';
 import { ACADEMY_SEED_QUESTIONS } from '@/data/academySeedQuestions';
 import { REWARDS, LIMITS, GACHA, STAMINA, ERROR_MESSAGES } from '@/lib/constants';
-import { TOTAL_TIERS } from '@/constants/rankSystem';
+import {
+  TOTAL_TIERS,
+  calcBooksFromFragments,
+  calcRankInfo,
+  calcSuhimochiIntimacyLevelFromPoints,
+  getSuhimochiIntimacyPointsCapForTierIndex,
+} from '@/constants/rankSystem';
+import { addRepairBookFragments, migrateRepairProgressIfNeeded, getRepairSpentFragments } from '@/lib/repairBookFragments';
 import {
   isEquippedShoulderPresetId,
   type EquippedShoulderPresetId,
@@ -720,6 +727,28 @@ interface GameState extends UserState {
   dailyWordCollectionScanCount: number;
   lastWordCollectionScanDate: string;
 
+  // デイリーミッション（すうひもちの部屋）
+  dailyMissionState: {
+    date: string; // JST日付 YYYY-MM-DD
+    scan: boolean;
+    everyone: boolean;
+    create: boolean;
+  };
+
+  // すうひもちの部屋：カレンダーTODO
+  calendarTodosByDate: Record<
+    string,
+    Array<{
+      id: string;
+      text: string;
+      done: boolean;
+      createdAt: string;
+    }>
+  >;
+
+  /** すうひもち：TODOを話題に出した最終時刻(ms) */
+  suhimochiLastTodoNudgeAtMs: number;
+
   // 単コレ冒険ログ
   wordCollectionScans: WordCollectionScan[];
 
@@ -951,6 +980,8 @@ interface GameActions {
   removeSuhimochiTimelinePost: (id: string) => void;
 
   updateSuhimochiIntimacy: (gain: number) => { newLevel: number; leveledUp: boolean };
+  /** 司書ランク（修復進捗）に合わせて親密度の上限内に収めつつ Lv を再計算 */
+  reconcileSuhimochiIntimacyWithLibraryRank: () => void;
   appendSuhimochiGeminiHistory: (userText: string, reply: string) => void;
   /** 手紙返信：手紙(model) -> ユーザー返信(user) -> すうひもち返信(model) を履歴へ保存 */
   appendSuhimochiGeminiLetterReplyHistory: (letterText: string, userText: string, reply: string) => void;
@@ -965,6 +996,16 @@ interface GameActions {
   registerAnataZukanWords: (entries: AnataZukanExtractedEntry[]) => void;
   updateAnataZukanEntry: (id: string, patch: Partial<Pick<AnataZukanEntry, 'name' | 'relation' | 'category' | 'likePoint'>>) => void;
   deleteAnataZukanEntry: (id: string) => void;
+
+  /** すうひもちの部屋：デイリーミッション（1日1回） */
+  claimDailyMission: (id: 'scan' | 'everyone' | 'create') => { ok: boolean; alreadyClaimed?: boolean };
+
+  // すうひもちの部屋：カレンダーTODO
+  addCalendarTodo: (date: string, text: string) => void;
+  toggleCalendarTodo: (date: string, todoId: string) => void;
+  deleteCalendarTodo: (date: string, todoId: string) => void;
+
+  setSuhimochiLastTodoNudgeAtMs: (ms: number) => void;
   
   reset: () => void;
   resetPreserveGuestUsage: () => void;
@@ -1005,6 +1046,9 @@ const initialState: GameState = {
   bonusScanBalance: isLocalDevelopment() ? 999 : 0,
   dailyWordCollectionScanCount: 0,
   lastWordCollectionScanDate: '',
+  dailyMissionState: { date: getTodayString(), scan: false, everyone: false, create: false },
+  calendarTodosByDate: {},
+  suhimochiLastTodoNudgeAtMs: 0,
   dailyFreeQuestGenerationCount: 0,
   lastFreeQuestGenerationDate: '',
   dailyTranslationCount: 0,
@@ -1741,6 +1785,83 @@ export const useGameStore = create<GameStore>()(
         get().syncWithCloud();
         return { success: true, message: 'ボーナススキャンを1回付与しました' };
       },
+
+      claimDailyMission: (id) => {
+        const state = get();
+        const today = getTodayString();
+
+        const current =
+          state.dailyMissionState?.date === today
+            ? state.dailyMissionState
+            : { date: today, scan: false, everyone: false, create: false };
+
+        if (current[id]) {
+          return { ok: false, alreadyClaimed: true };
+        }
+
+        // スタンプ付与
+        const next = { ...current, [id]: true };
+        set({ dailyMissionState: next, localStateUpdatedAtMs: Date.now() });
+
+        // 報酬（ことの葉 +5 / コイン +10）
+        // ことの葉は「修繕素材」として扱っているため既存APIへ寄せる
+        addRepairBookFragments(5);
+        get().addCoins(10);
+
+        return { ok: true };
+      },
+
+      addCalendarTodo: (date, text) => {
+        const d = String(date ?? '').trim();
+        const t = String(text ?? '').trim();
+        if (!d || !t) return;
+        const safe = t.slice(0, 80);
+        const now = new Date().toISOString();
+        const id = `todo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        set((state) => ({
+          calendarTodosByDate: {
+            ...(state.calendarTodosByDate ?? {}),
+            [d]: [
+              { id, text: safe, done: false, createdAt: now },
+              ...((state.calendarTodosByDate ?? {})[d] ?? []),
+            ],
+          },
+          localStateUpdatedAtMs: Date.now(),
+        }));
+      },
+
+      toggleCalendarTodo: (date, todoId) => {
+        const d = String(date ?? '').trim();
+        const id = String(todoId ?? '').trim();
+        if (!d || !id) return;
+        set((state) => ({
+          calendarTodosByDate: {
+            ...(state.calendarTodosByDate ?? {}),
+            [d]: ((state.calendarTodosByDate ?? {})[d] ?? []).map((x) =>
+              x.id !== id ? x : { ...x, done: !x.done }
+            ),
+          },
+          localStateUpdatedAtMs: Date.now(),
+        }));
+      },
+
+      deleteCalendarTodo: (date, todoId) => {
+        const d = String(date ?? '').trim();
+        const id = String(todoId ?? '').trim();
+        if (!d || !id) return;
+        set((state) => ({
+          calendarTodosByDate: {
+            ...(state.calendarTodosByDate ?? {}),
+            [d]: ((state.calendarTodosByDate ?? {})[d] ?? []).filter((x) => x.id !== id),
+          },
+          localStateUpdatedAtMs: Date.now(),
+        }));
+      },
+
+      setSuhimochiLastTodoNudgeAtMs: (ms) => {
+        const t = typeof ms === 'number' && Number.isFinite(ms) ? ms : Date.now();
+        set({ suhimochiLastTodoNudgeAtMs: t, localStateUpdatedAtMs: Date.now() });
+      },
       
       // ===== Free Quest Generation Management =====
       
@@ -1856,6 +1977,10 @@ export const useGameStore = create<GameStore>()(
           generatedQuiz: quiz,
           scanImageUrl: imageUrl ?? null,
         });
+        // デイリーミッション：スキャンして問題生成（クイズ生成が確定した時点）
+        if (quiz && Array.isArray((quiz as any).questions) && (quiz as any).questions.length > 0) {
+          get().claimDailyMission('scan');
+        }
       },
       
       // スキャン時に保存した quizId を記録
@@ -3463,21 +3588,21 @@ export const useGameStore = create<GameStore>()(
       },
 
       updateSuhimochiIntimacy: (gain) => {
+        if (typeof window !== 'undefined') {
+          migrateRepairProgressIfNeeded();
+        }
         const state = get();
         const prev = state.suhimochiIntimacy ?? {
           points: 0,
           level: 1 as const,
           totalMessages: 0,
         };
-        const newPoints = Math.min(1000, prev.points + gain);
-        const calcLevel = (pts: number): 1 | 2 | 3 | 4 | 5 => {
-          if (pts >= 850) return 5;
-          if (pts >= 650) return 4;
-          if (pts >= 400) return 3;
-          if (pts >= 200) return 2;
-          return 1;
-        };
-        const newLevel = calcLevel(newPoints);
+        const spent = typeof window !== 'undefined' ? getRepairSpentFragments() : 0;
+        const { totalBooks } = calcBooksFromFragments(spent);
+        const { tierIndex } = calcRankInfo(totalBooks);
+        const pointsCap = getSuhimochiIntimacyPointsCapForTierIndex(tierIndex);
+        const newPoints = Math.min(pointsCap, prev.points + gain);
+        const newLevel = calcSuhimochiIntimacyLevelFromPoints(newPoints, pointsCap);
         const leveledUp = newLevel > prev.level;
         set({
           suhimochiIntimacy: {
@@ -3487,6 +3612,31 @@ export const useGameStore = create<GameStore>()(
           },
         });
         return { newLevel, leveledUp };
+      },
+
+      reconcileSuhimochiIntimacyWithLibraryRank: () => {
+        if (typeof window === 'undefined') return;
+        migrateRepairProgressIfNeeded();
+        const state = get();
+        const prev = state.suhimochiIntimacy ?? {
+          points: 0,
+          level: 1 as const,
+          totalMessages: 0,
+        };
+        const spent = getRepairSpentFragments();
+        const { totalBooks } = calcBooksFromFragments(spent);
+        const { tierIndex } = calcRankInfo(totalBooks);
+        const pointsCap = getSuhimochiIntimacyPointsCapForTierIndex(tierIndex);
+        const nextPoints = Math.min(prev.points, pointsCap);
+        const nextLevel = calcSuhimochiIntimacyLevelFromPoints(nextPoints, pointsCap);
+        if (nextPoints === prev.points && nextLevel === prev.level) return;
+        set({
+          suhimochiIntimacy: {
+            ...prev,
+            points: nextPoints,
+            level: nextLevel,
+          },
+        });
       },
 
       appendSuhimochiGeminiHistory: (userText, reply) => {
@@ -3829,6 +3979,10 @@ export const useGameStore = create<GameStore>()(
         generatedQuiz: state.generatedQuiz,
         scanImageUrl: state.scanImageUrl,
         lastScanQuizId: state.lastScanQuizId,
+
+        dailyMissionState: state.dailyMissionState,
+        calendarTodosByDate: state.calendarTodosByDate,
+        suhimochiLastTodoNudgeAtMs: state.suhimochiLastTodoNudgeAtMs,
 
         suhimochiIntimacy: state.suhimochiIntimacy,
         suhimochiGeminiHistory: state.suhimochiGeminiHistory,

@@ -25,7 +25,11 @@ import { MinnanoMondaiScreen } from '@/components/screens/MinnanoMondaiScreen';
 import { RepairBookScreen } from '@/components/screens/RepairBookScreen';
 import { getRepairBookFragments } from '@/lib/repairBookFragments';
 import { storyIntroPages, STORY_INTRO_READ_KEY } from '@/data/storyIntroPages';
-import { CREATION_CATEGORIES, SUBCATEGORY_SUGGESTIONS } from '@/data/categories';
+import {
+  CREATION_CATEGORIES,
+  SUBCATEGORY_SUGGESTIONS,
+  resolveCreationAcademyStoredCategories,
+} from '@/data/categories';
 import { StoryIntroScreen } from '@/components/story/StoryIntroScreen';
 import type { AcademyUserQuestion, QuizHistory } from '@/types';
 
@@ -69,7 +73,7 @@ interface DraftMcq {
 interface AcademyScreenProps {
   onBack: () => void;
   /** 遷移直後に開くサブ画面（ホームの図書館ランクから本を修繕する画面へ直行するなど） */
-  initialSubview?: Extract<AcademySubview, 'top' | 'repair_book'>;
+  initialSubview?: Extract<AcademySubview, 'top' | 'repair_book' | 'everyone' | 'create_seed_list'>;
 }
 
 // ============================================================
@@ -427,6 +431,7 @@ export const AcademyScreen = ({ onBack, initialSubview = 'top' }: AcademyScreenP
   const uid = useGameStore((s) => s.uid);
   const isAcademyAdmin = useGameStore((s) => s.isAcademyAdmin());
   const addAcademyUserQuestion = useGameStore((s) => s.addAcademyUserQuestion);
+  const claimDailyMission = useGameStore((s) => s.claimDailyMission);
   const updateAcademyUserQuestion = useGameStore((s) => s.updateAcademyUserQuestion);
   const deleteAcademyUserQuestion = useGameStore((s) => s.deleteAcademyUserQuestion);
   const refreshAcademyQuestions = useGameStore((s) => s.refreshAcademyQuestions);
@@ -773,6 +778,11 @@ export const AcademyScreen = ({ onBack, initialSubview = 'top' }: AcademyScreenP
     if (!selectedBigCategory || !selectedSubCategory || selectedKeywordsForDraft.length === 0) return;
     setIsGenerating(true);
 
+    const storedCat = resolveCreationAcademyStoredCategories({
+      bigCategory: selectedBigCategory,
+      subCategory: selectedSubCategory,
+    });
+
     const subjectScopeKey = makeSubjectScopeKey(selectedBigCategory, selectedExamTrack, selectedSubCategory);
     const famousSubjectChips = SUBCATEGORY_SUGGESTIONS[selectedSubCategory ?? ''] ?? [];
 
@@ -782,8 +792,8 @@ export const AcademyScreen = ({ onBack, initialSubview = 'top' }: AcademyScreenP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keywords: selectedKeywordsForDraft,
-          bigCategory: selectedBigCategory,
-          subCategory: selectedSubCategory,
+          bigCategory: storedCat.bigCategory,
+          subCategory: storedCat.subCategory,
           // 科目名＋追加指示をまとめてAIに渡す
           detailText: [subjectText.trim(), detailText.trim()].filter(Boolean).join('\n') || undefined,
         }),
@@ -808,8 +818,8 @@ export const AcademyScreen = ({ onBack, initialSubview = 'top' }: AcademyScreenP
 
     const next = generateDraftFromKeywords({
       selectedKeywords: selectedKeywordsForDraft,
-      bigCategory: selectedBigCategory,
-      subCategory: selectedSubCategory,
+      bigCategory: storedCat.bigCategory,
+      subCategory: storedCat.subCategory,
       detailText: [subjectText.trim(), detailText.trim()].filter(Boolean).join('\n'),
       poolKeywords: allExtractedKeywords.map((k) => k.label),
     });
@@ -1087,13 +1097,39 @@ export const AcademyScreen = ({ onBack, initialSubview = 'top' }: AcademyScreenP
             key="original"
             type="button"
             onClick={handleSelectOriginal}
-            className="w-full text-left rounded-2xl border border-emerald-500/35 bg-emerald-900/20 p-4 mb-3"
+            aria-label="オリジナル：キーワードを手入力して作問する"
+            className="group relative mb-4 w-full overflow-hidden rounded-2xl border-2 border-emerald-200/95 bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-600 p-5 text-left shadow-[0_10px_36px_rgba(5,150,105,0.45)] ring-2 ring-emerald-300/40"
             whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: 1.015, boxShadow: '0 14px 44px rgba(5,150,105,0.55)' }}
+            transition={{ type: 'spring', stiffness: 420, damping: 24 }}
           >
-            <p className="text-white font-extrabold mb-1">オリジナル</p>
-            <p className="text-emerald-200/80 text-xs leading-relaxed">
-              キーワードを1〜2個手入力して、ゼロから作問します
-            </p>
+            <span
+              className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/18 blur-2xl"
+              aria-hidden
+            />
+            <span className="relative flex items-start gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/30 bg-white/20 text-white shadow-inner backdrop-blur-[2px]">
+                <PenSquare className="h-6 w-6" strokeWidth={2.25} />
+              </span>
+              <span className="min-w-0 flex-1 pt-0.5">
+                <span className="mb-1 flex flex-wrap items-center gap-2">
+                  <span className="text-lg font-black tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]">
+                    オリジナル
+                  </span>
+                  <span className="rounded-full border border-emerald-400/70 bg-emerald-950/35 px-2 py-0.5 text-[10px] font-black tracking-wide text-emerald-50 shadow-sm backdrop-blur-sm">
+                    手入力スタート
+                  </span>
+                </span>
+                <span className="block text-sm font-semibold leading-relaxed text-emerald-50">
+                  キーワードを1〜2個手入力して、ゼロから作問します
+                </span>
+              </span>
+              <ChevronRight
+                className="mt-2 h-5 w-5 shrink-0 text-white/90 opacity-95 transition-transform group-hover:translate-x-1"
+                strokeWidth={2.5}
+                aria-hidden
+              />
+            </span>
           </motion.button>
 
           {themes.length === 0 ? (
@@ -1570,24 +1606,32 @@ if (subview === 'create_detail') {
           />
         </div>
 
-        {/* AIへの追加指示（折りたたみ） */}
-        <div className="mb-5">
+        {/* AIへの追加指示（折りたたみ）— 明るめパネルで写真背景とも文字ともなじませる */}
+        <div className="mb-5 rounded-2xl border border-violet-200/90 bg-[rgba(252,251,255,0.94)] shadow-[0_10px_36px_rgba(76,29,149,0.12)] backdrop-blur-md overflow-hidden ring-1 ring-white/60">
           <button
+            type="button"
             onClick={() => setIsDetailOpen((p) => !p)}
-            className="w-full text-left text-xs text-gray-500 hover:text-gray-300 py-2 flex items-center gap-1"
+            className="w-full text-left text-sm font-semibold text-violet-950 hover:bg-violet-100/75 py-3.5 px-4 flex items-center gap-2 border-b border-violet-200/80 transition-colors"
           >
-            <ChevronDown className={`w-3 h-3 transition-transform ${isDetailOpen ? 'rotate-180' : ''}`} />
-            AIへの追加指示を書く（任意）
+            <ChevronDown
+              className={`w-4 h-4 shrink-0 text-violet-600 transition-transform ${isDetailOpen ? 'rotate-180' : ''}`}
+            />
+            <span>どんな問題にする？
+            </span>
+            <span className="text-xs font-normal text-violet-800/70">（任意）</span>
           </button>
           {isDetailOpen && (
-            <div className="mt-2 rounded-2xl border border-gray-700 bg-gray-800/60 p-4">
+            <div className="p-4 bg-[rgba(248,247,252,0.97)]">
+              <p className="text-xs text-slate-600 mb-2 leading-relaxed">
+                難易度や出題のニュアンスを書いてください。空欄のままでも問題を生成できます。
+              </p>
               <textarea
                 value={detailText}
                 onChange={(e) => setDetailText(e.target.value)}
-                placeholder="難易度・出題形式など。空欄でもOK。"
-                className="w-full rounded-lg bg-gray-900 border border-gray-600 text-white text-sm p-3 min-h-[80px] outline-none focus:border-indigo-500 placeholder:text-gray-600 resize-none"
+                placeholder="例: NHKのニュースレベルの時事を1問だけ混ぜて／選択肢は固有名詞寄りで…"
+                className="w-full rounded-xl bg-white border border-slate-300/90 text-slate-900 text-sm p-3 min-h-[96px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/25 placeholder:text-slate-400 resize-none shadow-inner shadow-slate-200/80"
               />
-              <p className="text-gray-600 text-xs mt-1.5 text-right">{detailText.length} 文字</p>
+              <p className="text-slate-500 text-xs mt-2 text-right tabular-nums">{detailText.length} 文字</p>
             </div>
           )}
         </div>
@@ -1767,14 +1811,18 @@ if (subview === 'create_detail') {
                     setIsPublishing(true);
                     try {
                       if (draft) {
+                        const pubCat = resolveCreationAcademyStoredCategories({
+                          bigCategory: selectedBigCategory,
+                          subCategory: selectedSubCategory,
+                        });
                         const result = await addAcademyUserQuestion({
                           question: draft.question,
                           choices: draft.choices,
                           answerIndex: draft.answerIndex,
                           explanation: draft.explanation,
                           keywords: selectedKeywordsForDraft,
-                          bigCategory: selectedBigCategory ?? undefined,
-                          subCategory: selectedSubCategory ?? undefined,
+                          bigCategory: pubCat.bigCategory || undefined,
+                          subCategory: pubCat.subCategory || undefined,
                           subjectText: subjectText.trim() || undefined,
                           detailText: detailText.trim() || undefined,
                         });
@@ -1783,6 +1831,8 @@ if (subview === 'create_detail') {
                           addToast('error', `投稿に失敗しました${reason}`);
                           return;
                         }
+                        // デイリーミッション：問題を作る（投稿完了で付与）
+                        claimDailyMission('create');
                       }
                       setShowPublishModal(false);
                       setSubview('create_done');

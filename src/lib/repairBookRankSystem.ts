@@ -177,6 +177,33 @@ export function getTierUpMessage(tierName: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────
+// すうひもち「親密度」ポイント上限（司書ランクのティア連動）
+// ─────────────────────────────────────────────────────────────
+
+/** 見習い司書ティア（tier 0）での上限。従来どおり 1000。 */
+export const SUHIMOCHI_INTIMACY_POINTS_BASE_CAP = 1000;
+/** ランクが 1 段上がるごとに加わる上限幅（tier10 なら 1000 + 110×10 = 2100） */
+export const SUHIMOCHI_INTIMACY_EXTRA_CAP_PER_TIER = 110;
+
+export function getSuhimochiIntimacyPointsCapForTierIndex(tierIndex: number): number {
+  const t = Number.isFinite(tierIndex)
+    ? Math.max(0, Math.min(TOTAL_TIERS - 1, Math.floor(tierIndex)))
+    : 0;
+  return SUHIMOCHI_INTIMACY_POINTS_BASE_CAP + SUHIMOCHI_INTIMACY_EXTRA_CAP_PER_TIER * t;
+}
+
+/** 親密度レベル（1〜5）。上限が伸びるほど同じ割合で Lv 判定の閾値も伸びる */
+export function calcSuhimochiIntimacyLevelFromPoints(points: number, pointsCap: number): 1 | 2 | 3 | 4 | 5 {
+  const cap = Math.max(pointsCap, SUHIMOCHI_INTIMACY_POINTS_BASE_CAP);
+  const s = cap / SUHIMOCHI_INTIMACY_POINTS_BASE_CAP;
+  if (points >= 850 * s) return 5;
+  if (points >= 650 * s) return 4;
+  if (points >= 400 * s) return 3;
+  if (points >= 200 * s) return 2;
+  return 1;
+}
+
+// ─────────────────────────────────────────────────────────────
 // 三重リングのソケット定義
 // ─────────────────────────────────────────────────────────────
 export const SOCKET_RINGS = [

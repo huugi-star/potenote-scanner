@@ -51,6 +51,7 @@ import { getRepairBookFragments, getRepairSpentFragments, migrateRepairProgressI
 import {
   calcBooksFromFragments,
   calcRankInfo,
+  getSuhimochiIntimacyPointsCapForTierIndex,
   RANK_TIERS,
   TIER_CUMULATIVE_FRAGMENTS,
   UNLOCK_WORD_COLLECTION_MIN_TIER_INDEX,
@@ -59,6 +60,7 @@ import {
 import { useLibraryRankSnapshot } from '@/hooks/useLibraryRankSnapshot';
 import { SHOULDER_TITLE_PRESETS } from '@/data/shoulderTitlePresets';
 import { KanColeScreen } from '@/components/screens/KanColeScreen';
+import { AC, AcnhOutdoorDecor } from '@/lib/acnhTheme';
 
 // ===== Types =====
 
@@ -128,127 +130,6 @@ const TranslationResultScreenWrapper = ({ onBack }: { onBack: () => void }) => {
     </motion.div>
   );
 };
-
-/** どうぶつの森風カラーパレット（トップ画面・冒険メニュー共通） */
-const AC = {
-  sky: '#D4EFF7',
-  skyDeep: '#A8D8EA',
-  grass: '#7EC8A4',
-  grassDk: '#5BAF8A',
-  cream: '#FFF8E8',
-  yellow: '#FFD93D',
-  yellowDk: '#E6B800',
-  brown: '#A0744A',
-  brownDk: '#7A5234',
-  coral: '#FF8C69',
-  mint: '#A8E6CF',
-  lavender: '#D4A8E6',
-  white: '#FFFFFF',
-  textDk: '#5A3E28',
-  textMd: '#7A5A3A',
-  textLt: '#A08060',
-};
-
-/** 空・草原・木・花・雲（ホームと同じ屋外レイヤー） */
-function AcnhOutdoorDecor({ compact }: { compact: boolean }) {
-  const floaters = [
-    { emoji: '🌿', top: '8%', left: '5%', delay: 0, dur: 4.2, size: 18 },
-    { emoji: '🌸', top: '12%', left: '85%', delay: 1.2, dur: 3.8, size: 16 },
-    { emoji: '🍃', top: '5%', left: '65%', delay: 0.6, dur: 4.5, size: 14 },
-    { emoji: '⭐', top: '20%', left: '92%', delay: 2.0, dur: 3.2, size: 13 },
-    { emoji: '🌼', top: '18%', left: '2%', delay: 1.8, dur: 4.0, size: 15 },
-  ];
-
-  return (
-    <>
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '38%',
-          background: `linear-gradient(180deg, transparent 0%, ${AC.mint}55 40%, ${AC.grass}44 100%)`,
-          pointerEvents: 'none',
-          zIndex: 0,
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          bottom: compact ? -40 : -60,
-          left: '-10%',
-          right: '-10%',
-          height: compact ? 100 : 140,
-          background: `radial-gradient(ellipse at 50% 100%, ${AC.grassDk}88 0%, ${AC.grass}44 60%, transparent 100%)`,
-          borderRadius: '50%',
-          pointerEvents: 'none',
-          zIndex: 0,
-        }}
-      />
-      {[
-        { left: '-3%', bottom: compact ? 44 : 60, scale: compact ? 0.62 : 0.9 },
-        { left: '82%', bottom: compact ? 40 : 55, scale: compact ? 0.58 : 0.85 },
-        { left: '92%', bottom: compact ? 46 : 62, scale: compact ? 0.52 : 0.75 },
-      ].map((t, i) => (
-        <div
-          key={i}
-          style={{
-            position: 'absolute',
-            bottom: t.bottom,
-            left: t.left,
-            fontSize: 48 * t.scale,
-            pointerEvents: 'none',
-            zIndex: 1,
-            opacity: compact ? 0.55 : 0.75,
-          }}
-        >
-          🌳
-        </div>
-      ))}
-      {(compact ? floaters.slice(0, 3) : floaters).map((f, i) => (
-        <motion.span
-          key={i}
-          style={{
-            pointerEvents: 'none',
-            position: 'absolute',
-            zIndex: 2,
-            top: f.top,
-            left: f.left,
-            fontSize: compact ? f.size * 0.82 : f.size,
-            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.12))',
-          }}
-          animate={{ y: [0, -10, 0], rotate: [-5, 5, -5] }}
-          transition={{ duration: f.dur, delay: f.delay, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          {f.emoji}
-        </motion.span>
-      ))}
-      {[
-        { top: compact ? '4%' : '6%', left: '15%', w: compact ? 48 : 70, delay: 0 },
-        ...(compact ? [] : [{ top: '3%', left: '55%', w: 55, delay: 1.5 }]),
-      ].map((c, i) => (
-        <motion.div
-          key={i}
-          style={{
-            position: 'absolute',
-            top: c.top,
-            left: c.left,
-            width: c.w,
-            height: c.w * 0.5,
-            borderRadius: 999,
-            background: 'rgba(255,255,255,0.85)',
-            pointerEvents: 'none',
-            zIndex: 1,
-            boxShadow: '0 3px 10px rgba(255,255,255,0.6)',
-          }}
-          animate={{ x: [0, 12, 0] }}
-          transition={{ duration: 8 + i * 2, delay: c.delay, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      ))}
-    </>
-  );
-}
 
 /**
  * 冒険メニュー画面
@@ -672,8 +553,8 @@ const AdventureMenuScreen = ({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <Users className="w-5 h-5" />
-            記録の書庫
+            <BookOpen className="w-5 h-5" />
+            ノートを開く
           </motion.button>
 
           <div className="pt-2">
@@ -2234,6 +2115,19 @@ const MyPageScreen = ({
   const isVIP = useGameStore((s) => s.isVIP);
   const coins = useGameStore((s) => s.coins);
   const equipment = useGameStore((s) => s.equipment);
+  const reconcileSuhimochiIntimacyWithLibraryRank = useGameStore(
+    (s) => s.reconcileSuhimochiIntimacyWithLibraryRank,
+  );
+
+  const libraryRank = useLibraryRankSnapshot();
+  const suhimochiIntimacyPointsCap = useMemo(
+    () => getSuhimochiIntimacyPointsCapForTierIndex(libraryRank.tierIndex),
+    [libraryRank.tierIndex],
+  );
+
+  useEffect(() => {
+    reconcileSuhimochiIntimacyWithLibraryRank();
+  }, [libraryRank.tierIndex, reconcileSuhimochiIntimacyWithLibraryRank]);
 
   const equippedDetails = useMemo(
     () => ({
@@ -2339,10 +2233,19 @@ const MyPageScreen = ({
           <div className="mt-3 h-2 w-full rounded-full bg-gray-700 overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-rose-400 to-pink-400 transition-all duration-700"
-              style={{ width: `${Math.min(100, (intimacyPoints / 1000) * 100)}%` }}
+              style={{
+                width: `${
+                  Math.min(
+                    100,
+                    suhimochiIntimacyPointsCap > 0 ? (intimacyPoints / suhimochiIntimacyPointsCap) * 100 : 0,
+                  )
+                }%`,
+              }}
             />
           </div>
-          <p className="text-right text-xs text-rose-400/60 mt-1">Lv.{intimacyLevel} / 5</p>
+          <p className="text-right text-xs text-rose-400/60 mt-1 tabular-nums">
+            {intimacyPoints}/{suhimochiIntimacyPointsCap} Pt ・ Lv.{intimacyLevel} / 5
+          </p>
         </div>
 
         <div className="rounded-2xl border border-gray-700 bg-gray-800/60 p-5">
@@ -2618,7 +2521,7 @@ const AppContent = () => {
   // State
   const [phase, setPhase] = useState<GamePhase>('home');
   /** アカデミー画面を開くときの初期サブ画面（図書館ランクから修繕へ直行など） */
-  const [academyInitialSubview, setAcademyInitialSubview] = useState<'top' | 'repair_book'>('top');
+  const [academyInitialSubview, setAcademyInitialSubview] = useState<'top' | 'repair_book' | 'everyone' | 'create_seed_list'>('top');
   const [wordDexBackPhase, setWordDexBackPhase] = useState<GamePhase>('scanning');
   const [quizSession, setQuizSession] = useState<QuizSession | null>(null);
   const [showLoginBonus, setShowLoginBonus] = useState(false);
@@ -2941,7 +2844,18 @@ const AppContent = () => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            <SuhimochiRoomScreen onBack={handleBackToHome} />
+            <SuhimochiRoomScreen
+              onBack={handleBackToHome}
+              onGoScan={() => handleNavigate('adventure_menu')}
+              onGoMinnanoMondai={() => {
+                setAcademyInitialSubview('everyone');
+                setPhase('academy');
+              }}
+              onGoCreateQuestion={() => {
+                setAcademyInitialSubview('create_seed_list');
+                setPhase('academy');
+              }}
+            />
           </motion.div>
         )}
 

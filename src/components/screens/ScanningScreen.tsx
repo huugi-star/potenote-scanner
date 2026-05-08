@@ -21,7 +21,7 @@ import {
   X,
   ChevronLeft,
   Sparkles,
-  History
+  BookOpen
 } from 'lucide-react';
 import { useGameStore, selectRemainingScanCount } from '@/store/useGameStore';
 import { PotatoAvatar } from '@/components/ui/PotatoAvatar';
@@ -92,6 +92,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
   }), [equipment.head, equipment.body, equipment.face, equipment.accessory]);
   const checkScanLimit = useGameStore(state => state.checkScanLimit);
   const incrementScanCount = useGameStore(state => state.incrementScanCount);
+  const claimDailyMission = useGameStore((s) => s.claimDailyMission);
   const incrementTranslationCount = useGameStore(state => state.incrementTranslationCount);
   const purchaseScanRecovery = useGameStore(state => state.purchaseScanRecovery);
   const saveQuizHistory = useGameStore(state => state.saveQuizHistory);
@@ -431,6 +432,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
           }
           
           setScanState('ready');
+          // デイリーミッション：スキャンして問題生成（生成成功時に付与）
+          claimDailyMission('scan');
           vibrateSuccess();
           addToast('success', 'クイズを生成しました！');
         } else if (quizResult.error) {
@@ -462,7 +465,7 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
       vibrateError();
       addToast('error', message);
     }
-  }, [checkScanLimit, incrementScanCount, addToast, translationMode, scanType, onTranslationReady, saveQuizHistory, registerQuizBatchToWordDex, setGeneratedQuiz, setAspAdRecommendation, onQuizReady, startProgressTicker, stopProgressTicker]);
+  }, [checkScanLimit, incrementScanCount, claimDailyMission, addToast, translationMode, scanType, onTranslationReady, saveQuizHistory, registerQuizBatchToWordDex, setGeneratedQuiz, setAspAdRecommendation, onQuizReady, startProgressTicker, stopProgressTicker]);
 
   // ファイル入力変更
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -658,8 +661,8 @@ export const ScanningScreen = ({ onQuizReady, onTranslationReady, onOpenFreeQues
                     whileHover={quizHistoryCount > 0 ? { scale: 1.02 } : {}}
                     whileTap={quizHistoryCount > 0 ? { scale: 0.98 } : {}}
                   >
-                    <History className="w-5 h-5" />
-                    記録の書庫
+                    <BookOpen className="w-5 h-5" />
+                    ノートを開く
                     <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
                       {quizHistoryCount}
                     </span>
