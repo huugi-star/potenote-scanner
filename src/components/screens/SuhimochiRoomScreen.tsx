@@ -408,13 +408,6 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
     if (isLogOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [talkMessages, isLogOpen]);
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      const c = scrollRef.current;
-      c.scrollLeft = (c.scrollWidth - c.clientWidth) / 2;
-    }
-  }, []);
-
   const handleConfirmInterests = useCallback(async () => {
     if (selectedInterests.length < 2) return;
     setSuhimochiInterests(selectedInterests);
@@ -424,7 +417,9 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
     if (isEditMode) return;
     vibrateLight();
     const rect = e.currentTarget.getBoundingClientRect();
-    setCharPosition(Math.max(120, Math.min(e.clientX - rect.left, 800 - 120)));
+    // 表示はscaleされているので、クリック座標を論理キャンバス座標へ戻す
+    const logicalX = (e.clientX - rect.left) / Math.max(roomCanvasScale, 0.001);
+    setCharPosition(Math.max(120, Math.min(logicalX, 800 - 120)));
   };
 
   useEffect(() => {
@@ -590,6 +585,12 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
     const raw = charPosition - 152;
     return Math.max(PAD, Math.min(raw, CANVAS_W - SUHIMOCHI_BUBBLE_WIDTH - PAD));
   }, [charPosition]);
+
+  /** 吹き出しのしっぽ位置（bubble 内 left-[40%]）直下に、アバター中心を合わせる */
+  const avatarAnchorX = useMemo(
+    () => bubbleLeft + SUHIMOCHI_BUBBLE_WIDTH * 0.4,
+    [bubbleLeft],
+  );
 
   const logMessages   = useMemo(() => talkMessages, [talkMessages]);
   const sortedAnataZukanEntries = useMemo<AnataZukanEntry[]>(
@@ -1093,7 +1094,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
         >
           <div
             ref={scrollRef}
-            className="absolute inset-0 overflow-x-auto overflow-y-hidden overscroll-x-contain [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+            className="absolute inset-0 overflow-hidden"
           >
             <div
               className="relative h-[420px] w-[800px]"
@@ -1190,10 +1191,19 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
                   ))}
                 </AnimatePresence>
               </div>
-              <motion.div className="absolute bottom-14 left-0 z-30 pointer-events-none"
-                animate={{ x: charPosition - 120 }} transition={{ type: 'tween', duration: 1.2, ease: 'linear' }}>
+              <motion.div
+                className="absolute bottom-12 z-30 flex w-0 justify-center pointer-events-none sm:bottom-14"
+                animate={{ left: avatarAnchorX }}
+                transition={{ type: 'tween', duration: 1.2, ease: 'linear' }}
+              >
                 <motion.div animate={hopControls}>
-                  <PotatoAvatar equipped={equippedDetails} emotion={currentEmotion as any} size={240} ssrEffect={false} showShadow={false} />
+                  <PotatoAvatar
+                    equipped={equippedDetails}
+                    emotion={currentEmotion as any}
+                    size={isCompactViewport ? 264 : 252}
+                    ssrEffect={false}
+                    showShadow={false}
+                  />
                 </motion.div>
               </motion.div>
               {latestSuhimochiMessage && (
@@ -1253,7 +1263,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
                       {inventory.length === 0
                         ? <p className="flex h-14 w-full items-center justify-center text-xs text-amber-900/50">収納に家具がありません</p>
                         : inventory.map((item) => (
-                          <button key={item.id} onClick={() => { vibrateLight(); addFurnitureToRoom(item, (scrollRef.current?.scrollLeft || 0) + 150, 280); }}
+                          <button key={item.id} onClick={() => { vibrateLight(); addFurnitureToRoom(item, 360, 280); }}
                             className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-white text-3xl shadow-sm hover:bg-amber-100 active:scale-95">
                             {item.emoji}
                           </button>
@@ -1357,8 +1367,6 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
             )}
           </AnimatePresence>
         </section>
-
-        </div>
 
         {/* デイリーミッション */}
         <AnimatePresence>
@@ -1707,7 +1715,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
 
         {/* 会話ログ */}
         {logMessages.length > 0 && (
-          <div className="rounded-2xl border border-amber-200 bg-white/60 overflow-hidden">
+          <div className="mt-0.5 overflow-hidden rounded-2xl border border-amber-200 bg-white/60">
             <button onClick={() => { vibrateLight(); setIsLogOpen((p) => !p); }}
               className="flex w-full items-center justify-between px-4 py-2 hover:bg-amber-50/60">
               <div className="flex items-center gap-2 text-amber-800">
@@ -1783,6 +1791,8 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
             )}
           </div>
         )}
+
+        </div>
 
       </div>
     </div>
