@@ -262,7 +262,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
   const [intimacyVisible, setIntimacyVisible] = useState(
     suhimochiIntimacy.totalMessages > 0
   );
-  const [isRoomMenuOpen, setIsRoomMenuOpen] = useState(false);
+  const [isRoomMenuOpen, setIsRoomMenuOpen] = useState(true);
   const [bubblePageIndex, setBubblePageIndex] = useState(0);
   const [bubbleTypedChars, setBubbleTypedChars] = useState(0);
 
@@ -1111,27 +1111,27 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
                     .sort((a, b) => Number(a.done) - Number(b.done))
                     .slice(0, 3);
                   return (
-                    <div className="absolute top-9 left-1/2 z-30 w-[100px] -translate-x-1/2 translate-x-[100px]">
+                    <div className="absolute top-8 left-1/2 z-30 w-[132px] -translate-x-1/2 translate-x-[110px]">
                       {/* 紐 */}
-                      <div className="mx-auto h-2 w-0.5 bg-[#7a5c43]/70" />
+                      <div className="mx-auto h-2.5 w-0.5 bg-[#7a5c43]/70" />
                       {/* 壁掛け（スリム化して一画面内の見切れを抑える） */}
                       <div className="relative w-full rounded-xl border border-[#7a5c43]/30 bg-white shadow-lg">
                         <div className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border border-[#7a5c43]/30 bg-white shadow-sm" />
                         <div className="rounded-t-xl bg-gradient-to-r from-sky-600 to-indigo-600 px-1.5 py-1">
-                          <p className="text-[8px] font-black tracking-[0.1em] text-white/90">
+                          <p className="text-[11px] font-black tracking-[0.1em] text-white/90">
                             {m}月
                           </p>
                         </div>
                         <div className="px-1.5 py-1.5">
                           <div className="flex items-end justify-between gap-0.5">
-                            <p className="text-[22px] font-black leading-none text-slate-900">{d}</p>
-                            <p className="text-[9px] font-black text-slate-500">({w})</p>
+                            <p className="text-[30px] font-black leading-none text-slate-900">{d}</p>
+                            <p className="text-[12px] font-black text-slate-500">({w})</p>
                           </div>
                         </div>
                         <div className="border-t border-slate-200/80 px-1.5 py-2">
-                          <p className="text-[8px] font-black tracking-[0.14em] text-slate-400">TODO</p>
+                          <p className="text-[10px] font-black tracking-[0.14em] text-slate-400">TODO</p>
                           {todosToday.length === 0 ? (
-                            <p className="mt-0.5 text-[9px] font-semibold leading-snug text-slate-500">
+                            <p className="mt-0.5 text-[11px] font-semibold leading-snug text-slate-500">
                               今日は予定なし
                             </p>
                           ) : (
@@ -1139,7 +1139,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
                               {todosToday.map((t) => (
                                 <p
                                   key={t.id}
-                                  className={`truncate text-[9px] font-black leading-tight ${
+                                  className={`truncate text-[11px] font-black leading-tight ${
                                     t.done
                                       ? 'text-slate-400 line-through decoration-rose-500 decoration-[1.5px]'
                                       : 'text-slate-800'
@@ -1200,7 +1200,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
                   <PotatoAvatar
                     equipped={equippedDetails}
                     emotion={currentEmotion as any}
-                    size={isCompactViewport ? 264 : 252}
+                    size={isCompactViewport ? 320 : 304}
                     ssrEffect={false}
                     showShadow={false}
                   />
@@ -1208,7 +1208,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
               </motion.div>
               {latestSuhimochiMessage && (
                 <div
-                  className="absolute bottom-[280px] z-40 pointer-events-none"
+                  className="absolute bottom-[305px] z-40 pointer-events-none"
                   style={{
                     left: bubbleLeft,
                     width: `min(${SUHIMOCHI_BUBBLE_WIDTH}px, calc(100vw - 24px))`,
@@ -1223,7 +1223,7 @@ export const SuhimochiRoomScreen = ({ onBack, newlyLearnedWord, onGoScan, onGoMi
                       <motion.p key={`${latestSuhimochiMessage.id}-${bubblePageIndex}`}
                         initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                         transition={{ duration: 0.25 }}
-                        className="text-sm font-medium leading-relaxed whitespace-pre-wrap text-[#352a21] tracking-[0.01em]">
+                        className="text-[16px] font-medium leading-relaxed whitespace-pre-wrap text-[#352a21] tracking-[0.01em]">
   {bubbleVisibleText.replace(/([。！？!?])/g, '$1\n').replace(/\n+/g, '\n').trim()}
                       </motion.p>
                     </AnimatePresence>
