@@ -4017,6 +4017,7 @@ export const useGameStore = create<GameStore>()(
         kanColeRetryQueue: state.kanColeRetryQueue,
         kanDexOrder: state.kanDexOrder,
         lectureHistory: state.lectureHistory,
+        lastLectureCategorySelection: state.lastLectureCategorySelection,
         scanType: state.scanType,
         translationResult: state.translationResult,
         generatedQuiz: state.generatedQuiz,

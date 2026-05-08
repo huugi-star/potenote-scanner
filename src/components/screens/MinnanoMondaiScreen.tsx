@@ -2426,6 +2426,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   const [answerFeedback, setAnswerFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [magicCircles, setMagicCircles] = useState<MagicCircleState[]>([]);
   const [lectureQuizMode, setLectureQuizMode] = useState<LectureQuizModeCount>(DEFAULT_LECTURE_QUIZ_COUNT);
+  const restoredSelectionRef = useRef(false);
   const magicIdRef = useRef(0);
   const feedbackAdvanceTimerRef = useRef<number | null>(null);
   const answerBatchSentRef = useRef(false);
@@ -2438,12 +2439,17 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
 
   // 前回「講義開始」で選んだタブ/科目/大分類を初期選択として復元
   useEffect(() => {
+    if (restoredSelectionRef.current) return;
     if (!lastLectureCategorySelection) return;
     const foundCat = lastLectureCategorySelection.categoryId
       ? LECTURE_CATEGORIES.find((c) => c.id === lastLectureCategorySelection.categoryId) ?? null
       : null;
     if (foundCat) setSelectedCat(foundCat);
-    if (lastLectureCategorySelection.tabLabel) setSelectedTabLabel(lastLectureCategorySelection.tabLabel);
+    if (lastLectureCategorySelection.tabLabel && foundCat?.tabs.some((t) => t.label === lastLectureCategorySelection.tabLabel)) {
+      setSelectedTabLabel(lastLectureCategorySelection.tabLabel);
+    } else if (foundCat) {
+      setSelectedTabLabel(foundCat.tabs[0]?.label ?? '');
+    }
     if (lastLectureCategorySelection.detailSubject) setSelectedDetailSubject(lastLectureCategorySelection.detailSubject);
     if (lastLectureCategorySelection.hsLiberalSubject) setHsLiberalSubject(lastLectureCategorySelection.hsLiberalSubject);
     if (lastLectureCategorySelection.hsLiberalField) setHsLiberalField(lastLectureCategorySelection.hsLiberalField);
@@ -2454,8 +2460,8 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
     if (lastLectureCategorySelection.lectureQuizModeCount) {
       setLectureQuizMode(lastLectureCategorySelection.lectureQuizModeCount as LectureQuizModeCount);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    restoredSelectionRef.current = true;
+  }, [lastLectureCategorySelection]);
 
   const questionsByCategoryAndTab = useMemo(() => {
     const map: Record<string, Record<string, AcademyUserQuestion[]>> = {};
@@ -2966,11 +2972,29 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
               totalPlays={categoryAllQuestionsById[cat.id]?.reduce((s, q) => s + (q.playCount ?? 0), 0) ?? 0}
               onSelect={() => {
                 setSelectedCat(cat);
-                setSelectedTabLabel(cat.tabs[0]?.label ?? '');
-                setSelectedDetailSubject('すべて');
-                setHsLiberalSubject('すべて');
-                setHsLiberalField('すべて');
-                setLectureQuizMode(DEFAULT_LECTURE_QUIZ_COUNT);
+                const saved = lastLectureCategorySelection;
+                const canReuse = saved && saved.categoryId === cat.id;
+                const fallbackTab = cat.tabs[0]?.label ?? '';
+                const savedTab = canReuse && saved.tabLabel && cat.tabs.some((t) => t.label === saved.tabLabel)
+                  ? saved.tabLabel
+                  : fallbackTab;
+                setSelectedTabLabel(savedTab);
+                setSelectedDetailSubject(canReuse ? saved.detailSubject || 'すべて' : 'すべて');
+                setHsLiberalSubject(canReuse ? saved.hsLiberalSubject || 'すべて' : 'すべて');
+                setHsLiberalField(canReuse ? saved.hsLiberalField || 'すべて' : 'すべて');
+                setPublicServiceMajor(canReuse ? saved.publicServiceMajor || DEFAULT_PUBLIC_SERVICE_MAJOR : DEFAULT_PUBLIC_SERVICE_MAJOR);
+                setPublicServiceField(
+                  canReuse
+                    ? saved.publicServiceField || defaultPublicServiceField((saved.publicServiceMajor as PublicServiceMajor) || DEFAULT_PUBLIC_SERVICE_MAJOR)
+                    : defaultPublicServiceField(DEFAULT_PUBLIC_SERVICE_MAJOR)
+                );
+                setTeacherSpecialty(canReuse ? (saved.teacherSpecialty || TEACHER_SPECIALTY_ORDER[0]) : TEACHER_SPECIALTY_ORDER[0]);
+                setTeacherJhsSubject(canReuse ? (saved.teacherJhsSubject || TEACHER_JHS_SUBJECTS[0]) : TEACHER_JHS_SUBJECTS[0]);
+                setLectureQuizMode(
+                  canReuse && saved.lectureQuizModeCount
+                    ? (saved.lectureQuizModeCount as LectureQuizModeCount)
+                    : DEFAULT_LECTURE_QUIZ_COUNT
+                );
               }}
               index={i}
             />
