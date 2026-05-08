@@ -2396,6 +2396,8 @@ const QuizPlayView = ({
 export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   const academyUserQuestions = useGameStore((s) => s.academyUserQuestions);
   const consecutiveLoginDays = useGameStore((s) => s.consecutiveLoginDays);
+  const lastLectureCategorySelection = useGameStore((s) => s.lastLectureCategorySelection);
+  const setLastLectureCategorySelection = useGameStore((s) => s.setLastLectureCategorySelection);
 
   const [selectedCat, setSelectedCat] = useState<LectureCategory | null>(null);
   const [selectedTabLabel, setSelectedTabLabel] = useState<string>('');
@@ -2432,6 +2434,27 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
 
   useEffect(() => {
     void useGameStore.getState().refreshAcademyQuestions();
+  }, []);
+
+  // 前回「講義開始」で選んだタブ/科目/大分類を初期選択として復元
+  useEffect(() => {
+    if (!lastLectureCategorySelection) return;
+    const foundCat = lastLectureCategorySelection.categoryId
+      ? LECTURE_CATEGORIES.find((c) => c.id === lastLectureCategorySelection.categoryId) ?? null
+      : null;
+    if (foundCat) setSelectedCat(foundCat);
+    if (lastLectureCategorySelection.tabLabel) setSelectedTabLabel(lastLectureCategorySelection.tabLabel);
+    if (lastLectureCategorySelection.detailSubject) setSelectedDetailSubject(lastLectureCategorySelection.detailSubject);
+    if (lastLectureCategorySelection.hsLiberalSubject) setHsLiberalSubject(lastLectureCategorySelection.hsLiberalSubject);
+    if (lastLectureCategorySelection.hsLiberalField) setHsLiberalField(lastLectureCategorySelection.hsLiberalField);
+    if (lastLectureCategorySelection.publicServiceMajor) setPublicServiceMajor(lastLectureCategorySelection.publicServiceMajor);
+    if (lastLectureCategorySelection.publicServiceField) setPublicServiceField(lastLectureCategorySelection.publicServiceField);
+    if (lastLectureCategorySelection.teacherSpecialty) setTeacherSpecialty(lastLectureCategorySelection.teacherSpecialty);
+    if (lastLectureCategorySelection.teacherJhsSubject) setTeacherJhsSubject(lastLectureCategorySelection.teacherJhsSubject);
+    if (lastLectureCategorySelection.lectureQuizModeCount) {
+      setLectureQuizMode(lastLectureCategorySelection.lectureQuizModeCount as LectureQuizModeCount);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const questionsByCategoryAndTab = useMemo(() => {
@@ -2598,6 +2621,20 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
 
   const startQuiz = useCallback(
     (categoryQuestions: AcademyUserQuestion[], questionCount: LectureQuizModeCount) => {
+      // 次回復元用に、講義開始時点の選択を保存
+      setLastLectureCategorySelection({
+        categoryId: selectedCat?.id ?? null,
+        tabLabel: selectedTabLabel,
+        detailSubject: selectedDetailSubject,
+        hsLiberalSubject,
+        hsLiberalField,
+        publicServiceMajor,
+        publicServiceField,
+        teacherSpecialty,
+        teacherJhsSubject,
+        lectureQuizModeCount: questionCount,
+      });
+
       const picked = buildQuizQuestions(categoryQuestions, academyUserQuestions, questionCount);
       if (picked.length < questionCount) {
         alert(
@@ -2618,7 +2655,19 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
       setQuizPhase('playing');
       answerBatchSentRef.current = false;
     },
-    [academyUserQuestions]
+    [
+      academyUserQuestions,
+      hsLiberalField,
+      hsLiberalSubject,
+      publicServiceField,
+      publicServiceMajor,
+      selectedCat?.id,
+      selectedDetailSubject,
+      selectedTabLabel,
+      setLastLectureCategorySelection,
+      teacherJhsSubject,
+      teacherSpecialty,
+    ]
   );
 
   /**

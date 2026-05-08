@@ -793,6 +793,23 @@ interface GameState extends UserState {
 
   // 講義履歴
   lectureHistory: LectureHistory[];
+
+  /**
+   * 受講カテゴリー（みんなの問題→講義開始）の前回選択。
+   * 画面を開いた直後に初期選択として復元する。
+   */
+  lastLectureCategorySelection: {
+    categoryId: string | null;
+    tabLabel: string;
+    detailSubject: string;
+    hsLiberalSubject: string;
+    hsLiberalField: string;
+    publicServiceMajor: string;
+    publicServiceField: string;
+    teacherSpecialty: string;
+    teacherJhsSubject: string;
+    lectureQuizModeCount: number;
+  } | null;
   
   // スキャンタイプと翻訳結果
   scanType: 'quiz' | 'translation';
@@ -947,6 +964,9 @@ interface GameActions {
   saveLectureHistory: (script: LectureScript, imageUrl?: string) => void;
   getLectureHistory: () => LectureHistory[];
   deleteLectureHistory: (id: string) => void;
+
+  // 受講カテゴリーの前回選択（保存/復元用）
+  setLastLectureCategorySelection: (next: GameState['lastLectureCategorySelection']) => void;
   
   calculateResult: (correctCount: number, totalQuestions: number, isAdWatched: boolean) => QuizResult;
   applyQuizResult: (result: QuizResult) => void;
@@ -1112,6 +1132,8 @@ const initialState: GameState = {
   academyUserQuestions: mergeSeedAndPostedAcademyQuestions([], []),
 
   lectureHistory: [],
+
+  lastLectureCategorySelection: null,
   
   scanType: 'quiz',
   translationMode: null,
@@ -2959,6 +2981,10 @@ export const useGameStore = create<GameStore>()(
             }
           })();
         }
+      },
+
+      setLastLectureCategorySelection: (next) => {
+        set({ lastLectureCategorySelection: next ?? null });
       },
       
       // ===== Quiz & Rewards =====
