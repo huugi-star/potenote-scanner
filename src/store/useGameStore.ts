@@ -509,13 +509,30 @@ const normalizeAcademyQuestion = (
 /** マージ後の上限。旧200だと公式seed+Firestore合算で末尾（日本史後半・世界史など）が落ち、高校受験「歴史」に揃わない。 */
 const ACADEMY_MERGED_QUESTIONS_MAX = 4000;
 
+const normalizeSeedAcademyQuestion = (q: AcademyUserQuestion): AcademyUserQuestion => {
+  // 旧seed（資格試験→公務員試験）表記を、UI側の「公務員試験」分野ラベルへ寄せる。
+  if (
+    (q.bigCategory === '資格' || q.bigCategory === '資格試験') &&
+    q.subCategory === '公務員試験' &&
+    q.subjectText === '教員採用試験' &&
+    q.detailText === '教養試験'
+  ) {
+    return {
+      ...q,
+      bigCategory: '資格',
+      subCategory: '教員採用試験・教養試験',
+    };
+  }
+  return q;
+};
+
 const mergeSeedAndPostedAcademyQuestions = (
   official: AcademyUserQuestion[],
   posted: AcademyUserQuestion[]
 ): AcademyUserQuestion[] => {
   // ローカル `academySeedQuestions.ts` をベースにし、Firestore 公式で上書き、最後にユーザー投稿が同名idを優先。
   const byId = new Map<string, AcademyUserQuestion>();
-  for (const q of ACADEMY_SEED_QUESTIONS) byId.set(q.id, q);
+  for (const q of ACADEMY_SEED_QUESTIONS) byId.set(q.id, normalizeSeedAcademyQuestion(q));
   for (const q of official) byId.set(q.id, q);
   for (const q of posted) byId.set(q.id, q);
   return Array.from(byId.values())
