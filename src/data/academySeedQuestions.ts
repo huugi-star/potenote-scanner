@@ -6806,7 +6806,7 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     subCategory: 'オリジナル',
   },
 
-  // --- 資格試験・公務員試験・教員採用試験（教養試験） ---
+  // --- 資格・公務員試験・教員採用試験（教養） ---
   {
     id: 'academy_seed_shikaku_kyousyoku_kyouyou_01',
     createdAt: '2026-05-08T08:51:00.000Z',
@@ -6814,11 +6814,11 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     choices: ['learn', 'learning', 'to learn', 'learned'],
     answerIndex: 1,
     explanation: 'be interested in の in は前置詞なので、後ろは動名詞（〜ing）を置きます。',
-    keywords: ['資格試験', '公務員試験', '教員採用試験', '教養試験', '英語', '前置詞', '動名詞'],
-    bigCategory: '資格試験',
+    keywords: ['資格', '公務員試験', '教員採用試験', '教養', '英語', '前置詞', '動名詞'],
+    bigCategory: '資格',
     subCategory: '公務員試験',
     subjectText: '教員採用試験',
-    detailText: '教養試験',
+    detailText: '教養',
   },
   {
     id: 'academy_seed_shikaku_kyousyoku_kyouyou_02',
@@ -6827,11 +6827,11 @@ const ACADEMY_SEED_QUESTIONS_RAW: AcademyUserQuestion[] = [
     choices: ['answer', 'answering', 'to answer', 'answered'],
     answerIndex: 1,
     explanation: 'be good at の at は前置詞なので、後ろは動名詞（〜ing）を置きます。',
-    keywords: ['資格試験', '公務員試験', '教員採用試験', '教養試験', '英語', '前置詞', '動名詞'],
-    bigCategory: '資格試験',
+    keywords: ['資格', '公務員試験', '教員採用試験', '教養', '英語', '前置詞', '動名詞'],
+    bigCategory: '資格',
     subCategory: '公務員試験',
     subjectText: '教員採用試験',
-    detailText: '教養試験',
+    detailText: '教養',
   },
   {
     id: 'academy_seed_shikaku_kyousyoku_kyouyou_03',
