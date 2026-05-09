@@ -154,6 +154,7 @@ const RpgButton = ({ onClick, label, fromColor, toColor, shadowColor, glowColor,
 export default function TournamentPage() {
   const academyUserQuestions = useGameStore(s => s.academyUserQuestions);
   const refreshAcademyQuestions = useGameStore(s => s.refreshAcademyQuestions);
+  const recordAcademyReviewAttempts = useGameStore(s => s.recordAcademyReviewAttempts);
   const equipment = useGameStore(s => s.equipment);
 
   const equippedDetails: EquippedSet = useMemo(() => ({
@@ -309,6 +310,9 @@ export default function TournamentPage() {
         if (!playerAnsweredRef.current) {
           setPlayerAnswered(true); setPlayerResult('wrong'); setAnswerFeedback('wrong'); setRoundPoints(null);
           setPlayerAnswerTimesMs((prev) => [...prev, TIME_LIMIT_MS]);
+          if (currentQuestion?.id) {
+            recordAcademyReviewAttempts([{ questionId: currentQuestion.id, isCorrect: false }]);
+          }
         }
       }
     }, 80);
@@ -319,7 +323,7 @@ export default function TournamentPage() {
       return setTimeout(() => settleCpu(cpu.id), delay);
     });
     return () => clearTimers();
-  }, [phase, currentQuestion, qIndex]);
+  }, [phase, currentQuestion, qIndex, cpus, recordAcademyReviewAttempts]);
 
   // ── Force CPUs after player answers
   useEffect(() => {
@@ -602,6 +606,7 @@ export default function TournamentPage() {
       setRoundPoints(isCorrect ? pts : null);
       setPlayerCorrectCount((prev) => prev + (isCorrect ? 1 : 0));
       setPlayerAnswerTimesMs((prev) => [...prev, elapsedMsAtClick]);
+      recordAcademyReviewAttempts([{ questionId: currentQuestion.id, isCorrect }]);
       setIsResolvingAnswer(false);
     }, MAGIC_CIRCLE_DURATION_MS);
   };

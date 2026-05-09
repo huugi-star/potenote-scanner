@@ -18,6 +18,7 @@ import {
   ChevronRight,
   ScrollText,
   Trophy,
+  NotebookPen,
 } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
 import { useToast } from '@/components/ui/Toast';
@@ -1996,6 +1997,16 @@ if (subview === 'create_detail') {
           >
             <BookOpen className="w-6 h-6" />
             みんなの問題
+          </motion.button>
+
+          <motion.button
+            type="button"
+            onClick={() => router.push('/library/review-note')}
+            className="w-full py-4 rounded-2xl bg-white/95 text-slate-800 font-bold text-lg flex items-center justify-center gap-3 shadow-md border border-slate-200/90"
+            whileTap={{ scale: 0.98 }}
+          >
+            <NotebookPen className="w-6 h-6 text-violet-600" />
+            復習ノート
           </motion.button>
 
           <motion.button

@@ -2398,6 +2398,7 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
   const consecutiveLoginDays = useGameStore((s) => s.consecutiveLoginDays);
   const lastLectureCategorySelection = useGameStore((s) => s.lastLectureCategorySelection);
   const setLastLectureCategorySelection = useGameStore((s) => s.setLastLectureCategorySelection);
+  const recordAcademyReviewAttempts = useGameStore((s) => s.recordAcademyReviewAttempts);
 
   const [selectedCat, setSelectedCat] = useState<LectureCategory | null>(null);
   const [selectedTabLabel, setSelectedTabLabel] = useState<string>('');
@@ -2800,8 +2801,14 @@ export const MinnanoMondaiScreen = ({ onBack }: { onBack: () => void }) => {
         selectedChoiceIndex,
       };
     });
+    recordAcademyReviewAttempts(
+      quizResults.map((result) => ({
+        questionId: result.questionId,
+        isCorrect: result.isCorrect,
+      }))
+    );
     void persistAcademyAnswerAggregateBatch(answers);
-  }, [quizPhase, quizQuestions, quizResults]);
+  }, [quizPhase, quizQuestions, quizResults, recordAcademyReviewAttempts]);
 
   const handleBackToRoom = () => {
     if (feedbackAdvanceTimerRef.current !== null) {

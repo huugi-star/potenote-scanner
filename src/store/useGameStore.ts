@@ -719,6 +719,23 @@ const inferDictionaryIdFromQuiz = (quiz: QuizRaw, dictionaries: WordDexDictionar
 
 // ===== Store Types =====
 
+export type AcademyReviewNoteFilterBucket = 'wrong' | 'correct';
+
+export type AcademyReviewNoteEntry = {
+  questionId: string;
+  lastResult: 'correct' | 'wrong';
+  totalAttempts: number;
+  correctCount: number;
+  wrongCount: number;
+  lastSolvedAt: string;
+  removedAt: string | null;
+  /**
+   * タブ「まちがえた / 正解した」の振り分け。
+   * 「まちがえた」枠は再挑戦で正解しても自動では「正解した」に移さない（ユーザーが任意ボタンで移動）。
+   */
+  filterBucket?: AcademyReviewNoteFilterBucket;
+};
+
 interface GameState extends UserState {
   journey: {
     totalDistance: number;
@@ -790,6 +807,8 @@ interface GameState extends UserState {
 
   // すうひもちアカデミー: 表示用問題（公式 + ユーザー投稿のFirestoreマージ）
   academyUserQuestions: AcademyUserQuestion[];
+  // すうひもちアカデミー: 復習ノート（questionId ごとの集計）
+  academyReviewNoteByQuestionId: Record<string, AcademyReviewNoteEntry>;
 
   // 講義履歴
   lectureHistory: LectureHistory[];
@@ -967,6 +986,10 @@ interface GameActions {
 
   // 受講カテゴリーの前回選択（保存/復元用）
   setLastLectureCategorySelection: (next: GameState['lastLectureCategorySelection']) => void;
+  // 復習ノート
+  recordAcademyReviewAttempts: (attempts: Array<{ questionId: string; isCorrect: boolean }>) => void;
+  removeAcademyReviewQuestion: (questionId: string) => void;
+  setAcademyReviewNoteFilterBucket: (questionId: string, bucket: AcademyReviewNoteFilterBucket) => void;
   
   calculateResult: (correctCount: number, totalQuestions: number, isAdWatched: boolean) => QuizResult;
   applyQuizResult: (result: QuizResult) => void;
@@ -1130,6 +1153,7 @@ const initialState: GameState = {
   kanColeScans: [],
   kanDexOrder: [],
   academyUserQuestions: mergeSeedAndPostedAcademyQuestions([], []),
+  academyReviewNoteByQuestionId: {},
 
   lectureHistory: [],
 
@@ -2986,6 +3010,81 @@ export const useGameStore = create<GameStore>()(
       setLastLectureCategorySelection: (next) => {
         set({ lastLectureCategorySelection: next ?? null });
       },
+      recordAcademyReviewAttempts: (attempts) => {
+        if (!Array.isArray(attempts) || attempts.length === 0) return;
+        const nowIso = new Date().toISOString();
+        set((state) => {
+          const next = { ...state.academyReviewNoteByQuestionId };
+          for (const attempt of attempts) {
+            const questionId = String(attempt?.questionId ?? '').trim();
+            if (!questionId) continue;
+            const prev = next[questionId];
+            const isCorrect = !!attempt.isCorrect;
+            const totalAttempts = Math.max(0, Number(prev?.totalAttempts ?? 0)) + 1;
+            const correctCount = Math.max(0, Number(prev?.correctCount ?? 0)) + (isCorrect ? 1 : 0);
+            const wrongCount = Math.max(0, Number(prev?.wrongCount ?? 0)) + (isCorrect ? 0 : 1);
+
+            const legacyBucket: AcademyReviewNoteFilterBucket =
+              prev?.filterBucket ??
+              (prev && prev.lastResult === 'wrong' ? 'wrong' : prev ? 'correct' : 'correct');
+
+            let filterBucket: AcademyReviewNoteFilterBucket;
+            if (!prev) {
+              filterBucket = isCorrect ? 'correct' : 'wrong';
+            } else if (!isCorrect) {
+              filterBucket = 'wrong';
+            } else {
+              filterBucket = legacyBucket === 'wrong' ? 'wrong' : 'correct';
+            }
+
+            next[questionId] = {
+              questionId,
+              lastResult: isCorrect ? 'correct' : 'wrong',
+              totalAttempts,
+              correctCount,
+              wrongCount,
+              lastSolvedAt: nowIso,
+              filterBucket,
+              // もう一度解いた時点で復活
+              removedAt: null,
+            };
+          }
+          return {
+            academyReviewNoteByQuestionId: next,
+          };
+        });
+      },
+      setAcademyReviewNoteFilterBucket: (questionId, bucket) => {
+        const targetId = String(questionId ?? '').trim();
+        if (!targetId) return;
+        set((state) => {
+          const prev = state.academyReviewNoteByQuestionId[targetId];
+          if (!prev || prev.removedAt) return {};
+          return {
+            academyReviewNoteByQuestionId: {
+              ...state.academyReviewNoteByQuestionId,
+              [targetId]: { ...prev, filterBucket: bucket },
+            },
+          };
+        });
+      },
+      removeAcademyReviewQuestion: (questionId) => {
+        const targetId = String(questionId ?? '').trim();
+        if (!targetId) return;
+        set((state) => {
+          const prev = state.academyReviewNoteByQuestionId[targetId];
+          if (!prev) return {};
+          return {
+            academyReviewNoteByQuestionId: {
+              ...state.academyReviewNoteByQuestionId,
+              [targetId]: {
+                ...prev,
+                removedAt: new Date().toISOString(),
+              },
+            },
+          };
+        });
+      },
       
       // ===== Quiz & Rewards =====
       
@@ -3915,6 +4014,10 @@ export const useGameStore = create<GameStore>()(
           state.wordDexWords = [];
           useGameStore.setState({ wordDexWords: [] });
         }
+        if (state && (!state.academyReviewNoteByQuestionId || typeof state.academyReviewNoteByQuestionId !== 'object')) {
+          state.academyReviewNoteByQuestionId = {};
+          useGameStore.setState({ academyReviewNoteByQuestionId: {} });
+        }
         // ローカル開発時は常に全装備品を所持済みに強制上書き
         if (isLocalDevelopment() && state) {
           state.inventory = DEV_INVENTORY;
@@ -4016,6 +4119,7 @@ export const useGameStore = create<GameStore>()(
         kanColeSealed: state.kanColeSealed,
         kanColeRetryQueue: state.kanColeRetryQueue,
         kanDexOrder: state.kanDexOrder,
+        academyReviewNoteByQuestionId: state.academyReviewNoteByQuestionId,
         lectureHistory: state.lectureHistory,
         lastLectureCategorySelection: state.lastLectureCategorySelection,
         scanType: state.scanType,
